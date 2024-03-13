@@ -1,0 +1,51 @@
+{
+  "name": "@pmndrs/vanilla",
+  "version": "1.14.3",
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "drei-inspired helpers for threejs",
+  "keywords": [
+    "drei",
+    "three",
+    "threejs"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pmndrs/drei-vanilla.git"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/pmndrs/drei-vanilla/issues"
+  },
+  "homepage": "https://github.com/pmndrs/drei-vanilla",
+  "maintainers": [
+    "VishaL (https://github.com/vis-prime)",
+    "Paul Henschel (https://github.com/drcmda)",
+    "Gianmarco Simone (https://github.com/gsimone)",
+    "Marco Perego (https://github.com/emmelleppi)",
+    "Josh Ellis (https://github.com/joshuaellis)",
+    "Antoine BERNIER (https://github.com/abernier)"
+  ],
+  "main": "index.cjs.js",
+  "module": "index.js",
+  "types": "index.d.ts",
+  "sideEffects": false,
+  "commitlint": {
+    "extends": [
+      "@commitlint/config-conventional"
+    ],
+    "rules": {
+      "body-max-line-length": [
+        0
+      ]
+    }
+  },
+  "dependencies": {
+    "troika-three-text": "0.47.2"
+  },
+  "peerDependencies": {
+    "three": ">=0.137"
+  }
+}

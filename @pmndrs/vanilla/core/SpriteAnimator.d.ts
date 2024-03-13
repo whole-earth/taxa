@@ -1,0 +1,32 @@
+import * as THREE from 'three';
+export declare type SpriteAnimatorProps = {
+    startFrame?: number;
+    endFrame?: number;
+    fps?: number;
+    frameName?: string;
+    textureDataURL?: string;
+    textureImageURL: string;
+    loop?: boolean;
+    numberOfFrames?: number;
+    autoPlay?: boolean;
+    animationNames?: Array<string>;
+    onStart?: Function;
+    onEnd?: Function;
+    onLoopEnd?: Function;
+    onFrame?: Function;
+    play?: boolean;
+    pause?: boolean;
+    flipX?: boolean;
+    position?: Array<number>;
+    alphaTest?: number;
+    asSprite?: boolean;
+};
+export declare type SpriteAnimatorType = {
+    group: THREE.Group;
+    init: Function;
+    update: Function;
+    pauseAnimation: Function;
+    playAnimation: Function;
+    setFrameName: Function;
+};
+export declare const SpriteAnimator: ({ startFrame, endFrame, fps, frameName, textureDataURL, textureImageURL, loop, numberOfFrames, autoPlay, animationNames, onStart, onEnd, onLoopEnd, onFrame, play, pause, flipX, alphaTest, asSprite, }: SpriteAnimatorProps) => SpriteAnimatorType;
