@@ -1,0 +1,38 @@
+export declare type TextProps = {
+    text: string;
+    characters?: string;
+    color?: number | string;
+    fontSize?: number;
+    maxWidth?: number;
+    lineHeight?: number;
+    letterSpacing?: number;
+    textAlign?: 'left' | 'right' | 'center' | 'justify';
+    font?: string;
+    anchorX?: number | 'left' | 'center' | 'right';
+    anchorY?: number | 'top' | 'top-baseline' | 'middle' | 'bottom-baseline' | 'bottom';
+    clipRect?: [number, number, number, number];
+    depthOffset?: number;
+    direction?: 'auto' | 'ltr' | 'rtl';
+    overflowWrap?: 'normal' | 'break-word';
+    whiteSpace?: 'normal' | 'overflowWrap' | 'nowrap';
+    outlineWidth?: number | string;
+    outlineOffsetX?: number | string;
+    outlineOffsetY?: number | string;
+    outlineBlur?: number | string;
+    outlineColor?: number | string;
+    outlineOpacity?: number;
+    strokeWidth?: number | string;
+    strokeColor?: number | string;
+    strokeOpacity?: number;
+    fillOpacity?: number;
+    sdfGlyphSize?: number;
+    debugSDF?: boolean;
+    onSync?: (troika: any) => void;
+    onPreloadEnd?: () => void;
+};
+export declare type TextType = {
+    mesh: THREE.Mesh;
+    updateProps: (newProps: Partial<TextProps>) => void;
+    dispose: () => void;
+};
+export declare const Text: ({ sdfGlyphSize, anchorX, anchorY, fontSize, ...restProps }: TextProps) => TextType;
