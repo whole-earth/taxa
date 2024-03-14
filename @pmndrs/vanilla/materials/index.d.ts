@@ -1,6 +1,0 @@
-export * from './MeshDiscardMaterial';
-export * from './MeshTransmissionMaterial';
-export * from './SpotLightMaterial';
-export * from './BlurPass';
-export * from './ConvolutionMaterial';
-export * from './MeshReflectorMaterial';
