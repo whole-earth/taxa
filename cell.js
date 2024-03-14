@@ -19,7 +19,7 @@ class CellComponent {
       this.position = new THREE.Vector3(0, 0, 0);
 
       // this.basePath = '/assets/obj/'; // PATHCHANGE
-      this.basePath = 'https://whole-earth.github.io/lucid-monday/taxa/assets/cell/obj/';
+      this.basePath = 'https://whole-earth.github.io/taxa/assets/cell/obj/';
       this.loader = new GLTFLoader();
       // const dracoLoader = new DRACOLoader()
 
@@ -292,7 +292,7 @@ const glass = Object.assign(new MeshTransmissionMaterial(10), {
 // SPONGE TEXTURE
 const sponge = new THREE.MeshBasicMaterial({
   // map: new THREE.TextureLoader().load("/assets/textures/sponge.jpg"), // PATHCHANGE
-  map: new THREE.TextureLoader().load("https://whole-earth.github.io/lucid-monday/taxa/assets/cell/textures/sponge.jpg"),
+  map: new THREE.TextureLoader().load("https://whole-earth.github.io/taxa/assets/cell/textures/sponge.jpg"),
 });
 
 // RIBBON TEXTURE
