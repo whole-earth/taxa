@@ -61,7 +61,7 @@ function loadLights() {
 }
 
 //const materialFlat = new THREE.MeshBasicMaterial({ color: 0x849ED0 });
-const materialMap = new THREE.TextureLoader().load('./obj/blue.jpg');
+const materialMap = new THREE.TextureLoader().load("https://whole-earth.github.io/taxa/assets/human/blue.jpg");
 const material = new THREE.MeshStandardMaterial({
     map: materialMap,
     roughness: 1,
