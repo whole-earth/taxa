@@ -61,7 +61,7 @@ function loadLights() {
 }
 
 //const materialFlat = new THREE.MeshBasicMaterial({ color: 0x849ED0 });
-const materialMap = new THREE.TextureLoader().load("https://whole-earth.github.io/taxa/assets/human/blue.jpg");
+const materialMap = new THREE.TextureLoader().load("https://whole-earth.github.io/taxa/assets/human/blue.jpg"); // PATHCHANGE
 const material = new THREE.MeshStandardMaterial({
     map: materialMap,
     roughness: 1,
@@ -77,7 +77,7 @@ function modelInit() {
     let modelHeight;
     const modelHeights = [];
 
-    loader.load('./obj/model.glb', function (gltf) {
+    loader.load("https://whole-earth.github.io/taxa/assets/human/model.glb", function (gltf) { // PATHCHANGE
 
         const model = gltf.scene;
 
