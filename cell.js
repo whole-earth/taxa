@@ -118,10 +118,10 @@ if (side == window.innerWidth) {
     cellWrapper.style.bottom = "20vh";
 }
 
-cellRender.domElement.classList.add("cell-three");
-document.querySelector(".cell").appendChild(cellRender.domElement);
+// cellRender.domElement.classList.add("cell-three");
+// document.querySelector(".cell").appendChild(cellRender.domElement);
 
-// document.querySelector(".cell-three").appendChild(cellRender.domElement);
+document.querySelector(".cell-three").appendChild(cellRender.domElement);
 
 // OrbitControls
 const controls = new OrbitControls(camera, cellRender.domElement);
