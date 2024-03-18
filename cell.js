@@ -113,6 +113,7 @@ cellRender.toneMapping = THREE.ACESFilmicToneMapping;
 
 const side = Math.min(window.innerHeight, window.innerWidth);
 cellRender.setSize(side, side);
+cellRender.setPixelRatio(window.devicePixelRatio);
 if (side == window.innerWidth) {
     const cellWrapper = document.querySelector('.cell-three');
     cellWrapper.style.bottom = "20vh";
