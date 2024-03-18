@@ -13,4 +13,5 @@ export function setupGUI(glass) {
   gui.add(glass, "distortionScale", 0, 10);
   gui.add(glass, "temporalDistortion", 0, 1);
   gui.add(glass, "transparent");
+  gui.closed = true;
 }
