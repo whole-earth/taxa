@@ -247,11 +247,11 @@ scene.add(directionalLight2);
 
 const rgbeLoader = new RGBELoader();
 
-rgbeLoader.load("https://whole-earth.github.io/taxa/assets/environments/aloe.hdr", function (texture) { // PATHCHANGE
+rgbeLoader.load("https://whole-earth.github.io/taxa/assets/cell/environments/aloe.hdr", function (texture) { // PATHCHANGE
     const pmremGenerator = new PMREMGenerator(cellRender);
     pmremGenerator.compileEquirectangularShader();
     const envMap = pmremGenerator.fromEquirectangular(texture).texture;
-
+x
     scene.environment = envMap;
     scene.environment.mapping = THREE.EquirectangularReflectionMapping;
     texture.dispose();
