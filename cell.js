@@ -252,7 +252,6 @@ rgbeLoader.load("https://whole-earth.github.io/taxa/assets/cell/environments/alo
     const pmremGenerator = new PMREMGenerator(cellRender);
     pmremGenerator.compileEquirectangularShader();
     const envMap = pmremGenerator.fromEquirectangular(texture).texture;
-x
     scene.environment = envMap;
     scene.environment.mapping = THREE.EquirectangularReflectionMapping;
     texture.dispose();
