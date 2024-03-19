@@ -22,7 +22,6 @@ class CellComponent {
 
             dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.4.3/')
             this.loader.setDRACOLoader(dracoLoader)
-
             this.loadObject(gltf, shader, resolve);
 
             this.boundingBox = new THREE.Box3();
