@@ -298,7 +298,7 @@ const orange = new THREE.MeshBasicMaterial({
 });
 
 const loadPromises = [
-    new CellComponent("blob-outer_transparent.glb", glass, { z: -1 }),
+    new CellComponent("blob-outer.glb", glass, { z: -1 }),
     new CellComponent("ribbons.glb", orange, { z: -0.5 }),
     new CellComponent("blob-inner.glb", sponge),
 ];
