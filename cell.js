@@ -61,7 +61,7 @@ class CellComponent {
             this.blobChild.material = shader;
 
             // Comment out to remove GUI
-            setupGUI(this.blobChild.material);
+            // setupGUI(this.blobChild.material);
 
         }
         else {
@@ -89,7 +89,7 @@ const cameraAspectRatio = cellWidth / window.innerHeight;
 console.log(cameraAspectRatio); 
 console.log('update');
 
-const camera = new THREE.PerspectiveCamera(splashStartFOV, 1.0, 0.5, 2000);
+const camera = new THREE.PerspectiveCamera(splashStartFOV, cameraAspectRatio, 0.5, 2000);
 camera.position.set(0, 0, 60);
 
 // changed 1.5 : initial right offset of the cell
