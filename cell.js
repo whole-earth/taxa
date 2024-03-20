@@ -108,9 +108,6 @@ if (window.innerWidth <= window.innerHeight) {
     cellWrapper.style.bottom = "20vh";
 }
 
-// cellRender.domElement.classList.add("cell-three");
-// document.querySelector(".cell").appendChild(cellRender.domElement);
-
 document.querySelector(".cell-three").appendChild(cellRender.domElement);
 
 // OrbitControls
@@ -223,8 +220,6 @@ pointLight.position.set(10, 10, 10)
 
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
 scene.add(ambientLight);
-
-// CHANGES : Played a little bit with the intensity and color of directionalLight (previous was 60)
 
 const directionalLight = new THREE.DirectionalLight(0xe1ff55, 60); // Color, Intensity
 // const directionalLight = new THREE.DirectionalLight(0xffffff, 60); // Color, Intensity
