@@ -108,12 +108,10 @@ cellRender.toneMapping = THREE.ACESFilmicToneMapping;
 // cellRender.setSize(window.innerWidth, window.innerHeight);
 // const side = Math.min(window.innerHeight*1.25, window.innerWidth)*1.15;
 
-// changed 1.6 : added conditional styling for cell-three
-
-const side = Math.min(window.innerHeight, window.innerWidth);
-cellRender.setSize(side, side);
+// cellRender.setSize(side, side);
+cellRender.setSize(window.innerHeight, window.innerWidth); // 11.7 ONDRA
 cellRender.setPixelRatio(window.devicePixelRatio);
-if (side == window.innerWidth) {
+if (window.innerWidth <= window.innerHeight) {
     const cellWrapper = document.querySelector('.cell-three');
     cellWrapper.style.bottom = "20vh";
 }
