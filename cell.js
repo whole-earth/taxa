@@ -87,6 +87,7 @@ const cellElement = document.querySelector('.cell-three');
 const cellWidth = cellElement.offsetWidth;
 const cameraAspectRatio = cellWidth / window.innerHeight;
 console.log(cameraAspectRatio); 
+console.log('update');
 
 const camera = new THREE.PerspectiveCamera(splashStartFOV, 1.0, 0.5, 2000);
 camera.position.set(0, 0, 60);
