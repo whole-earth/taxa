@@ -84,9 +84,10 @@ const scene = new THREE.Scene();
 // changed 1.4 : changed the aspect ratios as the canvas got clipped off on smaller screens
 // console.log(window.innerWidth / window.innerHeight);
 const splashStartFOV = 75;
+let cameraAspectRatio = window.innerWidth / window.innerHeight;
 
 // changed 1.5 : changed aspect ratio 1.0
-const camera = new THREE.PerspectiveCamera(splashStartFOV, 1.0, 0.5, 2000);
+const camera = new THREE.PerspectiveCamera(splashStartFOV, cameraAspectRatio, 0.5, 2000);
 camera.position.set(0, 0, 60);
 
 // changed 1.5 : initial right offset of the cell
