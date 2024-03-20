@@ -88,7 +88,7 @@ const cellWidth = cellElement.offsetWidth;
 const cameraAspectRatio = cellWidth / window.innerHeight;
 console.log(cameraAspectRatio); 
 
-const camera = new THREE.PerspectiveCamera(splashStartFOV, cameraAspectRatio, 0.5, 2000);
+const camera = new THREE.PerspectiveCamera(splashStartFOV, 1.0, 0.5, 2000);
 camera.position.set(0, 0, 60);
 
 // changed 1.5 : initial right offset of the cell
