@@ -81,32 +81,18 @@ class CellComponent {
 const scene = new THREE.Scene();
 
 // Camera
-// changed 1.4 : changed the aspect ratios as the canvas got clipped off on smaller screens
-// console.log(window.innerWidth / window.innerHeight);
 const splashStartFOV = 75;
-
 
 const cellElement = document.querySelector('.cell-three');
 const cellWidth = cellElement.offsetWidth;
-const aspectRatio = cellWidth / window.innerHeight;
+const cameraAspectRatio = cellWidth / window.innerHeight;
 console.log(cameraAspectRatio); 
 
-// changed 1.5 : changed aspect ratio 1.0
 const camera = new THREE.PerspectiveCamera(splashStartFOV, cameraAspectRatio, 0.5, 2000);
 camera.position.set(0, 0, 60);
 
 // changed 1.5 : initial right offset of the cell
 camera.setViewOffset(window.innerWidth, window.innerWidth, -80, 0, window.innerWidth, window.innerWidth);
-
-// .setViewOffset ( fullWidth, fullHeight, x , y , width , height)
-
-// fullWidth — full width of multiview setup
-// fullHeight — full height of multiview setup
-// x — horizontal offset of subcamera
-// y — vertical offset of subcamera
-// width — width of subcamera
-// height — height of subcamera 
-
 
 // Renderer
 const cellRender = new THREE.WebGLRenderer({ antialias: true, alpha: true });
