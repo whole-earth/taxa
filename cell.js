@@ -61,7 +61,7 @@ class CellComponent {
             this.blobChild.material = shader;
 
             // Comment out to remove GUI
-            // setupGUI(this.blobChild.material);
+            setupGUI(this.blobChild.material);
 
         }
         else {
@@ -81,19 +81,26 @@ class CellComponent {
 const scene = new THREE.Scene();
 
 // Camera
+// changed 1.4 : changed the aspect ratios as the canvas got clipped off on smaller screens
+// console.log(window.innerWidth / window.innerHeight);
 const splashStartFOV = 75;
 
-const cellElement = document.querySelector('.cell-three');
-const cellWidth = cellElement.offsetWidth;
-const cameraAspectRatio = cellWidth / window.innerHeight;
-console.log(cameraAspectRatio); 
-console.log('update');
-
-const camera = new THREE.PerspectiveCamera(splashStartFOV, cameraAspectRatio, 0.5, 2000);
+// changed 1.5 : changed aspect ratio 1.0
+const camera = new THREE.PerspectiveCamera(splashStartFOV, 1.0, 0.5, 2000);
 camera.position.set(0, 0, 60);
 
 // changed 1.5 : initial right offset of the cell
 camera.setViewOffset(window.innerWidth, window.innerWidth, -80, 0, window.innerWidth, window.innerWidth);
+
+// .setViewOffset ( fullWidth, fullHeight, x , y , width , height)
+
+// fullWidth — full width of multiview setup
+// fullHeight — full height of multiview setup
+// x — horizontal offset of subcamera
+// y — vertical offset of subcamera
+// width — width of subcamera
+// height — height of subcamera 
+
 
 // Renderer
 const cellRender = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -101,13 +108,18 @@ cellRender.toneMapping = THREE.ACESFilmicToneMapping;
 // cellRender.setSize(window.innerWidth, window.innerHeight);
 // const side = Math.min(window.innerHeight*1.25, window.innerWidth)*1.15;
 
-// cellRender.setSize(side, side);
-cellRender.setSize(window.innerHeight, window.innerWidth); // 11.7 ONDRA
+// changed 1.6 : added conditional styling for cell-three
+
+const side = Math.min(window.innerHeight, window.innerWidth);
+cellRender.setSize(side, side);
 cellRender.setPixelRatio(window.devicePixelRatio);
-if (window.innerWidth <= window.innerHeight) {
+if (side == window.innerWidth) {
     const cellWrapper = document.querySelector('.cell-three');
     cellWrapper.style.bottom = "20vh";
 }
+
+// cellRender.domElement.classList.add("cell-three");
+// document.querySelector(".cell").appendChild(cellRender.domElement);
 
 document.querySelector(".cell-three").appendChild(cellRender.domElement);
 
@@ -221,6 +233,8 @@ pointLight.position.set(10, 10, 10)
 
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
 scene.add(ambientLight);
+
+// CHANGES : Played a little bit with the intensity and color of directionalLight (previous was 60)
 
 const directionalLight = new THREE.DirectionalLight(0xe1ff55, 60); // Color, Intensity
 // const directionalLight = new THREE.DirectionalLight(0xffffff, 60); // Color, Intensity
