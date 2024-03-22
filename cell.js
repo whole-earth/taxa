@@ -9,74 +9,75 @@ import MeshTransmissionMaterial from "@pmndrs/vanilla";
 
 let boundingBoxes = [];
 let loadedObjects = [];
-console.log('3.20 version');
+
+console.log('3.21 version')
 
 class CellComponent {
-  constructor(gltf, shader) {
-    return new Promise((resolve, reject) => {
-      this.scene = scene;
-      this.position = new THREE.Vector3(0, 0, 0);
+    constructor(gltf, shader) {
+        return new Promise((resolve, reject) => {
+            this.scene = scene;
+            this.position = new THREE.Vector3(0, 0, 0);
 
-      this.basePath = 'https://whole-earth.github.io/taxa/assets/cell/obj/'; // PATHCHANGE
-      this.loader = new GLTFLoader();
-      const dracoLoader = new DRACOLoader()
+            this.basePath = 'https://whole-earth.github.io/taxa/assets/cell/obj/'; // PATHCHANGE
+            this.loader = new GLTFLoader();
+            const dracoLoader = new DRACOLoader()
 
-      dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.4.3/')
-      this.loader.setDRACOLoader(dracoLoader)
+            dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.4.3/')
+            this.loader.setDRACOLoader(dracoLoader)
 
-      this.loadObject(gltf, shader, resolve);
+            this.loadObject(gltf, shader, resolve);
 
-      this.boundingBox = new THREE.Box3();
-      boundingBoxes.push(this.boundingBox);
+            this.boundingBox = new THREE.Box3();
+            boundingBoxes.push(this.boundingBox);
 
-    });
-  }
+        });
+    }
 
-  loadObject(gltf, shader, resolve) {
-    const fullPath = this.basePath + gltf;
-    this.loader.load(fullPath, (gltf) => {
-      this.object = gltf.scene;
-      this.object.position.copy(this.position);
-      this.scene.add(this.object);
-      this.centerObject(this.object);
-      this.applyCustomShader(shader);
-      this.boundingBox.setFromObject(this.object);
+    loadObject(gltf, shader, resolve) {
+        const fullPath = this.basePath + gltf;
+        this.loader.load(fullPath, (gltf) => {
+            this.object = gltf.scene;
+            this.object.position.copy(this.position);
+            this.scene.add(this.object);
+            this.centerObject(this.object);
+            this.applyCustomShader(shader);
+            this.boundingBox.setFromObject(this.object);
 
-      loadedObjects.push(this.object);
-      resolve(this.object);
-    });
-  }
+            loadedObjects.push(this.object);
+            resolve(this.object);
+        });
+    }
 
-  applyCustomShader(shader) {
+    applyCustomShader(shader) {
 
-    if (shader instanceof THREE.MeshBasicMaterial) {
-      this.object.traverse((node) => {
-        if (node.isMesh) {
-          node.material = shader;
-          node.material.renderOrder = 1;
+        if (shader instanceof THREE.MeshBasicMaterial) {
+            this.object.traverse((node) => {
+                if (node.isMesh) {
+                    node.material = shader;
+                    node.material.renderOrder = 1;
+                }
+            });
         }
-      });
+        else if (shader instanceof THREE.MeshPhysicalMaterial) {
+            this.mesh = this.object
+            this.blobChild = this.object.getObjectByName('Blob1')
+            this.blobChild.material = shader;
+
+            // Comment out to remove GUI
+            setupGUI(this.blobChild.material);
+
+        }
+        else {
+            console.log("Error applying shaders to objects");
+        }
     }
-    else if (shader instanceof THREE.MeshPhysicalMaterial) {
-      this.mesh = this.object
-      this.blobChild = this.object.getObjectByName('Blob1')
-      this.blobChild.material = shader;
-      
-      // Comment out to remove GUI
-      // setupGUI(this.blobChild.material);
-      
-    }
-    else {
-      console.log("Error applying shaders to objects");
-    }
-  }
 
 
-  centerObject(object) {
-    const box = new THREE.Box3().setFromObject(object);
-    const center = box.getCenter(new THREE.Vector3());
-    object.position.sub(center);
-  }
+    centerObject(object) {
+        const box = new THREE.Box3().setFromObject(object);
+        const center = box.getCenter(new THREE.Vector3());
+        object.position.sub(center);
+    }
 }
 
 // Scene
@@ -88,9 +89,6 @@ const scene = new THREE.Scene();
 const splashStartFOV = 75;
 
 // changed 1.5 : changed aspect ratio 1.0
-const camera = new THREE.PerspectiveCamera(splashStartFOV,1.0, 0.5, 2000);
-camera.position.set(0, 0, 60);
-
 // changed 1.5 : initial right offset of the cell
 // camera.setViewOffset( window.innerWidth, window.innerWidth,-80, 0, window.innerWidth, window.innerWidth);
 
@@ -102,6 +100,10 @@ camera.position.set(0, 0, 60);
 // y — vertical offset of subcamera
 // width — width of subcamera
 // height — height of subcamera 
+const aspectRatio = window.innerWidth / window.innerHeight;
+const camera = new THREE.PerspectiveCamera(splashStartFOV, aspectRatio, 0.5, 2000);
+camera.position.set(0, 0, 60);
+
 
 
 // Renderer
@@ -112,15 +114,21 @@ cellRender.toneMapping = THREE.ACESFilmicToneMapping;
 
 // changed 1.6 : added conditional styling for cell-three
 
-const side = Math.min(window.innerHeight, window.innerWidth);
-cellRender.setSize(side, side);
+// const side = Math.min(window.innerHeight, window.innerWidth);
+// cellRender.setSize(side, side);
+// cellRender.setPixelRatio(window.devicePixelRatio);
+// if (side == window.innerWidth){
+//   const cellWrapper = document.querySelector('.cell-three');
+//   cellWrapper.style.bottom = "20vh";
+// }
+cellRender.setSize(window.innerWidth, window.innerHeight);
 cellRender.setPixelRatio(window.devicePixelRatio);
-if (side == window.innerWidth){
-  const cellWrapper = document.querySelector('.cell-three');
-  cellWrapper.style.bottom = "20vh";
-}
 
 
+// if (window.innerWidth <= window.innerHeight) {
+//   const cellWrapper = document.querySelector('.cell-three');
+//   cellWrapper.style.bottom = "20vh";
+// }
 
 document.querySelector(".cell-three").appendChild(cellRender.domElement);
 
@@ -169,14 +177,14 @@ const zoomOutAreaRect = zoomOutArea.getBoundingClientRect();
 
 
 function smoothLerp(start, end, progress) {
-  return start + (end - start) * smoothstep(progress);
+    return start + (end - start) * smoothstep(progress);
 }
 
 function smoothstep(x) {
-  return x * x * (3 - 2 * x);
+    return x * x * (3 - 2 * x);
 }
 
-window.addEventListener('scroll', function() {
+window.addEventListener('scroll', function () {
 
     let scrollY = window.pageYOffset;
     let scrollDiff = scrollY - lastScrollY;
@@ -186,40 +194,40 @@ window.addEventListener('scroll', function() {
     const splashHeight = splashAreaRect.height;
     let multiplier = Math.floor(scrollDiff / multiplierDistanceControl);
 
-  // changed 1.5 : Fixed the autoRotatespeed multiplier, for proper scroll accelerant
-  
+    // changed 1.5 : Fixed the autoRotatespeed multiplier, for proper scroll accelerant
+
     controls.autoRotateSpeed = 1.0 + multiplier * multiplierValue;
 
     clearTimeout(scrollTimeout);
-    scrollTimeout = setTimeout(function() {
+    scrollTimeout = setTimeout(function () {
         controls.autoRotateSpeed = 0.5;
     }, 100);
 
-    if (scrollY > zoomOutAreaRect.bottom){
-      lastScrollY = scrollY;
-      return;
+    if (scrollY > zoomOutAreaRect.bottom) {
+        lastScrollY = scrollY;
+        return;
     }
 
     let height;
 
-  if (splashBool) {
-    let rotation = (rotationDegree/(splashHeight*1.000));
-    camera.position.y = rotation * 0.10;
-    const splashProgress = (scrollY - splashAreaRect.top) / (splashHeight*1.00000);
-    
-    // changed 1.5 : started using offsetView instead of transform css, was creating an jittery start to scroll
-    //const offsetView =  -80 + window.innerWidth *splashProgress* 0.1;
-    //camera.setViewOffset( window.innerWidth, window.innerWidth,offsetView, 0, window.innerWidth, window.innerWidth);
-    camera.fov = smoothLerp(splashStartFOV, splashEndFOV, splashProgress);
-  } else if (diveBool) {
-    controls.autoRotate = !(diveHeight*0.8 + splashHeight < scrollY);
-    const diveProgress = (scrollY - (splashAreaRect.top + splashAreaRect.height)) / diveAreaRect.height;
-    camera.fov = smoothLerp(diveStartFOV, diveEndFOV, diveProgress); 
-  } else {
-    controls.autoRotate = true;
-    const zoomOutProgress = (scrollY - (splashAreaRect.top + splashHeight + diveHeight)) / (zoomOutAreaRect.height*1.00000);
-    camera.fov = smoothLerp(zoomOutStartFOV, zoomOutEndFOV, zoomOutProgress); 
-  }
+    if (splashBool) {
+        let rotation = (rotationDegree / (splashHeight * 1.000));
+        camera.position.y = rotation * 0.10;
+        const splashProgress = (scrollY - splashAreaRect.top) / (splashHeight * 1.00000);
+
+        // changed 1.5 : started using offsetView instead of transform css, was creating an jittery start to scroll
+        //const offsetView =  -80 + window.innerWidth *splashProgress* 0.1;
+        //camera.setViewOffset( window.innerWidth, window.innerWidth,offsetView, 0, window.innerWidth, window.innerWidth);
+        camera.fov = smoothLerp(splashStartFOV, splashEndFOV, splashProgress);
+    } else if (diveBool) {
+        controls.autoRotate = !(diveHeight * 0.8 + splashHeight < scrollY);
+        const diveProgress = (scrollY - (splashAreaRect.top + splashAreaRect.height)) / diveAreaRect.height;
+        camera.fov = smoothLerp(diveStartFOV, diveEndFOV, diveProgress);
+    } else {
+        controls.autoRotate = true;
+        const zoomOutProgress = (scrollY - (splashAreaRect.top + splashHeight + diveHeight)) / (zoomOutAreaRect.height * 1.00000);
+        camera.fov = smoothLerp(zoomOutStartFOV, zoomOutEndFOV, zoomOutProgress);
+    }
 
     camera.updateProjectionMatrix();
     lastScrollY = scrollY;
@@ -249,14 +257,14 @@ scene.add(directionalLight2);
 const rgbeLoader = new RGBELoader();
 
 rgbeLoader.load("https://whole-earth.github.io/taxa/assets/cell/environments/aloe.hdr", function (texture) { // PATHCHANGE
-  const pmremGenerator = new PMREMGenerator(cellRender);
-  pmremGenerator.compileEquirectangularShader();
-  const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+    const pmremGenerator = new PMREMGenerator(cellRender);
+    pmremGenerator.compileEquirectangularShader();
+    const envMap = pmremGenerator.fromEquirectangular(texture).texture;
 
-  scene.environment = envMap;
-  scene.environment.mapping = THREE.EquirectangularReflectionMapping;
-  texture.dispose();
-  pmremGenerator.dispose();
+    scene.environment = envMap;
+    scene.environment.mapping = THREE.EquirectangularReflectionMapping;
+    texture.dispose();
+    pmremGenerator.dispose();
 });
 
 //===================================================================
@@ -267,7 +275,7 @@ const glassColor = new THREE.Color(0xDCF2E4);
 
 const glass = Object.assign(new MeshTransmissionMaterial(10), {
 
-   side: THREE.DoubleSide,
+    side: THREE.DoubleSide,
     opacity: 0.9,
     clearcoat: 1.01,
     clearcoatRoughness: 0.8,
@@ -282,45 +290,45 @@ const glass = Object.assign(new MeshTransmissionMaterial(10), {
     distortionScale: 0.25,
     temporalDistortion: 0.44,
     transparent: true,
-  color: glassColor,
+    color: glassColor,
 });
 
 // SPONGE TEXTURE
 const sponge = new THREE.MeshBasicMaterial({
     map: new THREE.TextureLoader().load("https://whole-earth.github.io/taxa/assets/cell/textures/sponge.jpg"), // PATHCHANGE
-  transparent: true,
-  opacity: 0.85,
+    transparent: true,
+    opacity: 0.85,
 });
 
 // RIBBON TEXTURE
 const orange = new THREE.MeshBasicMaterial({
-  color: 0xB26DC3,
+    color: 0xB26DC3,
 });
 
 const loadPromises = [
-  new CellComponent("blob-outer.glb", glass, { z: -1 }),
-  new CellComponent("ribbons.glb", orange, { z: -0.5 }),
-  new CellComponent("blob-inner.glb", sponge),
+    new CellComponent("blob-outer.glb", glass, { z: -1 }),
+    new CellComponent("ribbons.glb", orange, { z: -0.5 }),
+    new CellComponent("blob-inner.glb", sponge),
 ];
 
 //===================================================================
 
 Promise.all(loadPromises).then(() => {
-  initInteract();
+    initInteract();
 });
 
 function initInteract() {
 
-  const bounds = boundingBoxes[1].max.z * 0.8;
-  const sceneCenter = new THREE.Vector3(0, 0, 0);
+    const bounds = boundingBoxes[1].max.z * 0.8;
+    const sceneCenter = new THREE.Vector3(0, 0, 0);
 
-  // Create the outer blob
-  const waveGeom = new THREE.SphereGeometry(bounds + 2, 32, 32);
-  const waveShader = new THREE.ShaderMaterial({
-    uniforms: {
-      time: { value: 0.0 },
-    },
-    vertexShader: `
+    // Create the outer blob
+    const waveGeom = new THREE.SphereGeometry(bounds + 2, 32, 32);
+    const waveShader = new THREE.ShaderMaterial({
+        uniforms: {
+            time: { value: 0.0 },
+        },
+        vertexShader: `
         varying vec3 vNormal;
         varying vec2 vUv;
         uniform float time;
@@ -343,7 +351,7 @@ function initInteract() {
             gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
         }
     `,
-    fragmentShader: `
+        fragmentShader: `
         varying vec3 vNormal;
         varying vec2 vUv;
 
@@ -352,104 +360,104 @@ function initInteract() {
             gl_FragColor = vec4(vNormal * 0.5 + 0.5, 0.0); // Opacity set to 0
         }
     `,
-    transparent: true, // Enable transparency
-    blending: THREE.NormalBlending, // Specify blending equation
-  });
-  const wavingBlob = new THREE.Mesh(waveGeom, waveShader);
-  scene.add(wavingBlob);
+        transparent: true, // Enable transparency
+        blending: THREE.NormalBlending, // Specify blending equation
+    });
+    const wavingBlob = new THREE.Mesh(waveGeom, waveShader);
+    scene.add(wavingBlob);
 
-  const numSpheresInside = 40;
-  const spheres = [];
+    const numSpheresInside = 40;
+    const spheres = [];
 
-  // Create spheres inside the outer sphere and randomize their initial positions and directions
-  for (let i = 0; i < numSpheresInside; i++) {
-    const randomPosition = getRandomPositionWithinBounds();
+    // Create spheres inside the outer sphere and randomize their initial positions and directions
+    for (let i = 0; i < numSpheresInside; i++) {
+        const randomPosition = getRandomPositionWithinBounds();
 
-    // Create sphere
-    const sphereGeometry = new THREE.SphereGeometry(0.25, 6, 6); // Adjust radius and segments as needed
-    const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
-    const sphereMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
+        // Create sphere
+        const sphereGeometry = new THREE.SphereGeometry(0.25, 6, 6); // Adjust radius and segments as needed
+        const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const sphereMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
 
-    // Set sphere position
-    sphereMesh.position.copy(randomPosition);
+        // Set sphere position
+        sphereMesh.position.copy(randomPosition);
 
-    // Randomize initial direction
-    const randomDirection = new THREE.Vector3(
-      Math.random() - 0.5,
-      Math.random() - 0.5,
-      Math.random() - 0.5,
-    ).normalize();
-    sphereMesh.velocity = randomDirection;
+        // Randomize initial direction
+        const randomDirection = new THREE.Vector3(
+            Math.random() - 0.5,
+            Math.random() - 0.5,
+            Math.random() - 0.5,
+        ).normalize();
+        sphereMesh.velocity = randomDirection;
 
-    wavingBlob.add(sphereMesh);
+        wavingBlob.add(sphereMesh);
 
-    spheres.push(sphereMesh);
-  }
-
-  // Helper function to get a random position within bounds. 0.65 prevents freezing at perim
-  function getRandomPositionWithinBounds() {
-    const x = (Math.random() * 2 - 1) * (bounds * 0.65);
-    const y = (Math.random() * 2 - 1) * (bounds * 0.65);
-    const z = (Math.random() * 2 - 1) * (bounds * 0.65);
-
-    return new THREE.Vector3(x, y, z);
-  }
-
-  /*
-  const raycaster = new THREE.Raycaster();
-  const mouse = new THREE.Vector2();
-  function onClick(event) {
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-    raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObjects(spheres, true); // Check for intersections with spheres
-
-    if (intersects.length > 0) {
-      const clickedSphere = intersects[0].object;
-      console.log("Sphere clicked:", clickedSphere);
+        spheres.push(sphereMesh);
     }
-  }
-  cellRender.domElement.addEventListener("click", onClick);
 
-  */
+    // Helper function to get a random position within bounds. 0.65 prevents freezing at perim
+    function getRandomPositionWithinBounds() {
+        const x = (Math.random() * 2 - 1) * (bounds * 0.65);
+        const y = (Math.random() * 2 - 1) * (bounds * 0.65);
+        const z = (Math.random() * 2 - 1) * (bounds * 0.65);
 
-  // Animation loop
-  const speedFactor = 0.03;
+        return new THREE.Vector3(x, y, z);
+    }
 
-  function animate(t) {
-    requestAnimationFrame(animate);
-
-    spheres.forEach((sphere) => {
-      sphere.position.add(sphere.velocity.clone().multiplyScalar(speedFactor));
-
-      // Check if the sphere is beyond the max distance
-      const distance = sphere.position.distanceTo(sceneCenter);
-      if (distance >= bounds) {
-        const reverseDirection = sphere.velocity.clone().negate();
-        const randomAngle = (Math.random() * Math.PI) / 6 - Math.PI / 12; // +/- 30 degrees in radians
-        reverseDirection.applyAxisAngle(
-          sphere.position.clone().normalize(),
-          randomAngle,
-        );
-        sphere.velocity.copy(reverseDirection);
+    /*
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    function onClick(event) {
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(spheres, true); // Check for intersections with spheres
+  
+      if (intersects.length > 0) {
+        const clickedSphere = intersects[0].object;
+        console.log("Sphere clicked:", clickedSphere);
       }
-    });
+    }
+    cellRender.domElement.addEventListener("click", onClick);
+  
+    */
 
-    waveShader.uniforms.time.value += 0.01;
+    // Animation loop
+    const speedFactor = 0.03;
 
-    // CHANGED 1.2 : loadedObject[0] is actually the outer blob mesh
-  if (loadedObjects[0] && loadedObjects[0].children.length > 0) {
-    loadedObjects[0].children.forEach(child => {
-        if (child.material) {
-            child.material.time = t / 1000;
-            // console.log(t / 1000)
+    function animate(t) {
+        requestAnimationFrame(animate);
+
+        spheres.forEach((sphere) => {
+            sphere.position.add(sphere.velocity.clone().multiplyScalar(speedFactor));
+
+            // Check if the sphere is beyond the max distance
+            const distance = sphere.position.distanceTo(sceneCenter);
+            if (distance >= bounds) {
+                const reverseDirection = sphere.velocity.clone().negate();
+                const randomAngle = (Math.random() * Math.PI) / 6 - Math.PI / 12; // +/- 30 degrees in radians
+                reverseDirection.applyAxisAngle(
+                    sphere.position.clone().normalize(),
+                    randomAngle,
+                );
+                sphere.velocity.copy(reverseDirection);
+            }
+        });
+
+        waveShader.uniforms.time.value += 0.01;
+
+        // CHANGED 1.2 : loadedObject[0] is actually the outer blob mesh
+        if (loadedObjects[0] && loadedObjects[0].children.length > 0) {
+            loadedObjects[0].children.forEach(child => {
+                if (child.material) {
+                    child.material.time = t / 1000;
+                    // console.log(t / 1000)
+                }
+            });
         }
-    });
-}
 
-    controls.update();
-    cellRender.render(scene, camera);
-  }
+        controls.update();
+        cellRender.render(scene, camera);
+    }
 
-  animate();
+    animate();
 }
