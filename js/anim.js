@@ -107,7 +107,8 @@ function initScene() {
                 return new Promise((resolve, reject) => {
                     this.scene = scene;
                     this.position = new THREE.Vector3(0, 0, 0);
-                    this.basePath = 'http://127.0.0.1:5501/assets/product/';
+                    //this.basePath = 'http://127.0.0.1:5501/assets/product/';
+                    this.basePath = 'https://cdn.jsdelivr.net/gh/whole-earth/taxa@main/assets/product/';
                     this.gltfFileName = gltf;
 
                     // Setup loaders
@@ -206,7 +207,7 @@ function initScene() {
         Promise.all(loadCellObjects).then(() => {
             scene.add(cellObject);
             initSpeckles(scene, boundingBoxes);
-            initGUI();
+            //initBlueGUI();
             return Promise.all(loadProductObject);
         }).then(() => {
             resolve();
@@ -259,7 +260,7 @@ function initScene() {
         controls.enableZoom = false;
         controls.enablePan = false;
         controls.autoRotate = true;
-        controls.autoRotateSpeed = 0.2;
+        controls.autoRotateSpeed = 0.1;
         controls.target.set(0, 0, 0);
         controls.minPolarAngle = Math.PI / 2;
         controls.maxPolarAngle = Math.PI / 2;
@@ -362,11 +363,10 @@ function initScene() {
         render.setSize(window.innerWidth, window.innerHeight);
     }
 
-    function initGUI() {
+    function initBlueGUI() {
         const gui = new GUI();
         const pearlBlueFolder = gui.addFolder('Pearl Blue Material');
         
-        // Color control - converts between hex string and THREE.Color
         pearlBlueFolder.addColor({
             color: '#' + pearlBlue.color.getHexString()
         }, 'color')
