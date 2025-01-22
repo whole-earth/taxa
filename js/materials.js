@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 
 export const pearlBlue = new THREE.MeshPhysicalMaterial({
-  color: new THREE.Color('#6a81ad'),
+  //color: new THREE.Color('#6a81ad'),
+  color: new THREE.Color('#6175aa'),
   roughness: 0.4,
   metalness: 0.2,
   opacity: 1,
-  transparent: true,
+  //transparent: true, TODO: check if needed to reinstate 
   side: THREE.FrontSide,
   sheen: 1,
   sheenRoughness: 1,
@@ -45,21 +46,5 @@ export const dispersion = new THREE.MeshPhysicalMaterial({
   transparent: true,
   dispersion: 5,
   transparent: true,
-  depthWrite: true
-});
-
-export const vialMaterial = new THREE.MeshPhysicalMaterial({
-  color: new THREE.Color('#f1ff00'),
-  roughness: 0.55,
-  metalness: 0.2,
-  iridescence: 0.85,
-  iridescenceIOR: 1.44,
-  transmission: 0.6,
-  ior: 1.4,
-  thickness: 1,
-  envMapIntensity: 1.5,
-  transparent: true,
-  opacity: 1,
-  side: THREE.FrontSide,
   depthWrite: true
 });

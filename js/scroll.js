@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Tween, Easing } from 'tween';
-import { lastScrollY, setLastScrollY, ribbonTweenGroup, dotTweenGroup, blobTweenGroup } from './anim.js';
+import { lastScrollY, setLastScrollY, ribbonTweenGroup, dotTweenGroup, blobTweenGroup, applicatorObject } from './anim.js';
 
 const splashStartFOV = window.innerWidth < 768 ? 90 : 60;
 const splashEndFOV = splashStartFOV * 0.55;
@@ -9,35 +9,39 @@ const zoomEndFOV = splashEndFOV * 1.1;
 const zoomOutStartFOV = zoomEndFOV;
 const zoomOutEndFOV = splashStartFOV;
 const pitchStartFOV = zoomOutEndFOV;
-const pitchEndFOV = pitchStartFOV * 1.05;
-const productStartFOV = pitchEndFOV;
-const productEndFOV = productStartFOV;
+const pitchEndFOV = pitchStartFOV * 1.5;
+//const productStartFOV = pitchEndFOV;
+//const productEndFOV = productStartFOV;
 
 const green = new THREE.Color('#92cb86');
 const orange = new THREE.Color('#ff8e00');
 const yellow = new THREE.Color('#f1ff00');
+const scrollDots = document.querySelectorAll('.scroll-dot');
 
 const fadeInDuration = 500;
 const fadeOutDuration = 180;
 
 // ============================
 
-function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, wavingBlob, dotBounds, product) {
+function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight) {
     splashBool = isVisibleBetweenTopAndBottom(splashArea);
     zoomBool = isVisibleBetweenTopAndBottom(zoomArea);
     zoomOutBool = isVisibleBetweenTopAndBottom(zoomOutArea);
     pitchBool = isVisibleBetweenTopAndBottom(pitchArea);
     productBool = isVisibleBetweenTopAndBottom(productArea);
 
+    // Add this line after the boolean checks
+    updateScrollIndicator();
+
     if (splashBool) {
         splashProgress = scrollProgress(splashArea);
         camera.fov = smoothLerp(splashStartFOV, splashEndFOV, splashProgress);
 
         if (!splashCurrent) {
-
             activateText(splashArea);
 
-            if (comingFrom == 'zoomAreaFirst') {
+            // Restore ribbons when scrolling back up to splash
+            if (comingFrom == 'zoomAreaFirst' || comingFrom == 'zoomOutArea') {
                 dotTweenOpacity(spheres, 1, 0, wavingBlob, fadeOutDuration);
                 ribbonTweenOpacity(ribbons, 0, 1);
                 cellSheenTween(blobInner);
@@ -57,7 +61,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
             splashCurrent = false;
             zoomCurrent = true;
             zoomOutCurrent = false;
-            restoreDotScale(wavingBlob); // added 9.23 21:16
+            restoreDotScale(wavingBlob);
         }
 
         zoomProgress = scrollProgress(zoomArea);
@@ -164,133 +168,150 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
 
         if (!pitchCurrent) {
             activateText(pitchArea);
-
             if (comingFrom == 'productArea') {
                 controls.autoRotate = true;
                 controls.enableRotate = true;
                 controls.autoRotateSpeed = 0.2;
                 restoreDotScale(wavingBlob);
+            } else if (comingFrom == 'zoomOutArea' && spheres[0].material.opacity > 0) {
+                // only trigger explosion if dots are visible
+                dotsTweenExplosion(wavingBlob, 600, 80);
+            }
 
-                if (product) {
-                    product.children.forEach(child => {
-                        if (child.material) {
-                            child.material.opacity = 0;
-                            child.material.needsUpdate = true;
-                        }
-                    });
-                }
-            } else if (comingFrom == 'zoomOutArea') {
-                dotsTweenExplosion(wavingBlob, 400, 100);
+            // Hide product when entering pitch section
+            if (product) {
+                product.visible = false;
             }
 
             zoomOutCurrent = false;
             pitchCurrent = true;
             productCurrent = false;
             comingFrom = 'pitchArea';
-
         }
     }
     else if (productBool) {
 
         if (!productCurrent) {
-            controls.autoRotate = false;
-            controls.enableRotate = false;
-            controls.autoRotateSpeed = 0;
+
+            if (product) {
+                product.visible = true; // opacity initializes to 0
+                product.rotation.x = Math.PI / 2;
+            }
+
+            // terminate existing animations for product
+            blobTweenGroup.removeAll();
+            dotTweenGroup.removeAll();
+            spheres.forEach(sphere => {
+                sphere.material.opacity = 0;
+                sphere.material.needsUpdate = true;
+            });
+            restoreDotScale(wavingBlob);
+
             pitchCurrent = false;
             productCurrent = true;
             productTextActivated = false;
             comingFrom = 'productArea';
 
-            if (comingFrom == 'pitchArea') {
-                restoreDotScale(wavingBlob);
-                
-                // also, increment thru spheres and set opacity to 0
-                blobTweenGroup.removeAll();
-                dotTweenGroup.removeAll();
-                spheres.forEach(sphere => {
-                    sphere.material.opacity = 0;
-                    sphere.material.needsUpdate = true;
-                });
-
-            }
         }
 
-        productProgress = scrollProgress__Last(productArea);
-
         if (product && product.children) {
+            productProgress = scrollProgress__LastElem(productArea);
 
-            productProgress__0_40 = productProgress <= 0.4 ? productProgress / 0.4 : 1;
+            // Parent if-statement for 0-50% progress
+            if (productProgress <= 0.5) {
 
-            camera.fov = smoothLerp(productStartFOV, productEndFOV, productProgress__0_40);
-
-            const cellScale = smoothLerp(1, 0.1, productProgress__0_40);
-            cellObject.scale.set(cellScale, cellScale, cellScale);
-
-            cellObject.children.forEach(child => {
-                if (child.name == 'ribbons.glb') {
-                    child.traverse(innerChild => {
-                        if (innerChild.material) {
-                            innerChild.material.opacity = 0;
-                            innerChild.material.needsUpdate = true;
-                        }
-                    });
-
-                } else {
-                    child.traverse(innerChild => {
-                        if (innerChild.material) {
-                            innerChild.material.opacity = 1 - productProgress__0_40;
-                            innerChild.material.needsUpdate = true;
-                        }
-                    });
-                }
-            });
-
-            // product scale
-            const productScale = smoothLerp(7, 3, productProgress);
-            product.scale.set(productScale, productScale, productScale);
-
-            // product transform
-            if (0 < productProgress && productProgress <= 0.25) {
+                // restore
                 product.rotation.x = Math.PI / 2;
+                product.rotation.z = 0;
+                cellObject.visible = true;
 
-                if (productTextActivated) {
-                    productArea.querySelectorAll('.child').forEach(child => {
+                // First animation: Scale down cell (0-50%)
+                const cellScale = smoothLerp(1, 0.3, productProgress / 0.5);
+                cellObject.scale.set(cellScale, cellScale, cellScale);
+
+                // Second animation: Product scale and fade (25-50%)
+                if (0.25 < productProgress) {
+
+                    // TODO: call this only once
+                    textChildren.forEach(child => {
                         if (child.classList.contains('active')) {
                             child.classList.remove('active');
                         }
                     });
-                    productTextActivated = false;
-                }
 
-            } else if (0.25 < productProgress && productProgress <= 0.8) {
+                    const normalizedProgress = (productProgress - 0.25) * 4;
+                    const fastOpacityProgress = Math.min(1, normalizedProgress * 2); // Double the opacity rate
+
+                    renderer.toneMappingExposure = smoothLerp(1, 0.35, normalizedProgress);
+                    ambientLight.intensity = smoothLerp(4, 4.6, normalizedProgress);
+                    
+                    // Scale product from 8x to 3x
+                    const productScale = smoothLerp(9, 5, normalizedProgress);
+                    product.scale.set(productScale, productScale, productScale);
+
+                    // Fade in product by traversing all its meshes
+                    product.traverse(child => {
+                        if (child.isMesh && child.material) {
+                            //child.material.transparent = true;
+                            //child.material.opacity = smoothLerp(0, 1, fastOpacityProgress);
+                            //child.material.needsUpdate = true;
+                        }
+                    });
+
+                    cellObject.children.forEach(child => {
+                        // no fadeout for ribbons: already 0
+                        if (child.name != 'ribbons.glb') {
+                            child.traverse(innerChild => {
+                                if (innerChild.material) {
+                                    innerChild.material.transparent = true;
+                                    innerChild.material.opacity = smoothLerp(1, 0, fastOpacityProgress);
+                                    innerChild.material.needsUpdate = true;
+                                }
+                            });
+                        }
+                    });
+                }
+            } else if (productProgress > 0.5) {
+                cellObject.visible = false;
+                const normalizedProgress = (productProgress - 0.5) / 0.5;
 
                 if (!productTextActivated) {
                     activateText(productArea);
                     productTextActivated = true;
                 }
 
-                const rotationProgress = (productProgress - 0.25) / 0.55;
-                const startRotation = Math.PI / 2;
-                const endRotation = 0;
-                product.rotation.x = smoothLerp(startRotation, endRotation, rotationProgress);
-                product.rotation.z = 0;
-                product.children.forEach(child => {
-                    if (child.material) {
-                        child.material.opacity = rotationProgress;
-                        child.material.needsUpdate = true;
-                    }
-                });
+                // calculate the first 40% of the normalizedProgress to determine rotationProgress
+                if (normalizedProgress <= 0.4) {
+                    const rotationXProgress = normalizedProgress / 0.4;
+                    product.rotation.x = smoothLerp(Math.PI / 2, Math.PI / 15, rotationXProgress);
 
-            } else if (0.8 < productProgress && productProgress <= 1) {
-                product.rotation.x = 0;
-                const rotationProgress = (productProgress - 0.8) / 0.2;
-                const startRotation = 0;
-                const endRotation = -Math.PI / 5;
-                product.rotation.z = smoothLerp(startRotation, endRotation, rotationProgress);
+                    if (normalizedProgress > 0.05) {
+                        // calculate the progression between normalizedprogress 0.1 and 0.25
+                        const rotationZProgress = (normalizedProgress - 0.05) / 0.35;
+                        product.rotation.z = smoothLerp(0, -Math.PI / 5, rotationZProgress);
+                    }
+                } else if (normalizedProgress > 0.8) {
+                    // Animate applicator
+                    if (applicatorObject) {
+                        // First 10% (0.8-0.9): Move Y position
+                        if (normalizedProgress <= 0.9) {
+                            const positionProgress = (normalizedProgress - 0.8) / 0.1; // Normalize to 0-1 for position
+                            applicatorObject.position.y = smoothLerp(12, 0, positionProgress);
+                        }
+                        
+                        // Last 5% (0.95-1.0): Rotate
+                        if (normalizedProgress > 0.95) {
+                            const rotationProgress = (normalizedProgress - 0.95) / 0.05; // Normalize to 0-1 for rotation
+                            applicatorObject.rotation.y = smoothLerp(0, Math.PI * 0.4, rotationProgress); // 1/5 of full turn (2π * 0.2)
+                        }
+                    }
+                }
             }
-        } else (console.log('Render Incomplete: Still awaiting product render!'))
+        }
+
     }
 }
+
 
 // =====================================================================================
 
@@ -307,7 +328,7 @@ const zoomThird = document.querySelector('#zoomThird');
 const zoomElements = [zoomFirst, zoomSecond, zoomThird];
 
 let splashBool, zoomBool, zoomOutBool, pitchBool, productBool;
-let splashProgress, zoomProgress, zoomOutProgress, pitchProgress, productProgress, productProgress__0_40;
+let splashProgress, zoomProgress, zoomOutProgress, pitchProgress, productProgress;
 
 let comingFrom = "splash";
 let activeTextTimeout;
@@ -323,7 +344,7 @@ let zoomFirstCurrent = false;
 let zoomSecondCurrent = false;
 let zoomThirdCurrent = false;
 
-export function animatePage(controls, camera, cellObject, blobInner, ribbons, spheres, wavingBlob, dotBounds, product, scrollTimeout) {
+export function animatePage(controls, camera, cellObject, blobInner, ribbons, spheres, wavingBlob, dotBounds, product, scrollTimeout, renderer, ambientLight) {
     let scrollY = window.scrollY;
     let scrollDiff = scrollY - lastScrollY;
     const multiplier = Math.floor(scrollDiff / 20);
@@ -334,7 +355,7 @@ export function animatePage(controls, camera, cellObject, blobInner, ribbons, sp
         controls.autoRotateSpeed = 0.2;
     }, 100);
 
-    throttle(() => scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, wavingBlob, dotBounds, product), 40)();
+    throttle(() => scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight), 40)();
     camera.updateProjectionMatrix();
     setLastScrollY(scrollY);
 };
@@ -352,7 +373,7 @@ function scrollProgress(element) {
     return parseFloat(progress).toFixed(4); // here we truncate!
 }
 
-function scrollProgress__Last(element) {
+function scrollProgress__LastElem(element) {
     const rect = element.getBoundingClientRect();
     const scrollableDistance = rect.height - window.innerHeight;
     const scrolledDistance = Math.max(0, -rect.top);
@@ -518,50 +539,6 @@ function dotRandomizePositions(spheres, dotBounds) {
 
 //================================================================
 
-function dotsTweenExplosion__Prev(spheres, wavingBlob, duration) {
-    blobTweenGroup.removeAll();
-    const initial = { scale: 1, opacity: 1 };
-    const target = { scale: 1.5, opacity: 0 };
-
-    const scaleTween = new Tween(initial)
-        .to({ scale: target.scale }, duration)
-        .easing(Easing.Quadratic.InOut)
-        .onUpdate(() => {
-            wavingBlob.scale.set(initial.scale, initial.scale, initial.scale);
-        })
-        .onComplete(() => {
-            blobTweenGroup.remove(scaleTween);
-        });
-
-    blobTweenGroup.add(scaleTween);
-    scaleTween.start();
-
-    // after certain time, start the opacity fade-out of the dots
-    setTimeout(() => {
-        dotTweenGroup.removeAll();
-
-        spheres.forEach(sphere => {
-            const currentState = { opacity: initial.opacity };
-            const targetState = { opacity: target.opacity };
-
-            const sphereTween = new Tween(currentState)
-                .to(targetState, duration * 0.4) // adjust as needed, but such that OPACITY and SCALE concurrently
-                .easing(Easing.Quadratic.InOut)
-                .onUpdate(() => {
-                    sphere.material.opacity = currentState.opacity;
-                    sphere.material.needsUpdate = true;
-                })
-                .onComplete(() => {
-                    dotTweenGroup.remove(sphereTween);
-                });
-
-            dotTweenGroup.add(sphereTween);
-            sphereTween.start();
-        });
-
-    }, duration * 0.6);
-}
-
 function dotsTweenExplosion(wavingBlob, duration, delayBeforeFire) {
     blobTweenGroup.removeAll();
     dotTweenGroup.removeAll();
@@ -570,7 +547,7 @@ function dotsTweenExplosion(wavingBlob, duration, delayBeforeFire) {
 
     dotGroups.forEach((group, index) => {
         const initialScale = { scale: 1 };
-        const targetScale = { scale: 1.8 };
+        const targetScale = { scale: 3 };
         const initialOpacity = { opacity: 1 };
         const targetOpacity = { opacity: 0 };
 
@@ -628,11 +605,10 @@ function restoreDotScale(wavingBlob) {
         }
     });
 
-    console.log("All scales reset to (1,1,1) for wavingBlob and its dot groups");
+    //console.log("All scales reset to (1,1,1) for wavingBlob and its dot groups");
 }
 
 //================================================================
-
 
 const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
 
@@ -656,3 +632,38 @@ function throttle(func, limit) {
         }
     };
 }
+
+function updateScrollIndicator() {
+    scrollDots.forEach(dot => {
+        const section = dot.dataset.section;
+        if ((section === 'splash' && splashBool) ||
+            (section === 'zoom' && zoomBool) ||
+            (section === 'pitch' && pitchBool) ||
+            (section === 'product' && productBool)) {
+            dot.classList.add('active');
+        } else {
+            dot.classList.remove('active');
+        }
+    });
+}
+
+scrollDots.forEach(dot => {
+    dot.addEventListener('click', () => {
+        const section = dot.dataset.section;
+        const targetElement = document.querySelector(`.${section}`);
+        if (targetElement) {
+            if (section === 'product') {
+                window.scrollTo({
+                    top: document.documentElement.scrollHeight,
+                    behavior: 'smooth'
+                });
+            } else {
+                const targetPosition = targetElement.offsetTop;
+                window.scrollTo({
+                    top: targetPosition,
+                    behavior: 'smooth'
+                });
+            }
+        }
+    });
+});

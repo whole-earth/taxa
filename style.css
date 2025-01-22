@@ -84,11 +84,12 @@ main {
 }
 
 .dg.ac {
-  z-index: 1 !important;
+  z-index: 99999 !important;
+  pointer-events: auto !important;
 }
 
 .dg.a {
   position: relative;
-  z-index: 10000000 !important;
-  pointer-events: auto;
+  z-index: 99999 !important;
+  pointer-events: auto !important;
 }
