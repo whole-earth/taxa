@@ -188,7 +188,7 @@ function initScene() {
         ];
 
         const loadProductObject = [
-            new productComponent("rotated.glb", null, 200)
+            new productComponent("hollow.glb", null, 200)
                 .then((createdProduct) => {
                     product = createdProduct;
                     
