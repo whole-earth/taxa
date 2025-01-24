@@ -5,12 +5,11 @@ import { DRACOLoader } from 'three/DracoLoader';
 import { OrbitControls } from 'three/OrbitControls';
 import { RGBELoader } from 'three/RGBELoader';
 import { PMREMGenerator } from 'three';
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { dispersion, mauve, pearlBlue } from './materials.js';
 import { animatePage } from './scroll.js';
 import { GUI } from 'dat.gui';
+import { MeshLine, MeshLineMaterial } from 'three/meshline';
+import { StarField, starfieldParams, initMeshLine } from './starfield.js';
 
 // Lighting controls
 const lightingParams = {
@@ -21,26 +20,6 @@ const lightingParams = {
     enableEnvironment: true
 };
 
-// Starfield parameters
-const starfieldParams = {
-    count: 2000,
-    size: 0.015,
-    color: '#92cb86',
-    speed: 0.05,
-    radius: 1.8,
-    innerRadius: 1.2,
-    visible: false,
-    warpFactor: 2.0
-};
-
-// Bloom parameters
-const bloomParams = {
-    exposure: 1,
-    bloomStrength: 1.5,
-    bloomThreshold: 0,
-    bloomRadius: 0.8
-};
-
 // Export variables
 export function setLastScrollY(value) { lastScrollY = value; }
 export let lastScrollY = 0;
@@ -48,99 +27,12 @@ export let dotTweenGroup = new Group();
 export let ribbonTweenGroup = new Group();
 export let blobTweenGroup = new Group();
 export let applicatorObject;
-export let starfieldPoints;
-export let composer;
+export let starField;
+
+// Initialize MeshLine dependencies
+initMeshLine({ MeshLine, MeshLineMaterial });
 
 document.addEventListener('DOMContentLoaded', async () => initScene());
-
-function initStarfield(scene) {
-    const starGeometry = new THREE.BufferGeometry();
-    const starPositions = new Float32Array(starfieldParams.count * 3);
-    const starVelocities = new Float32Array(starfieldParams.count * 3);
-    const starSizes = new Float32Array(starfieldParams.count);
-    
-    for (let i = 0; i < starfieldParams.count; i++) {
-        const i3 = i * 3;
-        
-        // Generate points on the surface of a cylinder
-        const radius = starfieldParams.innerRadius + Math.random() * (starfieldParams.radius - starfieldParams.innerRadius);
-        const theta = Math.random() * Math.PI * 2;
-        const y = (Math.random() * 2 - 1) * starfieldParams.radius * 2;
-        
-        starPositions[i3] = Math.cos(theta) * radius;     // x
-        starPositions[i3 + 1] = y;                        // y
-        starPositions[i3 + 2] = Math.sin(theta) * radius; // z
-        
-        // Calculate velocity vector (spiral motion)
-        const speed = starfieldParams.speed * (1 + Math.random());
-        const tangentialSpeed = speed * starfieldParams.warpFactor;
-        
-        starVelocities[i3] = -Math.sin(theta) * tangentialSpeed;     // x velocity (tangential)
-        starVelocities[i3 + 1] = -speed;                             // y velocity (downward)
-        starVelocities[i3 + 2] = Math.cos(theta) * tangentialSpeed;  // z velocity (tangential)
-        
-        // Vary the star sizes
-        starSizes[i] = starfieldParams.size * (0.5 + Math.random() * 0.5);
-    }
-    
-    starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-    starGeometry.setAttribute('velocity', new THREE.BufferAttribute(starVelocities, 3));
-    starGeometry.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
-    
-    // Create a custom shader material for the stars
-    const starMaterial = new THREE.ShaderMaterial({
-        uniforms: {
-            color: { value: new THREE.Color(starfieldParams.color) },
-            opacity: { value: 0 }
-        },
-        vertexShader: `
-            attribute float size;
-            attribute vec3 velocity;
-            varying float vAlpha;
-            
-            void main() {
-                vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-                float speed = length(velocity);
-                vAlpha = speed * 2.0;
-                gl_PointSize = size * (300.0 / -mvPosition.z);
-                gl_Position = projectionMatrix * mvPosition;
-            }
-        `,
-        fragmentShader: `
-            uniform vec3 color;
-            uniform float opacity;
-            varying float vAlpha;
-            
-            void main() {
-                float r = length(gl_PointCoord - vec2(0.5));
-                if (r > 0.5) discard;
-                float alpha = (1.0 - r * 2.0) * vAlpha * opacity;
-                gl_FragColor = vec4(color, alpha);
-            }
-        `,
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending
-    });
-    
-    starfieldPoints = new THREE.Points(starGeometry, starMaterial);
-    starfieldPoints.visible = starfieldParams.visible;
-    scene.add(starfieldPoints);
-    
-    // Add a glowing orb at the bottom of the tube
-    const glowGeometry = new THREE.SphereGeometry(0.3, 32, 32);
-    const glowMaterial = new THREE.MeshBasicMaterial({
-        color: starfieldParams.color,
-        transparent: true,
-        opacity: 0,
-        blending: THREE.AdditiveBlending
-    });
-    const glowOrb = new THREE.Mesh(glowGeometry, glowMaterial);
-    glowOrb.position.y = -starfieldParams.radius * 1.5;
-    starfieldPoints.add(glowOrb);
-    
-    return starfieldPoints;
-}
 
 function initScene() {
     let scene, camera, renderer, controls;
@@ -151,204 +43,179 @@ function initScene() {
     let ambientLight;
     const spheres = [];
 
-    return new Promise((resolve) => {
-        const boundingBoxes = [];
-        const loadedObjects = [];
-        const globalShaders = {};
-        scene = new THREE.Scene();
-        camera = initCamera();
-        renderer = initRenderer();
-        controls = initControls(camera, renderer);
-        cellObject = new THREE.Object3D();
+    const boundingBoxes = [];
+    const loadedObjects = [];
+    const globalShaders = {};
+    scene = new THREE.Scene();
+    camera = initCamera();
+    renderer = initRenderer();
+    controls = initControls(camera, renderer);
+    cellObject = new THREE.Object3D();
 
-        // Initialize post-processing
-        composer = new EffectComposer(renderer);
-        const renderPass = new RenderPass(scene, camera);
-        composer.addPass(renderPass);
+    // Initialize star field
+    starField = new StarField(starfieldParams);
+    starField.visible = false; // Initially hidden
+    scene.add(starField);
 
-        const bloomPass = new UnrealBloomPass(
-            new THREE.Vector2(window.innerWidth, window.innerHeight),
-            bloomParams.bloomStrength,
-            bloomParams.bloomRadius,
-            bloomParams.bloomThreshold
-        );
-        composer.addPass(bloomPass);
+    initLights(scene, renderer);
+    
+    window.addEventListener('resize', () => resizeScene(renderer, camera));
+    window.addEventListener('scroll', () => animatePage(controls, camera, cellObject, blobInner, ribbons, spheres, wavingBlob, dotBounds, product, scrollTimeout, renderer, ambientLight));
 
-        initLights(scene, renderer);
-        initStarfield(scene);
-        
-        // Update resize handler to include composer
-        window.addEventListener('resize', () => {
-            resizeScene(renderer, camera);
-            composer.setSize(window.innerWidth, window.innerHeight);
-        });
+    class CellComponent {
+        constructor(gltf, shader = null, renderOrder = 1) {
+            return new Promise((resolve) => {
+                this.scene = scene;
+                this.position = new THREE.Vector3(0, 0, 0);
+                this.basePath = 'https://cdn.jsdelivr.net/gh/whole-earth/taxa@main/assets/cell/';
+                // this.basePath = './assets/cell/';
+                this.loader = new GLTFLoader();
+                this.gltfFileName = gltf;
+                const dracoLoader = new DRACOLoader();
+                dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.4.3/');
+                this.loader.setDRACOLoader(dracoLoader);
+                this.loadObject(gltf, shader, renderOrder, resolve);
+                this.boundingBox = new THREE.Box3();
+                boundingBoxes.push(this.boundingBox);
+                if (shader) globalShaders[gltf] = shader;
+            });
+        }
 
-        window.addEventListener('scroll', () => animatePage(controls, camera, cellObject, blobInner, ribbons, spheres, wavingBlob, dotBounds, product, scrollTimeout, renderer, ambientLight));
+        loadObject(gltf, shader, renderOrder, resolve) {
+            const fullPath = this.basePath + gltf;
+            this.loader.load(fullPath, (gltf) => {
+                this.object = gltf.scene;
+                this.object.position.copy(this.position);
+                this.object.name = this.gltfFileName.split('/').pop();
+                cellObject.add(this.object);
+                this.centerObject(this.object);
+                if (shader) this.applyCustomShader(shader);
+                this.object.renderOrder = renderOrder;
+                this.boundingBox.setFromObject(this.object);
+                loadedObjects.push(this.object);
+                resolve(this.object);
+            });
+        }
 
-        class CellComponent {
-            constructor(gltf, shader = null, renderOrder = 1) {
-                return new Promise((resolve) => {
-                    this.scene = scene;
-                    this.position = new THREE.Vector3(0, 0, 0);
-                    this.basePath = 'https://cdn.jsdelivr.net/gh/whole-earth/taxa@main/assets/cell/';
-                    // this.basePath = './assets/cell/';
-                    this.loader = new GLTFLoader();
-                    this.gltfFileName = gltf;
-                    const dracoLoader = new DRACOLoader();
-                    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.4.3/');
-                    this.loader.setDRACOLoader(dracoLoader);
-                    this.loadObject(gltf, shader, renderOrder, resolve);
-                    this.boundingBox = new THREE.Box3();
-                    boundingBoxes.push(this.boundingBox);
-                    if (shader) globalShaders[gltf] = shader;
-                });
-            }
+        applyCustomShader(shader) {
+            if (!shader) return;
+            this.object.traverse((node) => {
+                if (node.isMesh) {
+                    node.material = shader;
+                    node.material.needsUpdate = true;
+                }
+            });
+        }
 
-            loadObject(gltf, shader, renderOrder, resolve) {
-                const fullPath = this.basePath + gltf;
-                this.loader.load(fullPath, (gltf) => {
+        centerObject(object) {
+            const box = new THREE.Box3().setFromObject(object);
+            const center = box.getCenter(new THREE.Vector3());
+            object.position.sub(center);
+        }
+    }
+
+    class productComponent {
+        constructor(gltf, renderOrder = 1) {
+            return new Promise((resolve, reject) => {
+                this.scene = scene;
+                this.position = new THREE.Vector3(0, 0, 0);
+                this.basePath = 'https://cdn.jsdelivr.net/gh/whole-earth/taxa@main/assets/product/';
+                this.gltfFileName = gltf;
+
+                // Setup loaders
+                this.loader = new GLTFLoader();
+                const dracoLoader = new DRACOLoader();
+                dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.4.3/');
+                this.loader.setDRACOLoader(dracoLoader);
+
+                this.loadObject(gltf, renderOrder, resolve, reject);
+            });
+        }
+
+        loadObject(gltf, renderOrder, resolve, reject) {
+            const fullPath = this.basePath + gltf;
+
+            this.loader.load(
+                fullPath,
+                (gltf) => {
                     this.object = gltf.scene;
                     this.object.position.copy(this.position);
                     this.object.name = this.gltfFileName.split('/').pop();
-                    cellObject.add(this.object);
+                    scene.add(this.object);
                     this.centerObject(this.object);
-                    if (shader) this.applyCustomShader(shader);
+                    this.object.rotation.x = Math.PI / 2;
                     this.object.renderOrder = renderOrder;
-                    this.boundingBox.setFromObject(this.object);
-                    loadedObjects.push(this.object);
-                    resolve(this.object);
-                });
-            }
+                    this.object.visible = false;
 
-            applyCustomShader(shader) {
-                if (!shader) return;
-                this.object.traverse((node) => {
-                    if (node.isMesh) {
-                        node.material = shader;
-                        node.material.needsUpdate = true;
-                    }
-                });
-            }
-
-            centerObject(object) {
-                const box = new THREE.Box3().setFromObject(object);
-                const center = box.getCenter(new THREE.Vector3());
-                object.position.sub(center);
-            }
-        }
-
-        class productComponent {
-            constructor(gltf, renderOrder = 1) {
-                return new Promise((resolve, reject) => {
-                    this.scene = scene;
-                    this.position = new THREE.Vector3(0, 0, 0);
-                    //this.basePath = 'http://127.0.0.1:5501/assets/product/';
-                    this.basePath = 'https://cdn.jsdelivr.net/gh/whole-earth/taxa@main/assets/product/';
-                    this.gltfFileName = gltf;
-
-                    // Setup loaders
-                    this.loader = new GLTFLoader();
-                    const dracoLoader = new DRACOLoader();
-                    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.4.3/');
-                    this.loader.setDRACOLoader(dracoLoader);
-
-                    this.loadObject(gltf, renderOrder, resolve, reject);
-                });
-            }
-
-            loadObject(gltf, renderOrder, resolve, reject) {
-                const fullPath = this.basePath + gltf;
-
-                this.loader.load(
-                    fullPath,
-                    (gltf) => {
-                        this.object = gltf.scene;
-                        this.object.position.copy(this.position);
-                        this.object.name = this.gltfFileName.split('/').pop();
-                        scene.add(this.object);
-                        this.centerObject(this.object);
-                        this.object.rotation.x = Math.PI / 2;
-                        this.object.renderOrder = renderOrder;
-                        this.object.visible = false;
-
-                        // Initialize product with transparency
-                        this.object.traverse(child => {
-                            if (child.material) {
-                                //child.material.transparent = true;
-                                //child.material.opacity = 0;
-                                child.material.needsUpdate = true;
-                            }
-                        });
-
-                        // Move applicator up
-                        applicatorObject = this.object.getObjectByName('applicator');
-                        if (applicatorObject) {
-                            applicatorObject.position.y += 24;
+                    // Initialize product with transparency
+                    this.object.traverse(child => {
+                        if (child.material) {
+                            child.material.needsUpdate = true;
                         }
+                    });
 
-                        resolve(this.object);
-                    },
-                    undefined,
-                    (error) => {
-                        console.error('Error loading product:', error);
-                        reject(error);
+                    // Move applicator up
+                    applicatorObject = this.object.getObjectByName('applicator');
+                    if (applicatorObject) {
+                        applicatorObject.position.y += 24;
                     }
-                );
-            }
 
-            centerObject(object) {
-                const box = new THREE.Box3().setFromObject(object);
-                const center = box.getCenter(new THREE.Vector3());
-                object.position.sub(center);
-            }
+                    resolve(this.object);
+                },
+                undefined,
+                (error) => {
+                    console.error('Error loading product:', error);
+                    reject(error);
+                }
+            );
         }
 
-        const loadCellObjects = [
+        centerObject(object) {
+            const box = new THREE.Box3().setFromObject(object);
+            const center = box.getCenter(new THREE.Vector3());
+            object.position.sub(center);
+        }
+    }
 
-            new CellComponent("blob-inner.glb", pearlBlue, 0).then((object) => {
-                blobInner = object;
-                resolve();
-            }),
+    const loadCellObjects = [
 
-            new CellComponent("blob-outer.glb", dispersion, 2).then((object) => {
-                blobOuter = object;
-                resolve();
-            }),
+        new CellComponent("blob-inner.glb", pearlBlue, 0).then((object) => {
+            blobInner = object;
+        }),
 
-            new CellComponent("ribbons.glb", mauve, 3).then((object) => {
-                ribbons = object;
-                resolve();
+        new CellComponent("blob-outer.glb", dispersion, 2).then((object) => {
+            blobOuter = object;
+        }),
+
+        new CellComponent("ribbons.glb", mauve, 3).then((object) => {
+            ribbons = object;
+        })
+
+    ];
+
+    const loadProductObject = [
+        new productComponent("hollow.glb", 200)
+            .then((createdProduct) => {
+                product = createdProduct;
+                
+                // Create anchor and add product to it
+                productAnchor = new THREE.Object3D();
+                productAnchor.add(product);
+                
+                scene.add(productAnchor);
             })
+            .catch((error) => {
+                console.error('Failed to load product:', error);
+            })
+    ];
 
-        ];
-
-        const loadProductObject = [
-            new productComponent("hollow.glb", 200)
-                .then((createdProduct) => {
-                    product = createdProduct;
-                    
-                    // Create anchor and add product to it
-                    productAnchor = new THREE.Object3D();
-                    productAnchor.add(product);
-                    
-                    scene.add(productAnchor);
-                    resolve();
-                })
-                .catch((error) => {
-                    console.error('Failed to load product:', error);
-                })
-        ];
-
-        Promise.all(loadCellObjects).then(() => {
-            scene.add(cellObject);
-            initSpeckles(scene, boundingBoxes);
-            //initBlueGUI();
-            return Promise.all(loadProductObject);
-        }).then(() => {
-            resolve();
-        }).catch((error) => {
-            console.error('Error in loading sequence:', error);
-        });
+    Promise.all(loadCellObjects).then(() => {
+        scene.add(cellObject);
+        initSpeckles(scene, boundingBoxes);
+        return Promise.all(loadProductObject);
+    }).then(() => {
+    }).catch((error) => {
+        console.error('Error in loading sequence:', error);
     });
 
     function initRenderer() {
@@ -468,58 +335,17 @@ function initScene() {
     
         function animate() {
             requestAnimationFrame(animate);
-    
+
             dotTweenGroup.update();
             ribbonTweenGroup.update();
             blobTweenGroup.update();
-    
+
             if (productAnchor) { productAnchor.lookAt(camera.position); }
-    
-            // Update starfield
-            if (starfieldPoints && starfieldPoints.visible) {
-                const positions = starfieldPoints.geometry.attributes.position;
-                const velocities = starfieldPoints.geometry.attributes.velocity;
-                
-                for (let i = 0; i < positions.count; i++) {
-                    const i3 = i * 3;
-                    
-                    // Update position based on velocity
-                    positions.array[i3] += velocities.array[i3];
-                    positions.array[i3 + 1] += velocities.array[i3 + 1];
-                    positions.array[i3 + 2] += velocities.array[i3 + 2];
-                    
-                    // Reset position if star goes below the cylinder
-                    if (positions.array[i3 + 1] < -starfieldParams.radius * 2) {
-                        // Reset to top with random radius and angle
-                        const radius = starfieldParams.innerRadius + Math.random() * (starfieldParams.radius - starfieldParams.innerRadius);
-                        const theta = Math.random() * Math.PI * 2;
-                        
-                        positions.array[i3] = Math.cos(theta) * radius;
-                        positions.array[i3 + 1] = starfieldParams.radius * 2;
-                        positions.array[i3 + 2] = Math.sin(theta) * radius;
-                        
-                        // Update velocity for new spiral motion
-                        const speed = starfieldParams.speed * (1 + Math.random());
-                        const tangentialSpeed = speed * starfieldParams.warpFactor;
-                        
-                        velocities.array[i3] = -Math.sin(theta) * tangentialSpeed;
-                        velocities.array[i3 + 1] = -speed;
-                        velocities.array[i3 + 2] = Math.cos(theta) * tangentialSpeed;
-                    }
-                }
-                
-                positions.needsUpdate = true;
-                
-                // Update glow orb opacity to match starfield
-                if (starfieldPoints.children[0]) {
-                    starfieldPoints.children[0].material.opacity = starfieldPoints.material.uniforms.opacity.value;
-                }
-            }
-    
-            // Use composer instead of renderer
-            composer.render();
+            if (starField && starField.visible) { starField.updateFacing(camera); }
+
+            renderer.render(scene, camera);
             controls.update();
-    
+
             [dotsGroup1, dotsGroup2, dotsGroup3, dotsGroup4, dotsGroup5].forEach(group => {
                 group.children.forEach(sphere => {
                     sphere.position.add(sphere.velocity);

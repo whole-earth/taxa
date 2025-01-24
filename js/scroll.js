@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Tween, Easing } from 'tween';
-import { lastScrollY, setLastScrollY, ribbonTweenGroup, dotTweenGroup, blobTweenGroup, applicatorObject, starfieldPoints } from './anim.js';
+import { lastScrollY, setLastScrollY, ribbonTweenGroup, dotTweenGroup, blobTweenGroup, applicatorObject, starField } from './anim.js';
 
 const splashStartFOV = window.innerWidth < 768 ? 90 : 60;
 const splashEndFOV = splashStartFOV * 0.55;
@@ -10,8 +10,6 @@ const zoomOutStartFOV = zoomEndFOV;
 const zoomOutEndFOV = splashStartFOV;
 const pitchStartFOV = zoomOutEndFOV;
 const pitchEndFOV = pitchStartFOV * 1.5;
-//const productStartFOV = pitchEndFOV;
-//const productEndFOV = productStartFOV;
 
 const green = new THREE.Color('#92cb86');
 const orange = new THREE.Color('#ff8e00');
@@ -170,24 +168,18 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
 
     }
     else if (pitchBool) {
-        pitchProgress = scrollProgress(pitchArea);
-        camera.fov = smoothLerp(pitchStartFOV, pitchEndFOV, pitchProgress);
-
+    
         if (!pitchCurrent) {
             activateText(pitchArea);
             if (comingFrom == 'productArea') {
                 controls.autoRotate = true;
                 controls.enableRotate = true;
                 controls.autoRotateSpeed = 0.2;
+                product.visible = false;
                 restoreDotScale(wavingBlob);
             } else if (comingFrom == 'zoomOutArea' && spheres[0].material.opacity > 0) {
                 // only trigger explosion if dots are visible
                 dotsTweenExplosion(wavingBlob, 600, 80);
-            }
-
-            // Hide product when entering pitch section
-            if (product) {
-                product.visible = false;
             }
 
             zoomOutCurrent = false;
@@ -195,144 +187,122 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
             productCurrent = false;
             comingFrom = 'pitchArea';
         }
+
+        pitchProgress = scrollProgress(pitchArea);
+        camera.fov = smoothLerp(pitchStartFOV, pitchEndFOV, pitchProgress);
     }
     else if (productBool) {
+        // Initial setup when entering product section
         if (!productCurrent) {
             if (product) {
-                product.visible = true;
                 product.rotation.x = Math.PI / 2;
             }
 
-            // Reset starfield
-            if (starfieldPoints) {
-                starfieldPoints.visible = false;
-                starfieldPoints.material.uniforms.opacity.value = 0;
-                if (starfieldPoints.children[0]) {
-                    starfieldPoints.children[0].material.opacity = 0;
-                }
-            }
-
-            // terminate existing animations for product
+            // Clean up previous animations
             wavingBlob.children.forEach(group => {
-                if (group.isGroup) {
-                    group.visible = false;
-                }
+                if (group.isGroup) group.visible = false;
             });
             blobTweenGroup.removeAll();
             dotTweenGroup.removeAll();
             restoreDotScale(wavingBlob);
 
+            // Show star field for transition
+            if (starField) {
+                starField.visible = true;
+            }
+
+            // Update state
             pitchCurrent = false;
             productCurrent = true;
             productTextActivated = false;
             comingFrom = 'productArea';
         }
 
+        // Begin animation sequence
         if (product && product.children) {
             productProgress = scrollProgress__LastElem(productArea);
 
-            // Handle starfield visibility and animation (0-0.45)
-            if (productProgress <= 0.45) {
-                if (starfieldPoints) {
-                    // Make starfield visible and fade in
-                    if (!starfieldPoints.visible) {
-                        starfieldPoints.visible = true;
-                        starfieldPoints.position.copy(product.position);
-                        starfieldPoints.rotation.copy(product.rotation);
-                    }
-                    
-                    // Fade in starfield gradually from 0 to 0.2 progress
-                    if (productProgress <= 0.2) {
-                        starfieldPoints.material.uniforms.opacity.value = smoothLerp(0, 1, productProgress / 0.2);
-                    }
-                    // Maintain full opacity from 0.2 to 0.35
-                    else if (productProgress <= 0.35) {
-                        starfieldPoints.material.uniforms.opacity.value = 1;
-                    }
-                    // Fade out from 0.35 to 0.45
-                    else {
-                        starfieldPoints.material.uniforms.opacity.value = smoothLerp(1, 0, (productProgress - 0.35) / 0.1);
-                    }
-                    
-                    // Update starfield position and rotation to match product
-                    starfieldPoints.position.copy(product.position);
-                    starfieldPoints.rotation.copy(product.rotation);
+            // ===== PHASE 1: Initial Transition (0 to 0.5) =====
+            if (productProgress <= 0.5) {
+                // 1a. Star Trails Animation (0 to 0.5)
+                if (starField) {
+                    starField.updateProgress(productProgress * 2); // Scale 0-0.5 to 0-1
                 }
 
-                // Phase 1: Cell scale down and product fade in (0-0.25)
-                if (productProgress <= 0.25) {
-                    // restore initial positions
-                    product.rotation.x = Math.PI / 2;
-                    product.rotation.z = 0;
-                    cellObject.visible = true;
+                // 1b. Cell Scale & Product Fade (0 to 0.5)
+                product.rotation.x = Math.PI / 2;
+                product.rotation.z = 0;
+                cellObject.visible = true;
+                const cellScale = smoothLerp(1, 0.3, productProgress / 0.5);
+                cellObject.scale.set(cellScale, cellScale, cellScale);
 
-                    // Scale down cell
-                    const cellScale = smoothLerp(1, 0.3, productProgress / 0.25);
-                    cellObject.scale.set(cellScale, cellScale, cellScale);
+                // 1c. Product Scale & Fade (0.25 to 0.5)
+                if (productProgress > 0.25) {
+                    // Clear text
+                    textChildren.forEach(child => {
+                        if (child.classList.contains('active')) {
+                            child.classList.remove('active');
+                        }
+                    });
 
-                    // Product scale and fade starting at 0.125 (halfway through cell scale)
-                    if (productProgress > 0.125) {
-                        // Remove text only once when entering this phase
-                        textChildren.forEach(child => {
-                            if (child.classList.contains('active')) {
-                                child.classList.remove('active');
-                            }
-                        });
-
-                        const fadeProgress = (productProgress - 0.125) / 0.125; // Normalize 0.125-0.25 to 0-1
-                        
-                        renderer.toneMappingExposure = smoothLerp(1, 0.35, fadeProgress);
-                        ambientLight.intensity = smoothLerp(4, 4.6, fadeProgress);
-                        
-                        const productScale = smoothLerp(24, 5, fadeProgress);
-                        product.scale.set(productScale, productScale, productScale);
-
-                        // Fade out cell (except ribbons)
-                        cellObject.children.forEach(child => {
-                            if (child.name != 'ribbons.glb') {
-                                child.traverse(innerChild => {
-                                    if (innerChild.material) {
-                                        innerChild.material.transparent = true;
-                                        innerChild.material.opacity = smoothLerp(1, 0, fadeProgress);
-                                        innerChild.material.needsUpdate = true;
-                                    }
-                                });
-                            }
-                        });
-                    }
-                } 
-                // Phase 2: Product rotation (0.25-0.45)
-                else {
-                    cellObject.visible = false;
-                    const rotationProgress = (productProgress - 0.25) / 0.2; // Normalize 0.25-0.45 to 0-1
+                    const fadeProgress = (productProgress - 0.25) / 0.25;
                     
-                    product.rotation.x = smoothLerp(Math.PI / 2, Math.PI / 15, rotationProgress);
+                    // Update rendering parameters
+                    renderer.toneMappingExposure = smoothLerp(1, 0.35, fadeProgress);
+                    ambientLight.intensity = smoothLerp(4, 4.6, fadeProgress);
                     
-                    if (rotationProgress > 0.25) { // Start Z rotation after 25% of X rotation
-                        const zRotationProgress = (rotationProgress - 0.25) / 0.75; // Normalize remaining progress
-                        product.rotation.z = smoothLerp(0, -Math.PI / 5, zRotationProgress);
-                    }
+                    // Scale product (but keep it invisible)
+                    const productScale = smoothLerp(42, 5, fadeProgress);
+                    product.scale.set(productScale, productScale, productScale);
+
+                    // Fade out cell (except ribbons)
+                    cellObject.children.forEach(child => {
+                        if (child.name != 'ribbons.glb') {
+                            child.traverse(innerChild => {
+                                if (innerChild.material) {
+                                    innerChild.material.transparent = true;
+                                    innerChild.material.opacity = smoothLerp(1, 0, fadeProgress);
+                                    innerChild.material.needsUpdate = true;
+                                }
+                            });
+                        }
+                    });
                 }
-            } else {
-                // Hide starfield after progress > 0.45
-                if (starfieldPoints) {
-                    starfieldPoints.visible = false;
+            } 
+            // ===== PHASE 2: Product Rotation (0.5 to 0.8) =====
+            else if (productProgress <= 0.8) {
+                // Hide star field after transition
+                if (starField) {
+                    starField.visible = false;
                 }
+
+                product.visible = true;  // Keep parent visible
+
+                // 2a. X-axis rotation (0.5 to 0.8)
+                const rotationProgress = (productProgress - 0.5) / 0.3;
+                product.rotation.x = smoothLerp(Math.PI / 2, Math.PI / 15, rotationProgress);
                 
-                // Phase 3: Applicator animation (0.8-1.0)
-                if (productProgress >= 0.8 && applicatorObject) {
-                    // Y position animation (0.8-0.95)
+                // 2b. Z-axis rotation (starts at 0.65)
+                if (rotationProgress > 0.5) {
+                    const zRotationProgress = (rotationProgress - 0.5) / 0.5;
+                    product.rotation.z = smoothLerp(0, -Math.PI / 5, zRotationProgress);
+                }
+            }
+            
+            // ===== PHASE 3: Applicator Animation (0.8 to 1.0) =====
+            else if (productProgress >= 0.8) {
+                if (applicatorObject) {
+                    // 3a. Applicator Position (0.8 to 0.95)
                     if (productProgress <= 0.95) {
                         const positionProgress = (productProgress - 0.8) / 0.15;
                         applicatorObject.position.y = smoothLerp(24, 0, positionProgress);
-
+                    }
+                    // 3b. Applicator Rotation (0.95 to 1.0)
+                    else {
                         if (!productTextActivated) {
                             activateText(productArea);
                             productTextActivated = true;
                         }
-                    }
-                    // Applicator rotation (0.95-1.0)
-                    if (productProgress > 0.95) {
                         const rotationProgress = (productProgress - 0.95) / 0.05;
                         applicatorObject.rotation.y = smoothLerp(0, Math.PI * 0.4, rotationProgress);
                     }
@@ -637,8 +607,6 @@ function restoreDotScale(wavingBlob) {
             group.scale.set(1, 1, 1);
         }
     });
-
-    //console.log("All scales reset to (1,1,1) for wavingBlob and its dot groups");
 }
 
 //================================================================
@@ -759,8 +727,8 @@ function smoothScrollTo(targetPosition) {
     const numberOfSections = Math.abs(targetIndex - currentIndex);
     
     // Log for debugging
-    console.log(`Scrolling from ${currentSection} (index: ${currentIndex}) to ${targetSection} (index: ${targetIndex})`);
-    console.log(`Number of sections to scroll: ${numberOfSections}`);
+    //console.log(`Scrolling from ${currentSection} (index: ${currentIndex}) to ${targetSection} (index: ${targetIndex})`);
+    //console.log(`Number of sections to scroll: ${numberOfSections}`);
     
     // Determine duration based on number of sections
     let duration;
