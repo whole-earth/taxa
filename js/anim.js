@@ -5,6 +5,9 @@ import { DRACOLoader } from 'three/DracoLoader';
 import { OrbitControls } from 'three/OrbitControls';
 import { RGBELoader } from 'three/RGBELoader';
 import { PMREMGenerator } from 'three';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { dispersion, mauve, pearlBlue } from './materials.js';
 import { animatePage } from './scroll.js';
 import { GUI } from 'dat.gui';
@@ -18,14 +21,126 @@ const lightingParams = {
     enableEnvironment: true
 };
 
-document.addEventListener('DOMContentLoaded', async () => initScene());
+// Starfield parameters
+const starfieldParams = {
+    count: 2000,
+    size: 0.015,
+    color: '#92cb86',
+    speed: 0.05,
+    radius: 1.8,
+    innerRadius: 1.2,
+    visible: false,
+    warpFactor: 2.0
+};
 
+// Bloom parameters
+const bloomParams = {
+    exposure: 1,
+    bloomStrength: 1.5,
+    bloomThreshold: 0,
+    bloomRadius: 0.8
+};
+
+// Export variables
 export function setLastScrollY(value) { lastScrollY = value; }
 export let lastScrollY = 0;
 export let dotTweenGroup = new Group();
 export let ribbonTweenGroup = new Group();
 export let blobTweenGroup = new Group();
 export let applicatorObject;
+export let starfieldPoints;
+export let composer;
+
+document.addEventListener('DOMContentLoaded', async () => initScene());
+
+function initStarfield(scene) {
+    const starGeometry = new THREE.BufferGeometry();
+    const starPositions = new Float32Array(starfieldParams.count * 3);
+    const starVelocities = new Float32Array(starfieldParams.count * 3);
+    const starSizes = new Float32Array(starfieldParams.count);
+    
+    for (let i = 0; i < starfieldParams.count; i++) {
+        const i3 = i * 3;
+        
+        // Generate points on the surface of a cylinder
+        const radius = starfieldParams.innerRadius + Math.random() * (starfieldParams.radius - starfieldParams.innerRadius);
+        const theta = Math.random() * Math.PI * 2;
+        const y = (Math.random() * 2 - 1) * starfieldParams.radius * 2;
+        
+        starPositions[i3] = Math.cos(theta) * radius;     // x
+        starPositions[i3 + 1] = y;                        // y
+        starPositions[i3 + 2] = Math.sin(theta) * radius; // z
+        
+        // Calculate velocity vector (spiral motion)
+        const speed = starfieldParams.speed * (1 + Math.random());
+        const tangentialSpeed = speed * starfieldParams.warpFactor;
+        
+        starVelocities[i3] = -Math.sin(theta) * tangentialSpeed;     // x velocity (tangential)
+        starVelocities[i3 + 1] = -speed;                             // y velocity (downward)
+        starVelocities[i3 + 2] = Math.cos(theta) * tangentialSpeed;  // z velocity (tangential)
+        
+        // Vary the star sizes
+        starSizes[i] = starfieldParams.size * (0.5 + Math.random() * 0.5);
+    }
+    
+    starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+    starGeometry.setAttribute('velocity', new THREE.BufferAttribute(starVelocities, 3));
+    starGeometry.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
+    
+    // Create a custom shader material for the stars
+    const starMaterial = new THREE.ShaderMaterial({
+        uniforms: {
+            color: { value: new THREE.Color(starfieldParams.color) },
+            opacity: { value: 0 }
+        },
+        vertexShader: `
+            attribute float size;
+            attribute vec3 velocity;
+            varying float vAlpha;
+            
+            void main() {
+                vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                float speed = length(velocity);
+                vAlpha = speed * 2.0;
+                gl_PointSize = size * (300.0 / -mvPosition.z);
+                gl_Position = projectionMatrix * mvPosition;
+            }
+        `,
+        fragmentShader: `
+            uniform vec3 color;
+            uniform float opacity;
+            varying float vAlpha;
+            
+            void main() {
+                float r = length(gl_PointCoord - vec2(0.5));
+                if (r > 0.5) discard;
+                float alpha = (1.0 - r * 2.0) * vAlpha * opacity;
+                gl_FragColor = vec4(color, alpha);
+            }
+        `,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+    });
+    
+    starfieldPoints = new THREE.Points(starGeometry, starMaterial);
+    starfieldPoints.visible = starfieldParams.visible;
+    scene.add(starfieldPoints);
+    
+    // Add a glowing orb at the bottom of the tube
+    const glowGeometry = new THREE.SphereGeometry(0.3, 32, 32);
+    const glowMaterial = new THREE.MeshBasicMaterial({
+        color: starfieldParams.color,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending
+    });
+    const glowOrb = new THREE.Mesh(glowGeometry, glowMaterial);
+    glowOrb.position.y = -starfieldParams.radius * 1.5;
+    starfieldPoints.add(glowOrb);
+    
+    return starfieldPoints;
+}
 
 function initScene() {
     let scene, camera, renderer, controls;
@@ -46,9 +161,29 @@ function initScene() {
         controls = initControls(camera, renderer);
         cellObject = new THREE.Object3D();
 
+        // Initialize post-processing
+        composer = new EffectComposer(renderer);
+        const renderPass = new RenderPass(scene, camera);
+        composer.addPass(renderPass);
+
+        const bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            bloomParams.bloomStrength,
+            bloomParams.bloomRadius,
+            bloomParams.bloomThreshold
+        );
+        composer.addPass(bloomPass);
+
         initLights(scene, renderer);
+        initStarfield(scene);
+        
+        // Update resize handler to include composer
+        window.addEventListener('resize', () => {
+            resizeScene(renderer, camera);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+
         window.addEventListener('scroll', () => animatePage(controls, camera, cellObject, blobInner, ribbons, spheres, wavingBlob, dotBounds, product, scrollTimeout, renderer, ambientLight));
-        window.addEventListener('resize', () => resizeScene(renderer, camera));
 
         class CellComponent {
             constructor(gltf, shader = null, renderOrder = 1) {
@@ -103,7 +238,7 @@ function initScene() {
         }
 
         class productComponent {
-            constructor(gltf, shader = null, renderOrder = 1) {
+            constructor(gltf, renderOrder = 1) {
                 return new Promise((resolve, reject) => {
                     this.scene = scene;
                     this.position = new THREE.Vector3(0, 0, 0);
@@ -148,7 +283,7 @@ function initScene() {
                         // Move applicator up
                         applicatorObject = this.object.getObjectByName('applicator');
                         if (applicatorObject) {
-                            applicatorObject.position.y += 12;
+                            applicatorObject.position.y += 24;
                         }
 
                         resolve(this.object);
@@ -188,7 +323,7 @@ function initScene() {
         ];
 
         const loadProductObject = [
-            new productComponent("hollow.glb", null, 200)
+            new productComponent("hollow.glb", 200)
                 .then((createdProduct) => {
                     product = createdProduct;
                     
@@ -340,7 +475,49 @@ function initScene() {
     
             if (productAnchor) { productAnchor.lookAt(camera.position); }
     
-            renderer.render(scene, camera);
+            // Update starfield
+            if (starfieldPoints && starfieldPoints.visible) {
+                const positions = starfieldPoints.geometry.attributes.position;
+                const velocities = starfieldPoints.geometry.attributes.velocity;
+                
+                for (let i = 0; i < positions.count; i++) {
+                    const i3 = i * 3;
+                    
+                    // Update position based on velocity
+                    positions.array[i3] += velocities.array[i3];
+                    positions.array[i3 + 1] += velocities.array[i3 + 1];
+                    positions.array[i3 + 2] += velocities.array[i3 + 2];
+                    
+                    // Reset position if star goes below the cylinder
+                    if (positions.array[i3 + 1] < -starfieldParams.radius * 2) {
+                        // Reset to top with random radius and angle
+                        const radius = starfieldParams.innerRadius + Math.random() * (starfieldParams.radius - starfieldParams.innerRadius);
+                        const theta = Math.random() * Math.PI * 2;
+                        
+                        positions.array[i3] = Math.cos(theta) * radius;
+                        positions.array[i3 + 1] = starfieldParams.radius * 2;
+                        positions.array[i3 + 2] = Math.sin(theta) * radius;
+                        
+                        // Update velocity for new spiral motion
+                        const speed = starfieldParams.speed * (1 + Math.random());
+                        const tangentialSpeed = speed * starfieldParams.warpFactor;
+                        
+                        velocities.array[i3] = -Math.sin(theta) * tangentialSpeed;
+                        velocities.array[i3 + 1] = -speed;
+                        velocities.array[i3 + 2] = Math.cos(theta) * tangentialSpeed;
+                    }
+                }
+                
+                positions.needsUpdate = true;
+                
+                // Update glow orb opacity to match starfield
+                if (starfieldPoints.children[0]) {
+                    starfieldPoints.children[0].material.opacity = starfieldPoints.material.uniforms.opacity.value;
+                }
+            }
+    
+            // Use composer instead of renderer
+            composer.render();
             controls.update();
     
             [dotsGroup1, dotsGroup2, dotsGroup3, dotsGroup4, dotsGroup5].forEach(group => {

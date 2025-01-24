@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Tween, Easing } from 'tween';
-import { lastScrollY, setLastScrollY, ribbonTweenGroup, dotTweenGroup, blobTweenGroup, applicatorObject } from './anim.js';
+import { lastScrollY, setLastScrollY, ribbonTweenGroup, dotTweenGroup, blobTweenGroup, applicatorObject, starfieldPoints } from './anim.js';
 
 const splashStartFOV = window.innerWidth < 768 ? 90 : 60;
 const splashEndFOV = splashStartFOV * 0.55;
@@ -197,12 +197,19 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
         }
     }
     else if (productBool) {
-
         if (!productCurrent) {
-
             if (product) {
-                product.visible = true; // opacity initializes to 0
+                product.visible = true;
                 product.rotation.x = Math.PI / 2;
+            }
+
+            // Reset starfield
+            if (starfieldPoints) {
+                starfieldPoints.visible = false;
+                starfieldPoints.material.uniforms.opacity.value = 0;
+                if (starfieldPoints.children[0]) {
+                    starfieldPoints.children[0].material.opacity = 0;
+                }
             }
 
             // terminate existing animations for product
@@ -219,104 +226,119 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
             productCurrent = true;
             productTextActivated = false;
             comingFrom = 'productArea';
-
         }
 
         if (product && product.children) {
             productProgress = scrollProgress__LastElem(productArea);
 
-            // Parent if-statement for 0-50% progress
-            if (productProgress <= 0.5) {
-
-                // restore
-                product.rotation.x = Math.PI / 2;
-                product.rotation.z = 0;
-                cellObject.visible = true;
-
-                // First animation: Scale down cell (0-50%)
-                const cellScale = smoothLerp(1, 0.3, productProgress / 0.5);
-                cellObject.scale.set(cellScale, cellScale, cellScale);
-
-                // Second animation: Product scale and fade (25-50%)
-                if (0.25 < productProgress) {
-
-                    // TODO: call this only once
-                    textChildren.forEach(child => {
-                        if (child.classList.contains('active')) {
-                            child.classList.remove('active');
-                        }
-                    });
-
-                    const normalizedProgress = (productProgress - 0.25) * 4;
-                    const fastOpacityProgress = Math.min(1, normalizedProgress * 2); // Double the opacity rate
-
-                    renderer.toneMappingExposure = smoothLerp(1, 0.35, normalizedProgress);
-                    ambientLight.intensity = smoothLerp(4, 4.6, normalizedProgress);
-                    
-                    // Scale product from 8x to 3x
-                    const productScale = smoothLerp(9, 5, normalizedProgress);
-                    product.scale.set(productScale, productScale, productScale);
-
-                    // Fade in product by traversing all its meshes
-                    product.traverse(child => {
-                        if (child.isMesh && child.material) {
-                            //child.material.transparent = true;
-                            //child.material.opacity = smoothLerp(0, 1, fastOpacityProgress);
-                            //child.material.needsUpdate = true;
-                        }
-                    });
-
-                    cellObject.children.forEach(child => {
-                        // no fadeout for ribbons: already 0
-                        if (child.name != 'ribbons.glb') {
-                            child.traverse(innerChild => {
-                                if (innerChild.material) {
-                                    innerChild.material.transparent = true;
-                                    innerChild.material.opacity = smoothLerp(1, 0, fastOpacityProgress);
-                                    innerChild.material.needsUpdate = true;
-                                }
-                            });
-                        }
-                    });
-                }
-            } else if (productProgress > 0.5) {
-                cellObject.visible = false;
-                const normalizedProgress = (productProgress - 0.5) / 0.5;
-
-                if (!productTextActivated) {
-                    activateText(productArea);
-                    productTextActivated = true;
-                }
-
-                // calculate the first 40% of the normalizedProgress to determine rotationProgress
-                if (normalizedProgress <= 0.4) {
-                    const rotationXProgress = normalizedProgress / 0.4;
-                    product.rotation.x = smoothLerp(Math.PI / 2, Math.PI / 15, rotationXProgress);
-
-                    if (normalizedProgress > 0.05) {
-                        // calculate the progression between normalizedprogress 0.1 and 0.25
-                        const rotationZProgress = (normalizedProgress - 0.05) / 0.35;
-                        product.rotation.z = smoothLerp(0, -Math.PI / 5, rotationZProgress);
+            // Handle starfield visibility and animation (0-0.45)
+            if (productProgress <= 0.45) {
+                if (starfieldPoints) {
+                    // Make starfield visible and fade in
+                    if (!starfieldPoints.visible) {
+                        starfieldPoints.visible = true;
+                        starfieldPoints.position.copy(product.position);
+                        starfieldPoints.rotation.copy(product.rotation);
                     }
-                } else if (normalizedProgress > 0.8) {
-                    // Animate applicator
-                    if (applicatorObject) {
-                        // First 10% (0.8-0.9): Move Y position
-                        if (normalizedProgress <= 0.9) {
-                            const positionProgress = (normalizedProgress - 0.8) / 0.1; // Normalize to 0-1 for position
-                            applicatorObject.position.y = smoothLerp(12, 0, positionProgress);
-                        }
+                    
+                    // Fade in starfield gradually from 0 to 0.2 progress
+                    if (productProgress <= 0.2) {
+                        starfieldPoints.material.uniforms.opacity.value = smoothLerp(0, 1, productProgress / 0.2);
+                    }
+                    // Maintain full opacity from 0.2 to 0.35
+                    else if (productProgress <= 0.35) {
+                        starfieldPoints.material.uniforms.opacity.value = 1;
+                    }
+                    // Fade out from 0.35 to 0.45
+                    else {
+                        starfieldPoints.material.uniforms.opacity.value = smoothLerp(1, 0, (productProgress - 0.35) / 0.1);
+                    }
+                    
+                    // Update starfield position and rotation to match product
+                    starfieldPoints.position.copy(product.position);
+                    starfieldPoints.rotation.copy(product.rotation);
+                }
+
+                // Phase 1: Cell scale down and product fade in (0-0.25)
+                if (productProgress <= 0.25) {
+                    // restore initial positions
+                    product.rotation.x = Math.PI / 2;
+                    product.rotation.z = 0;
+                    cellObject.visible = true;
+
+                    // Scale down cell
+                    const cellScale = smoothLerp(1, 0.3, productProgress / 0.25);
+                    cellObject.scale.set(cellScale, cellScale, cellScale);
+
+                    // Product scale and fade starting at 0.125 (halfway through cell scale)
+                    if (productProgress > 0.125) {
+                        // Remove text only once when entering this phase
+                        textChildren.forEach(child => {
+                            if (child.classList.contains('active')) {
+                                child.classList.remove('active');
+                            }
+                        });
+
+                        const fadeProgress = (productProgress - 0.125) / 0.125; // Normalize 0.125-0.25 to 0-1
                         
-                        // Last 5% (0.95-1.0): Rotate
-                        if (normalizedProgress > 0.95) {
-                            const rotationProgress = (normalizedProgress - 0.95) / 0.05; // Normalize to 0-1 for rotation
-                            applicatorObject.rotation.y = smoothLerp(0, Math.PI * 0.4, rotationProgress); // 1/5 of full turn (2π * 0.2)
+                        renderer.toneMappingExposure = smoothLerp(1, 0.35, fadeProgress);
+                        ambientLight.intensity = smoothLerp(4, 4.6, fadeProgress);
+                        
+                        const productScale = smoothLerp(24, 5, fadeProgress);
+                        product.scale.set(productScale, productScale, productScale);
+
+                        // Fade out cell (except ribbons)
+                        cellObject.children.forEach(child => {
+                            if (child.name != 'ribbons.glb') {
+                                child.traverse(innerChild => {
+                                    if (innerChild.material) {
+                                        innerChild.material.transparent = true;
+                                        innerChild.material.opacity = smoothLerp(1, 0, fadeProgress);
+                                        innerChild.material.needsUpdate = true;
+                                    }
+                                });
+                            }
+                        });
+                    }
+                } 
+                // Phase 2: Product rotation (0.25-0.45)
+                else {
+                    cellObject.visible = false;
+                    const rotationProgress = (productProgress - 0.25) / 0.2; // Normalize 0.25-0.45 to 0-1
+                    
+                    product.rotation.x = smoothLerp(Math.PI / 2, Math.PI / 15, rotationProgress);
+                    
+                    if (rotationProgress > 0.25) { // Start Z rotation after 25% of X rotation
+                        const zRotationProgress = (rotationProgress - 0.25) / 0.75; // Normalize remaining progress
+                        product.rotation.z = smoothLerp(0, -Math.PI / 5, zRotationProgress);
+                    }
+                }
+            } else {
+                // Hide starfield after progress > 0.45
+                if (starfieldPoints) {
+                    starfieldPoints.visible = false;
+                }
+                
+                // Phase 3: Applicator animation (0.8-1.0)
+                if (productProgress >= 0.8 && applicatorObject) {
+                    // Y position animation (0.8-0.95)
+                    if (productProgress <= 0.95) {
+                        const positionProgress = (productProgress - 0.8) / 0.15;
+                        applicatorObject.position.y = smoothLerp(24, 0, positionProgress);
+
+                        if (!productTextActivated) {
+                            activateText(productArea);
+                            productTextActivated = true;
                         }
+                    }
+                    // Applicator rotation (0.95-1.0)
+                    if (productProgress > 0.95) {
+                        const rotationProgress = (productProgress - 0.95) / 0.05;
+                        applicatorObject.rotation.y = smoothLerp(0, Math.PI * 0.4, rotationProgress);
                     }
                 }
             }
         }
-
     }
 }
 
