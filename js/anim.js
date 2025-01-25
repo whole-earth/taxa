@@ -7,14 +7,15 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { PMREMGenerator } from 'three';
 import { dispersion, mauve, pearlBlue } from './materials.js';
 import { animatePage } from './scroll.js';
-import { GUI } from 'dat.gui';
 import { StarField, starfieldParams } from './starfield.js';
+import { initActivityTracking, setAnimationFrameId } from './activity.js';
 
-// Initialize global THREE
 window.THREE = window.THREE || {};
-Object.assign(window.THREE, THREE);
+Object.assign(window.THREE, THREE)
+const meshLineScript = document.createElement('script');
+meshLineScript.src = "https://unpkg.com/three.meshline@1.4.0/src/THREE.MeshLine.js";
+document.head.appendChild(meshLineScript);
 
-// Lighting controls
 const lightingParams = {
     ambientIntensity: 4,
     envMapIntensity: 1,
@@ -23,7 +24,6 @@ const lightingParams = {
     enableEnvironment: true
 };
 
-// Export variables
 export function setLastScrollY(value) { lastScrollY = value; }
 export let lastScrollY = 0;
 export let dotTweenGroup = new Group();
@@ -54,13 +54,12 @@ function initScene() {
     controls = initControls(camera, renderer);
     cellObject = new THREE.Object3D();
 
-    // Initialize star field
     starField = new StarField(starfieldParams);
-    starField.visible = false; // Initially hidden
+    starField.visible = false;
     scene.add(starField);
 
     initLights(scene, renderer);
-    
+
     window.addEventListener('resize', () => resizeScene(renderer, camera));
     window.addEventListener('scroll', () => animatePage(controls, camera, cellObject, blobInner, ribbons, spheres, wavingBlob, dotBounds, product, scrollTimeout, renderer, ambientLight));
 
@@ -124,7 +123,6 @@ function initScene() {
                 this.basePath = 'https://cdn.jsdelivr.net/gh/whole-earth/taxa@main/assets/product/';
                 this.gltfFileName = gltf;
 
-                // Setup loaders
                 this.loader = new GLTFLoader();
                 const dracoLoader = new DRACOLoader();
                 dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.4.3/');
@@ -147,19 +145,67 @@ function initScene() {
                     this.centerObject(this.object);
                     this.object.rotation.x = Math.PI / 2;
                     this.object.renderOrder = renderOrder;
-                    this.object.visible = false;
-
-                    // Initialize product with transparency
+                    
+                    // Set all meshes invisible initially
                     this.object.traverse(child => {
-                        if (child.material) {
+                        if (child.isMesh) {
+                            child.visible = false;
+                            child.material.transparent = true;
+                            child.material.opacity = 0;
                             child.material.needsUpdate = true;
                         }
                     });
 
-                    // Move applicator up
                     applicatorObject = this.object.getObjectByName('applicator');
                     if (applicatorObject) {
                         applicatorObject.position.y += 24;
+                        // Create plane with hole for overflow masking
+                        const planeSize = window.innerWidth > 1600 ? 300 : 200;
+                        const holeRadius = 31.65 / 2 * 0.99;
+
+                        const shape = new THREE.Shape();
+                        shape.moveTo(-planeSize/2, -planeSize/2);
+                        shape.lineTo(planeSize/2, -planeSize/2);
+                        shape.lineTo(planeSize/2, planeSize/2);
+                        shape.lineTo(-planeSize/2, planeSize/2);
+                        shape.lineTo(-planeSize/2, -planeSize/2);
+
+                        // Add the circular hole
+                        const holePath = new THREE.Path();
+                        holePath.absarc(0, 0, holeRadius, 0, Math.PI * 2, true);
+                        shape.holes.push(holePath);
+
+                        const geometry = new THREE.ShapeGeometry(shape);
+                        const material = new THREE.MeshBasicMaterial({ 
+                            color: '#fffbf4',
+                            side: THREE.DoubleSide,
+                            transparent: false,
+                            opacity: 1
+                        });
+
+                        const planeMesh = new THREE.Mesh(geometry, material);
+                        planeMesh.name = 'overflowMask';
+                        planeMesh.visible = false;
+                        planeMesh.renderOrder = 199;
+                        
+                        // Position at top of applicator
+                        const box = new THREE.Box3().setFromObject(applicatorObject);
+                        planeMesh.position.y = 100; // not elegant, but works
+                        
+                        // Rotate the plane to be horizontal
+                        planeMesh.rotation.x = Math.PI / 2;
+                        
+                        applicatorObject.add(planeMesh);
+
+                        // Ensure applicator is also invisible initially
+                        applicatorObject.traverse(child => {
+                            if (child.isMesh) {
+                                child.visible = false;
+                                child.material.transparent = true;
+                                child.material.opacity = 0;
+                                child.material.needsUpdate = true;
+                            }
+                        });
                     }
 
                     resolve(this.object);
@@ -180,30 +226,17 @@ function initScene() {
     }
 
     const loadCellObjects = [
-
-        new CellComponent("blob-inner.glb", pearlBlue, 0).then((object) => {
-            blobInner = object;
-        }),
-
-        new CellComponent("blob-outer.glb", dispersion, 2).then((object) => {
-            blobOuter = object;
-        }),
-
-        new CellComponent("ribbons.glb", mauve, 3).then((object) => {
-            ribbons = object;
-        })
-
+        new CellComponent("blob-inner.glb", pearlBlue, 0).then((object) => { blobInner = object; }),
+        new CellComponent("blob-outer.glb", dispersion, 2).then((object) => { blobOuter = object; }),
+        new CellComponent("ribbons.glb", mauve, 3).then((object) => { ribbons = object; })
     ];
 
     const loadProductObject = [
-        new productComponent("hollow.glb", 200)
+        new productComponent("real.glb", 200)
             .then((createdProduct) => {
                 product = createdProduct;
-                
-                // Create anchor and add product to it
                 productAnchor = new THREE.Object3D();
                 productAnchor.add(product);
-                
                 scene.add(productAnchor);
             })
             .catch((error) => {
@@ -241,8 +274,6 @@ function initScene() {
         ambientLight = new THREE.AmbientLight(0xffffff, lightingParams.ambientIntensity);
         scene.add(ambientLight);
         const rgbeLoader = new RGBELoader();
-
-        // Add environment toggle to lighting params
         lightingParams.enableEnvironment = true;
 
         rgbeLoader.load("https://cdn.jsdelivr.net/gh/whole-earth/taxa-v3@main/assets/cell/aloe.hdr", function (texture) {
@@ -280,7 +311,7 @@ function initScene() {
         const waveMaterial = new THREE.MeshBasicMaterial({ color: 0x92cb86, opacity: 0, transparent: true, depthWrite: false, depthTest: false });
         wavingBlob = new THREE.Mesh(waveGeom, waveMaterial);
         wavingBlob.renderOrder = 5;
-    
+
         const dotsGroup1 = new THREE.Group();
         const dotsGroup2 = new THREE.Group();
         const dotsGroup3 = new THREE.Group();
@@ -288,9 +319,9 @@ function initScene() {
         const dotsGroup5 = new THREE.Group();
         wavingBlob.add(dotsGroup1, dotsGroup2, dotsGroup3, dotsGroup4, dotsGroup5);
         scene.add(wavingBlob);
-    
+
         const sizes = [0.12, 0.14, 0.16, 0.18, 0.22];
-        
+
         for (let i = 0; i < 200; i++) {
             const randomPosition = getRandomPositionWithinBounds(dotBounds);
             const sizeIndex = i % sizes.length;
@@ -301,13 +332,12 @@ function initScene() {
             spheres.push(sphereMesh);
             const randomDirection = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
             sphereMesh.velocity = randomDirection.multiplyScalar(0.014);
-            
-            // Distribute spheres across 5 groups instead of 3
+
             const groupIndex = i % 5;
-            switch(groupIndex) {
+            switch (groupIndex) {
                 case 0:
                     dotsGroup1.add(sphereMesh);
-                    sphereMesh.velocity.multiplyScalar(0.8); // slowest
+                    sphereMesh.velocity.multiplyScalar(0.8);
                     break;
                 case 1:
                     dotsGroup2.add(sphereMesh);
@@ -315,7 +345,6 @@ function initScene() {
                     break;
                 case 2:
                     dotsGroup3.add(sphereMesh);
-                    // default speed (1.0)
                     break;
                 case 3:
                     dotsGroup4.add(sphereMesh);
@@ -323,21 +352,22 @@ function initScene() {
                     break;
                 case 4:
                     dotsGroup5.add(sphereMesh);
-                    sphereMesh.velocity.multiplyScalar(1.2); // fastest
+                    sphereMesh.velocity.multiplyScalar(1.2);
                     break;
             }
         }
-    
+
         function getRandomPositionWithinBounds(bounds) {
             const x = (Math.random() * 2 - 1) * (bounds * 0.65);
             const y = (Math.random() * 2 - 1) * (bounds * 0.65);
             const z = (Math.random() * 2 - 1) * (bounds * 0.65);
             return new THREE.Vector3(x, y, z);
         }
-    
-        function animate() {
-            requestAnimationFrame(animate);
 
+        function animate() {
+            const frameId = requestAnimationFrame(animate);
+            setAnimationFrameId(frameId);
+            
             dotTweenGroup.update();
             ribbonTweenGroup.update();
             blobTweenGroup.update();
@@ -357,67 +387,15 @@ function initScene() {
                 });
             });
         }
-    
+
+        initActivityTracking(animate);
         animate();
     }
-    
 
     function resizeScene(render, camera) {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         render.setSize(window.innerWidth, window.innerHeight);
-    }
-
-    function initBlueGUI() {
-        const gui = new GUI();
-        const pearlBlueFolder = gui.addFolder('Pearl Blue Material');
-        
-        pearlBlueFolder.addColor({
-            color: '#' + pearlBlue.color.getHexString()
-        }, 'color')
-            .name('Base Color')
-            .onChange(value => {
-                pearlBlue.color.set(value);
-                pearlBlue.sheenColor.set(value);
-                pearlBlue.needsUpdate = true;
-            });
-            
-        pearlBlueFolder.add(pearlBlue, 'roughness', 0, 1, 0.01)
-            .name('Roughness');
-            
-        pearlBlueFolder.add(pearlBlue, 'metalness', 0, 1, 0.01)
-            .name('Metalness');
-            
-        pearlBlueFolder.add(pearlBlue, 'sheen', 0, 1, 0.01)
-            .name('Sheen');
-            
-        pearlBlueFolder.add(pearlBlue, 'sheenRoughness', 0, 1, 0.01)
-            .name('Sheen Roughness');
-            
-        pearlBlueFolder.add(pearlBlue, 'opacity', 0, 1, 0.01)
-            .name('Opacity');
-
-        pearlBlueFolder.add(pearlBlue, 'transparent')
-            .name('Transparent');
-
-        pearlBlueFolder.add({ reset: () => {
-            pearlBlue.color.set('#6a81ad');
-            pearlBlue.sheenColor.set('#6a81ad');
-            pearlBlue.roughness = 0.4;
-            pearlBlue.metalness = 0.2;
-            pearlBlue.opacity = 1;
-            pearlBlue.sheen = 1;
-            pearlBlue.sheenRoughness = 1;
-            pearlBlue.transparent = true;
-            pearlBlue.needsUpdate = true;
-            // Force GUI to update
-            for (let controller of pearlBlueFolder.controllers) {
-                controller.updateDisplay();
-            }
-        }}, 'reset')
-            .name('Reset Values');
-            
-        pearlBlueFolder.open();
     }
 
 }

@@ -22,13 +22,12 @@ const fadeOutDuration = 180;
 // ============================
 
 function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight) {
+
     splashBool = isVisibleBetweenTopAndBottom(splashArea);
     zoomBool = isVisibleBetweenTopAndBottom(zoomArea);
     zoomOutBool = isVisibleBetweenTopAndBottom(zoomOutArea);
     pitchBool = isVisibleBetweenTopAndBottom(pitchArea);
     productBool = isVisibleBetweenTopAndBottom(productArea);
-
-    // Add this line after the boolean checks
     updateScrollIndicator();
 
     if (splashBool) {
@@ -38,7 +37,6 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
         if (!splashCurrent) {
             activateText(splashArea);
 
-            // Restore ribbons when scrolling back up to splash
             if (comingFrom == 'zoomAreaFirst' || comingFrom == 'zoomOutArea') {
                 dotTweenOpacity(spheres, 1, 0, wavingBlob, fadeOutDuration);
                 ribbonTweenOpacity(ribbons, 0, 1);
@@ -70,14 +68,11 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                 if (!zoomFirstCurrent) {
                     activateText__ZoomChild(zoomFirst);
                     cellSheenTween(blobInner, orange);
-
                     if (comingFrom == 'splash') {
                         ribbonTweenOpacity(ribbons, 1, 0);
                         dotTweenOpacity(spheres, 0, 1, wavingBlob, fadeInDuration);
                     } else if (comingFrom == 'zoomAreaSecond') {
-
                         dotTweenOpacity(spheres, 1, 0, wavingBlob, fadeOutDuration);
-
                         setTimeout(() => {
                             if (zoomFirstCurrent) {
                                 dotUpdateColors(spheres, orange);
@@ -85,9 +80,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                                 dotTweenOpacity(spheres, 0, 1, wavingBlob, fadeInDuration);
                             }
                         }, fadeOutDuration);
-
                     }
-
                     comingFrom = 'zoomAreaFirst';
                     zoomFirstCurrent = true;
                     zoomSecondCurrent = false;
@@ -95,10 +88,8 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
             }
             else if (zoomProgress >= 1 / 3 && zoomProgress < 2 / 3) {
                 if (!zoomSecondCurrent) {
-
                     activateText__ZoomChild(zoomSecond);
                     dotTweenOpacity(spheres, 1, 0, wavingBlob, fadeOutDuration);
-
                     setTimeout(() => {
                         if (zoomSecondCurrent) {
                             dotUpdateColors(spheres, yellow);
@@ -117,7 +108,6 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
             else if (zoomProgress >= 2 / 3 && zoomProgress <= 1) {
                 if (!zoomThirdCurrent) {
                     activateText__ZoomChild(zoomThird);
-
                     if (comingFrom == 'zoomAreaSecond') {
                         dotTweenOpacity(spheres, 1, 0, wavingBlob, fadeOutDuration);
                         setTimeout(() => {
@@ -129,17 +119,14 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                             }
                         }, fadeOutDuration);
                     } else if (comingFrom == 'zoomOutArea') {
-
                         wavingBlob.children.forEach(group => {
                             if (group.isGroup) {
                                 group.visible = true;
                             }
                         });
-
                         dotTweenOpacity(spheres, 0, 1, wavingBlob, fadeInDuration);
                         cellSheenTween(blobInner, green);
                     }
-
                     zoomSecondCurrent = false;
                     zoomThirdCurrent = true;
                     comingFrom = 'zoomAreaThird';
@@ -152,13 +139,11 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
         camera.fov = smoothLerp(zoomOutStartFOV, zoomOutEndFOV, zoomOutProgress);
 
         if (!zoomOutCurrent) {
-
             textChildren.forEach(child => {
                 if (child.classList.contains('active')) {
                     child.classList.remove('active');
                 }
             });
-
             zoomCurrent = false;
             zoomThirdCurrent = false;
             zoomOutCurrent = true;
@@ -168,14 +153,37 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
 
     }
     else if (pitchBool) {
-    
         if (!pitchCurrent) {
             activateText(pitchArea);
             if (comingFrom == 'productArea') {
                 controls.autoRotate = true;
                 controls.enableRotate = true;
                 controls.autoRotateSpeed = 0.2;
-                product.visible = false;
+
+                if (product) {
+                    product.traverse(child => {
+                        if (child.material) {
+                            child.visible = false;
+                        }
+                    });
+                }
+
+                cellObject.children.forEach(child => {
+                    if (child.name != 'ribbons.glb') {
+                        child.traverse(innerChild => {
+                            if (innerChild.material) {
+                                innerChild.material.transparent = (child.name != 'blob-inner.glb');
+                                innerChild.material.opacity = 1;
+                                innerChild.material.needsUpdate = true;
+                            }
+                        });
+                    }
+                });
+
+                if (starField) {
+                    starField.visible = false;
+                }
+
                 restoreDotScale(wavingBlob);
             } else if (comingFrom == 'zoomOutArea' && spheres[0].material.opacity > 0) {
                 // only trigger explosion if dots are visible
@@ -192,13 +200,10 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
         camera.fov = smoothLerp(pitchStartFOV, pitchEndFOV, pitchProgress);
     }
     else if (productBool) {
-        // Initial setup when entering product section
         if (!productCurrent) {
-            if (product) {
-                product.rotation.x = Math.PI / 2;
-            }
 
-            // Clean up previous animations
+            resetProductVisibility(product, applicatorObject);
+
             wavingBlob.children.forEach(group => {
                 if (group.isGroup) group.visible = false;
             });
@@ -206,39 +211,46 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
             dotTweenGroup.removeAll();
             restoreDotScale(wavingBlob);
 
-            // Show star field for transition
             if (starField) {
                 starField.visible = true;
             }
 
-            // Update state
             pitchCurrent = false;
             productCurrent = true;
             productTextActivated = false;
             comingFrom = 'productArea';
         }
 
-        // Begin animation sequence
         if (product && product.children) {
             productProgress = scrollProgress__LastElem(productArea);
 
             // ===== PHASE 1: Initial Transition (0 to 0.5) =====
             if (productProgress <= 0.5) {
+                // Reset visibility when entering or staying in Phase 1
+                resetProductVisibility(product, applicatorObject);
+
                 // 1a. Star Trails Animation (0 to 0.5)
                 if (starField) {
-                    starField.updateProgress(productProgress * 2); // Scale 0-0.5 to 0-1
+                    starField.updateProgress(productProgress * 2);
                 }
+
+                // __________________________
+
+
+
+                // __________________________
 
                 // 1b. Cell Scale & Product Fade (0 to 0.5)
                 product.rotation.x = Math.PI / 2;
                 product.rotation.z = 0;
                 cellObject.visible = true;
-                const cellScale = smoothLerp(1, 0.3, productProgress / 0.5);
+
+                const cellScale = smoothLerp(1, 0.05, productProgress / 0.5);
                 cellObject.scale.set(cellScale, cellScale, cellScale);
 
                 // 1c. Product Scale & Fade (0.25 to 0.5)
                 if (productProgress > 0.25) {
-                    // Clear text
+
                     textChildren.forEach(child => {
                         if (child.classList.contains('active')) {
                             child.classList.remove('active');
@@ -246,16 +258,11 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                     });
 
                     const fadeProgress = (productProgress - 0.25) / 0.25;
-                    
-                    // Update rendering parameters
+
                     renderer.toneMappingExposure = smoothLerp(1, 0.35, fadeProgress);
                     ambientLight.intensity = smoothLerp(4, 4.6, fadeProgress);
-                    
-                    // Scale product (but keep it invisible)
-                    const productScale = smoothLerp(42, 5, fadeProgress);
-                    product.scale.set(productScale, productScale, productScale);
 
-                    // Fade out cell (except ribbons)
+                    // Fade out cell object
                     cellObject.children.forEach(child => {
                         if (child.name != 'ribbons.glb') {
                             child.traverse(innerChild => {
@@ -267,28 +274,65 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                             });
                         }
                     });
+
+                    const productScale = smoothLerp(20, 5, fadeProgress);
+                    product.scale.set(productScale, productScale, productScale);
+
+                    if (applicatorObject) {
+
+                        product.traverse(child => {
+                            child.visible = true;
+                        });
+
+                        applicatorObject.traverse(child => {
+                            child.visible = true;
+                            if (child.material) {
+                                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                                materials.forEach(mat => {
+                                    mat.visible = true;
+                                    mat.opacity = 1;
+                                    mat.needsUpdate = true;
+                                });
+                            }
+                        });
+                    }
                 }
-            } 
+            }
             // ===== PHASE 2: Product Rotation (0.5 to 0.8) =====
-            else if (productProgress <= 0.8) {
+            else if (0.5 <= productProgress && productProgress <= 0.8) {
+
                 // Hide star field after transition
                 if (starField) {
                     starField.visible = false;
                 }
 
-                product.visible = true;  // Keep parent visible
+                product.traverse(child => {
+                    if (child.name === 'overflowMask') {
+                        child.visible = false;
+                    } else {
+                        child.visible = true;
+                    }
+                    if (child.material) {
+                        const materials = Array.isArray(child.material) ? child.material : [child.material];
+                        materials.forEach(mat => {
+                            mat.transparent = child.name === 'Swap_name'; // if child name is 'Swap_name', set transparency to true
+                            mat.opacity = 1;
+                            mat.needsUpdate = true;
+                        });
+                    }
+                });
 
                 // 2a. X-axis rotation (0.5 to 0.8)
                 const rotationProgress = (productProgress - 0.5) / 0.3;
                 product.rotation.x = smoothLerp(Math.PI / 2, Math.PI / 15, rotationProgress);
-                
+
                 // 2b. Z-axis rotation (starts at 0.65)
                 if (rotationProgress > 0.5) {
                     const zRotationProgress = (rotationProgress - 0.5) / 0.5;
                     product.rotation.z = smoothLerp(0, -Math.PI / 5, zRotationProgress);
                 }
             }
-            
+
             // ===== PHASE 3: Applicator Animation (0.8 to 1.0) =====
             else if (productProgress >= 0.8) {
                 if (applicatorObject) {
@@ -308,10 +352,61 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                     }
                 }
             }
+
+            previousProductProgress = productProgress;
         }
     }
 }
 
+function resetProductVisibility(product, applicatorObject) {
+    if (!product) return;
+    product.rotation.x = Math.PI / 2;
+    // First, set everything invisible and transparent
+    product.traverse(child => {
+        child.visible = false;
+        if (child.material) {
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            materials.forEach(mat => {
+                mat.transparent = true;
+                mat.opacity = 0;
+                mat.needsUpdate = true;
+            });
+        }
+        // Handle meshes without materials
+        if (child.isMesh) {
+            child.visible = false;
+        }
+    });
+
+    // Then, selectively show only the applicator and overflowMask
+    if (applicatorObject) {
+        applicatorObject.traverse(child => {
+            child.visible = true;
+            if (child.material) {
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                materials.forEach(mat => {
+                    mat.visible = true;
+                    mat.opacity = 1;
+                    mat.needsUpdate = true;
+                });
+            }
+        });
+    }
+
+    // Show overflowMask if it exists
+    product.traverse(child => {
+        if (child.name === 'overflowMask') {
+            child.visible = true;
+            if (child.material) {
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                materials.forEach(mat => {
+                    mat.opacity = 1;
+                    mat.needsUpdate = true;
+                });
+            }
+        }
+    });
+}
 
 // =====================================================================================
 
@@ -344,8 +439,10 @@ let zoomFirstCurrent = false;
 let zoomSecondCurrent = false;
 let zoomThirdCurrent = false;
 
-let isClickScroll = false; // Flag to track if the scroll was initiated by a click
-let scrollTimeout; // Timeout for debouncing scroll events
+let isClickScroll = false;
+let scrollTimeout;
+
+let previousProductProgress = 0;
 
 export function animatePage(controls, camera, cellObject, blobInner, ribbons, spheres, wavingBlob, dotBounds, product, scrollTimeout, renderer, ambientLight) {
     let scrollY = window.scrollY;
@@ -540,8 +637,6 @@ function dotRandomizePositions(spheres, dotBounds) {
     }
 }
 
-//================================================================
-
 function dotsTweenExplosion(wavingBlob, duration, delayBeforeFire) {
     blobTweenGroup.removeAll();
     dotTweenGroup.removeAll();
@@ -557,7 +652,7 @@ function dotsTweenExplosion(wavingBlob, duration, delayBeforeFire) {
         setTimeout(() => {
             // Step 1: Scale Animation - Full duration
             const scaleTween = new Tween(initialScale)
-                .to(targetScale, duration) // Full duration for scaling
+                .to(targetScale, duration)
                 .easing(Easing.Quadratic.InOut)
                 .onUpdate(() => {
                     group.scale.set(initialScale.scale, initialScale.scale, initialScale.scale);
@@ -591,25 +686,21 @@ function dotsTweenExplosion(wavingBlob, duration, delayBeforeFire) {
         }, index * delayBeforeFire); // Stagger each group's animation by delayBeforeFire
     });
 
-    // Cleanup: Remove all tweens after the last group's animation is complete
     setTimeout(() => {
         blobTweenGroup.removeAll();
         dotTweenGroup.removeAll();
-    }, (dotGroups.length - 1) * delayBeforeFire + duration); // Total time for the last group to finish
+    }, (dotGroups.length - 1) * delayBeforeFire + duration);
 }
 
 
 function restoreDotScale(wavingBlob) {
     wavingBlob.scale.set(1, 1, 1);
-
     wavingBlob.children.forEach(group => {
         if (group.isGroup) {
             group.scale.set(1, 1, 1);
         }
     });
 }
-
-//================================================================
 
 const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
 
@@ -655,19 +746,16 @@ scrollDots.forEach(dot => {
         const section = dot.dataset.section;
         const targetElement = document.querySelector(`.${section}`);
 
-        // Remove active class from all dots and add to clicked dot
         scrollDots.forEach(d => d.classList.remove('active'));
         dot.classList.add('active');
 
-        isClickScroll = true; // Set the flag to true
+        isClickScroll = true;
 
         if (targetElement) {
             let targetPosition;
             if (section === 'product') {
-                // Scroll to the bottom of the product section
                 targetPosition = targetElement.offsetTop + targetElement.offsetHeight;
             } else {
-                // Scroll to the top of the section
                 targetPosition = targetElement.offsetTop;
             }
             smoothScrollTo(targetPosition);
@@ -677,22 +765,18 @@ scrollDots.forEach(dot => {
     });
 });
 
-// Smooth scroll function
 function smoothScrollTo(targetPosition) {
     const startPosition = window.scrollY;
     const sections = ['splash', 'zoom', 'pitch', 'product'];
-    
-    // Find current and target sections
+
     let currentSection = '';
     let targetSection = '';
-    
-    // Find which section we're currently in
+
     sections.forEach(section => {
         const elem = document.querySelector(`.${section}`);
         if (section === 'zoom') {
-            // Check both zoom and zoom-out areas
             const zoomOutElem = document.querySelector('.zoom-out');
-            if ((elem && isVisibleBetweenTopAndBottom(elem)) || 
+            if ((elem && isVisibleBetweenTopAndBottom(elem)) ||
                 (zoomOutElem && isVisibleBetweenTopAndBottom(zoomOutElem))) {
                 currentSection = section;
             }
@@ -700,13 +784,12 @@ function smoothScrollTo(targetPosition) {
             currentSection = section;
         }
     });
-    
-    // Find which section we're targeting
+
+
     sections.forEach(section => {
         const elem = document.querySelector(`.${section}`);
         // Special handling for the product section
         if (section === 'product') {
-            // Check if we're targeting the product section
             const productElem = document.querySelector('.product');
             if (productElem && targetPosition >= productElem.offsetTop) {
                 targetSection = 'product';
@@ -715,31 +798,24 @@ function smoothScrollTo(targetPosition) {
             targetSection = section;
         }
     });
-    
-    // If no section was found and we're at the bottom, assume product section
+
     if (!currentSection && window.innerHeight + window.scrollY >= document.documentElement.scrollHeight) {
         currentSection = 'product';
     }
-    
-    // Calculate number of sections between
+
     const currentIndex = sections.indexOf(currentSection);
     const targetIndex = sections.indexOf(targetSection);
     const numberOfSections = Math.abs(targetIndex - currentIndex);
-    
-    // Log for debugging
-    //console.log(`Scrolling from ${currentSection} (index: ${currentIndex}) to ${targetSection} (index: ${targetIndex})`);
-    //console.log(`Number of sections to scroll: ${numberOfSections}`);
-    
-    // Determine duration based on number of sections
+
     let duration;
     if (numberOfSections === 1) {
-        duration = 1200;      // 1 section = 1.2s
+        duration = 1200;
     } else if (numberOfSections === 2) {
-        duration = 2800;      // 2 sections = 2.8s
+        duration = 2800;
     } else if (numberOfSections >= 3) {
-        duration = 4000;      // 3+ sections = 4.0s
+        duration = 3600;
     } else {
-        duration = 0;      // Same section or error case
+        duration = 0;
     }
 
     let startTime = null;
@@ -762,10 +838,9 @@ function smoothScrollTo(targetPosition) {
     requestAnimationFrame(animation);
 }
 
-// Debounce the scroll event
 window.addEventListener('scroll', () => {
     clearTimeout(scrollTimeout);
     scrollTimeout = setTimeout(() => {
         updateScrollIndicator();
-    }, 100); // Adjust the timeout as needed
+    }, 100);
 });

@@ -9,27 +9,13 @@
   <link rel="icon"
     href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦠</text></svg>">
 
-  <!-- Load Three.js first -->
-  <script async src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
-  
-  <!-- Load MeshLine after Three.js -->
-  <script>
-    // Wait for Three.js to load
-    window.addEventListener('load', function() {
-      const meshLineScript = document.createElement('script');
-      meshLineScript.src = "https://unpkg.com/three.meshline@1.4.0/src/THREE.MeshLine.js";
-      document.head.appendChild(meshLineScript);
-    });
-  </script>
-
   <script type="importmap">
     {
       "imports": {
         "tween": "https://cdn.jsdelivr.net/gh/whole-earth/taxa/node_modules/@tweenjs/tween.js/dist/tween.esm.js",
-        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
-        "three.meshline": "https://cdn.jsdelivr.net/gh/whole-earth/taxa/js/meshline-module.js",
-        "dat.gui": "https://cdn.jsdelivr.net/gh/whole-earth/taxa/node_modules/dat.gui/build/dat.gui.module.js"
+        "three": "https://unpkg.com/three@0.172.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.172.0/examples/jsm/",
+        "three.meshline": "https://cdn.jsdelivr.net/gh/whole-earth/taxa/js/meshline-module.js"
       }
     }
   </script>

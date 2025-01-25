@@ -23,13 +23,13 @@ export const mauve = new THREE.MeshBasicMaterial({
 
 export const dispersion = new THREE.MeshPhysicalMaterial({
   color: 0xe4e4e4,
-  roughness: 0.2,
-  metalness: 0.2,
+  roughness: 0.16,
+  metalness: 0.17,
   sheen: 0,
   sheenColor: 0x000000,
   sheenRoughness: 0,
   emissive: 0x000000,
-  specularIntensity: 1,
+  specularIntensity: 0,
   specularColor: 0xffffff,
   clearcoat: 0.78,
   clearcoatRoughness: 0.84,
@@ -43,8 +43,6 @@ export const dispersion = new THREE.MeshPhysicalMaterial({
   transmission: 0.9,
   attenuationColor: 0xffffff,
   side: THREE.DoubleSide,
-  transparent: true,
-  dispersion: 5,
   transparent: true,
   depthWrite: true
 });
