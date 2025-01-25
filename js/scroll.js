@@ -231,6 +231,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
 
                 // 1a. Star Trails Animation (0 to 0.5)
                 if (starField) {
+                        starField.visible = true;
                     starField.updateProgress(productProgress * 2);
                 }
 

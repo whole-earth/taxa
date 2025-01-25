@@ -257,9 +257,23 @@ function initScene() {
             })
     ];
 
+    // Ensure both classes are present at start
+    document.body.classList.add('loading');
+    document.body.classList.add('completing');
+
     Promise.all(loadCellObjects).then(() => {
         scene.add(cellObject);
         initSpeckles(scene, boundingBoxes);
+        
+        // Signal loading complete
+        document.body.classList.remove('loading');
+        
+        // Remove completed class after transition
+        setTimeout(() => {
+            document.body.classList.remove('completing');
+        }, 810);
+        
+        // Load product separately after page is ready
         return Promise.all(loadProductObject);
     }).then(() => {
     }).catch((error) => {

@@ -2,30 +2,35 @@ import * as THREE from 'three';
 import { waitForMeshLine } from 'three.meshline';
 
 export const starfieldParams = {
-    numLines: 80,              // Total number of lines in the star field
-    lineThickness: 0.6,        // Thickness of the lines
-    colors: {
-        main: '#4a9eff',       // Base blue color
-        secondary: '#92ffd0',       // Mint green color
-        tertiary: '#b784ff'      // Purple color
+    lines: {
+        count: 180,
+        thickness: 0.2,
+        opacity: 0.8,
+        undulationRatio: 0.9,
+        baseLength: 30
     },
-    baseLength: 10,            // The base forward distance the lines extend
-    lengthVarianceRange: 5,    // Random variation in line length
-    startDiameter: 180,        // The diameter of the circle where lines start (outer circle)
-    endDiameter: 15,          // The diameter of the circle where lines end (inner circle)
-    opacity: 0.8,             // Transparency of the lines
-    undulationRatio: 0.7,     // Ratio of lines that should undulate (0 to 1)
-    distributionMethod: 'fibonacci', // How points are distributed around the circle
+    colors: {
+        main: '#4a9eff',
+        secondary: '#92ffd0',
+        tertiary: '#b784ff'
+    },
+    space: {
+        startZ: 3,
+        endZ: 20,
+        startDiameter: 800,
+        endDiameter: 20,
+        zVariance: 10
+    },
     swirl: {
-        points: 20,           // Number of points per line for smooth curves
-        radius: 0.2,          // Radius of the undulation
-        rotations: 1,         // Number of rotations along the line
-        speed: 0.01           // Speed of the undulation animation
+        points: 20,
+        radius: 0.2,
+        rotations: 1,
+        speed: 0.1
     },
     glow: {
-        thickness: 10,       // How much thicker the glow line is compared to main line
-        opacity: 0.2,        // Base opacity of the glow
-        color: '#92ffd0'      // Color of the glow
+        thickness: 2,
+        opacity: 0.2,
+        color: '#92ffd0'
     }
 };
 
@@ -34,8 +39,6 @@ export class StarField extends THREE.Group {
         super();
         this.params = params;
         this.lines = [];
-        this.initialPositions = [];
-        this.finalPositions = [];
         this.time = 0;
         this.init();
     }
@@ -60,29 +63,32 @@ export class StarField extends THREE.Group {
     }
 
     createStarField(MeshLine, MeshLineMaterial) {
-        const points = this.generateFibonacciPoints(this.params.numLines);
-        const numUndulatingLines = Math.floor(this.params.numLines * this.params.undulationRatio);
+        const points = this.generateFibonacciPoints(this.params.lines.count);
+        const numUndulatingLines = Math.floor(this.params.lines.count * this.params.lines.undulationRatio);
+        const { space } = this.params;
 
-        for (let i = 0; i < this.params.numLines; i++) {
+        for (let i = 0; i < this.params.lines.count; i++) {
+            const radius = Math.sqrt(points[i].lengthSq()) * space.startDiameter;
+            
             const startPoint = new THREE.Vector3(
-                points[i].x * this.params.endDiameter,
-                points[i].y * this.params.endDiameter,
-                this.params.baseLength  // All lines start at same Z position
+                points[i].x * radius,
+                points[i].y * radius,
+                space.startZ
             );
 
             const endPoint = new THREE.Vector3(
-                points[i].x * this.params.startDiameter,
-                points[i].y * this.params.startDiameter,
-                this.params.baseLength * 0.1 + (Math.random() * 2 - 1) * (this.params.lengthVarianceRange * 0.2)
+                points[i].x * space.endDiameter,
+                points[i].y * space.endDiameter,
+                space.endZ + (Math.random() * 2 - 1) * space.zVariance
             );
 
             // Create the main line
             const material = new MeshLineMaterial({
                 color: this.getColorForIndex(i),
                 transparent: true,
-                opacity: this.params.opacity,
+                opacity: this.params.lines.opacity,
                 depthWrite: false,
-                lineWidth: this.params.lineThickness,
+                lineWidth: this.params.lines.thickness,
                 sizeAttenuation: 1,
                 resolution: new THREE.Vector2(window.innerWidth, window.innerHeight)
             });
@@ -96,7 +102,7 @@ export class StarField extends THREE.Group {
                 transparent: true,
                 opacity: this.params.glow.opacity,
                 depthWrite: false,
-                lineWidth: this.params.lineThickness * this.params.glow.thickness,
+                lineWidth: this.params.lines.thickness * this.params.glow.thickness,
                 sizeAttenuation: 1,
                 resolution: new THREE.Vector2(window.innerWidth, window.innerHeight)
             });
@@ -104,7 +110,6 @@ export class StarField extends THREE.Group {
             const glowLine = new MeshLine();
             const glowMesh = new THREE.Mesh(glowLine, glowMaterial);
             
-            // Store data for both meshes
             mesh.userData = {
                 startPoint,
                 endPoint,
@@ -123,9 +128,7 @@ export class StarField extends THREE.Group {
                 glowMaterial
             });
 
-            this.initialPositions.push(startPoint.clone());
-            this.finalPositions.push(endPoint.clone());
-            this.add(glowMesh); // Add glow first so it renders behind
+            this.add(glowMesh);
             this.add(mesh);
         }
     }
@@ -134,15 +137,15 @@ export class StarField extends THREE.Group {
         const points = [];
         const { swirl } = this.params;
         const numPoints = swirl.points;
-        const currentStart = new THREE.Vector3().lerpVectors(end, start, progress);
+        const currentEnd = new THREE.Vector3().lerpVectors(end, start, 1 - progress);
 
         for (let i = 0; i < numPoints; i++) {
             const t = i / (numPoints - 1);
-            const pos = new THREE.Vector3().lerpVectors(currentStart, end, t);
+            const pos = new THREE.Vector3().lerpVectors(end, currentEnd, t);
 
             if (shouldUndulate) {
                 const angle = t * Math.PI * 2 * swirl.rotations + this.time + index * 0.1;
-                const undulationRadius = swirl.radius * Math.sin(t * Math.PI); // Fade undulation at ends
+                const undulationRadius = swirl.radius * Math.sin(t * Math.PI);
                 pos.x += Math.cos(angle) * undulationRadius;
                 pos.y += Math.sin(angle) * undulationRadius;
             }
@@ -157,15 +160,25 @@ export class StarField extends THREE.Group {
         this.lines.forEach(({mesh, line, material, glowMesh, glowLine, glowMaterial}, i) => {
             const { startPoint, endPoint, shouldUndulate } = mesh.userData;
             mesh.userData.currentProgress = progress;
-            const points = this.generateLinePoints(startPoint, endPoint, progress, i, shouldUndulate);
             
-            // Update both main line and glow line
+            const points = this.generateLinePoints(
+                startPoint,
+                endPoint,
+                progress,
+                i,
+                shouldUndulate
+            );
+            
             line.setPoints(points);
             glowLine.setPoints(points);
             
-            // Calculate opacity based on progress - 0% at start, 100% by 70% progress
-            const opacity = progress < 0.7 ? (progress / 0.7) : 1.0;
-            material.opacity = opacity * this.params.opacity;
+            const fadeStart = 0.05;
+            const fadeEnd = 0.8;
+            const opacity = progress < fadeStart ? 0 : 
+                          progress < fadeEnd ? ((progress - fadeStart) / (fadeEnd - fadeStart)) : 
+                          1.0;
+            
+            material.opacity = opacity * this.params.lines.opacity;
             glowMaterial.opacity = opacity * this.params.glow.opacity;
             
             material.needsUpdate = true;
