@@ -1,15 +1,18 @@
 import * as THREE from 'three';
-import { Group } from 'tween'
-import { GLTFLoader } from 'three/GLTFLoader';
-import { DRACOLoader } from 'three/DracoLoader';
-import { OrbitControls } from 'three/OrbitControls';
-import { RGBELoader } from 'three/RGBELoader';
+import { Group } from 'tween';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { PMREMGenerator } from 'three';
 import { dispersion, mauve, pearlBlue } from './materials.js';
 import { animatePage } from './scroll.js';
 import { GUI } from 'dat.gui';
-import { MeshLine, MeshLineMaterial } from 'three/meshline';
-import { StarField, starfieldParams, initMeshLine } from './starfield.js';
+import { StarField, starfieldParams } from './starfield.js';
+
+// Initialize global THREE
+window.THREE = window.THREE || {};
+Object.assign(window.THREE, THREE);
 
 // Lighting controls
 const lightingParams = {
@@ -29,10 +32,9 @@ export let blobTweenGroup = new Group();
 export let applicatorObject;
 export let starField;
 
-// Initialize MeshLine dependencies
-initMeshLine({ MeshLine, MeshLineMaterial });
-
-document.addEventListener('DOMContentLoaded', async () => initScene());
+document.addEventListener('DOMContentLoaded', () => {
+    initScene();
+});
 
 function initScene() {
     let scene, camera, renderer, controls;
