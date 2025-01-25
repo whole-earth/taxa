@@ -176,11 +176,24 @@ function initScene() {
                         shape.holes.push(holePath);
 
                         const geometry = new THREE.ShapeGeometry(shape);
-                        const material = new THREE.MeshBasicMaterial({ 
-                            color: '#fffbf4',
+                        const material = new THREE.ShaderMaterial({
+                            uniforms: {
+                                color: { value: new THREE.Color('#fffbf4') }
+                            },
+                            vertexShader: `
+                                void main() {
+                                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                                }
+                            `,
+                            fragmentShader: `
+                                uniform vec3 color;
+                                void main() {
+                                    gl_FragColor = vec4(color, 1.0);
+                                }
+                            `,
                             side: THREE.DoubleSide,
-                            transparent: false,
-                            opacity: 1
+                            depthWrite: true,
+                            depthTest: true
                         });
 
                         const planeMesh = new THREE.Mesh(geometry, material);
@@ -232,7 +245,7 @@ function initScene() {
     ];
 
     const loadProductObject = [
-        new productComponent("real.glb", 200)
+        new productComponent("hollow.glb", 200)
             .then((createdProduct) => {
                 product = createdProduct;
                 productAnchor = new THREE.Object3D();
