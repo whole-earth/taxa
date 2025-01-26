@@ -203,7 +203,7 @@ function initScene() {
                         
                         // Position at top of applicator
                         const box = new THREE.Box3().setFromObject(applicatorObject);
-                        planeMesh.position.y = 100; // not elegant, but works
+                        planeMesh.position.y = -65; // not elegant, but works
                         
                         // Rotate the plane to be horizontal
                         planeMesh.rotation.x = Math.PI / 2;
