@@ -13,7 +13,7 @@ import { initActivityTracking, setAnimationFrameId } from './activity.js';
 window.THREE = window.THREE || {};
 Object.assign(window.THREE, THREE)
 const meshLineScript = document.createElement('script');
-meshLineScript.src = "https://unpkg.com/three.meshline@1.4.0/src/THREE.MeshLine.js";
+meshLineScript.src = "https://cdn.jsdelivr.net/gh/whole-earth/taxa/node_modules/three.meshline@1.4.0/src/THREE.MeshLine.js";
 document.head.appendChild(meshLineScript);
 
 const lightingParams = {
@@ -303,7 +303,7 @@ function initScene() {
         const rgbeLoader = new RGBELoader();
         lightingParams.enableEnvironment = true;
 
-        rgbeLoader.load("https://cdn.jsdelivr.net/gh/whole-earth/taxa-v3@main/assets/cell/aloe.hdr", function (texture) {
+        rgbeLoader.load("https://cdn.jsdelivr.net/gh/whole-earth/taxa@main/assets/cell/aloe.hdr", function (texture) {
             const pmremGenerator = new PMREMGenerator(renderer);
             pmremGenerator.compileEquirectangularShader();
             const envMap = pmremGenerator.fromEquirectangular(texture).texture;

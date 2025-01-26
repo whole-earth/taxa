@@ -235,12 +235,6 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                     starField.updateProgress(productProgress * 2);
                 }
 
-                // __________________________
-
-
-
-                // __________________________
-
                 // 1b. Cell Scale & Product Fade (0 to 0.5)
                 product.rotation.x = Math.PI / 2;
                 product.rotation.z = 0;
