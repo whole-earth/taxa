@@ -158,7 +158,7 @@ function initScene() {
 
                     applicatorObject = this.object.getObjectByName('applicator');
                     if (applicatorObject) {
-                        applicatorObject.position.y += 24;
+                        applicatorObject.position.y += 1;
                         // Create plane with hole for overflow masking
                         const planeSize = window.innerWidth > 1600 ? 300 : 200;
                         const holeRadius = 31.65 / 2 * 0.99;
@@ -245,7 +245,7 @@ function initScene() {
     ];
 
     const loadProductObject = [
-        new productComponent("real.glb", 200)
+        new productComponent("updated.glb", 200)
             .then((createdProduct) => {
                 product = createdProduct;
                 productAnchor = new THREE.Object3D();

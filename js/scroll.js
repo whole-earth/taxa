@@ -339,7 +339,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                     // 3a. Applicator Position (0.8 to 0.95)
                     if (productProgress <= 0.95) {
                         const positionProgress = (productProgress - 0.8) / 0.15;
-                        applicatorObject.position.y = smoothLerp(24, 0, positionProgress);
+                        applicatorObject.position.y = smoothLerp(1, 0, positionProgress);
                     }
                     // 3b. Applicator Rotation (0.95 to 1.0)
                     else {
