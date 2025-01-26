@@ -231,9 +231,14 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
 
                 // 1a. Star Trails Animation (0 to 0.5)
                 if (starField) {
-                        starField.visible = true;
                     starField.updateProgress(productProgress * 2);
                 }
+
+                // __________________________
+
+
+
+                // __________________________
 
                 // 1b. Cell Scale & Product Fade (0 to 0.5)
                 product.rotation.x = Math.PI / 2;
@@ -338,13 +343,10 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                     }
                     // 3b. Applicator Rotation (0.95 to 1.0)
                     else {
-                        activateText(productArea);
-                        /*
                         if (!productTextActivated) {
                             activateText(productArea);
                             productTextActivated = true;
                         }
-                        */
                         const rotationProgress = (productProgress - 0.95) / 0.05;
                         applicatorObject.rotation.y = smoothLerp(0, Math.PI * 0.4, rotationProgress);
                     }

@@ -13,7 +13,7 @@ import { initActivityTracking, setAnimationFrameId } from './activity.js';
 window.THREE = window.THREE || {};
 Object.assign(window.THREE, THREE)
 const meshLineScript = document.createElement('script');
-meshLineScript.src = "https://cdn.jsdelivr.net/gh/whole-earth/taxa/node_modules/three.meshline@1.4.0/src/THREE.MeshLine.js";
+meshLineScript.src = "https://unpkg.com/three.meshline@1.4.0/src/THREE.MeshLine.js";
 document.head.appendChild(meshLineScript);
 
 const lightingParams = {
@@ -245,7 +245,7 @@ function initScene() {
     ];
 
     const loadProductObject = [
-        new productComponent("hollow.glb", 200)
+        new productComponent("real.glb", 200)
             .then((createdProduct) => {
                 product = createdProduct;
                 productAnchor = new THREE.Object3D();
@@ -257,23 +257,9 @@ function initScene() {
             })
     ];
 
-    // Ensure both classes are present at start
-    document.body.classList.add('loading');
-    document.body.classList.add('completing');
-
     Promise.all(loadCellObjects).then(() => {
         scene.add(cellObject);
         initSpeckles(scene, boundingBoxes);
-        
-        // Signal loading complete
-        document.body.classList.remove('loading');
-        
-        // Remove completed class after transition
-        setTimeout(() => {
-            document.body.classList.remove('completing');
-        }, 810);
-        
-        // Load product separately after page is ready
         return Promise.all(loadProductObject);
     }).then(() => {
     }).catch((error) => {
@@ -303,7 +289,7 @@ function initScene() {
         const rgbeLoader = new RGBELoader();
         lightingParams.enableEnvironment = true;
 
-        rgbeLoader.load("https://cdn.jsdelivr.net/gh/whole-earth/taxa@main/assets/cell/aloe.hdr", function (texture) {
+        rgbeLoader.load("https://cdn.jsdelivr.net/gh/whole-earth/taxa-v3@main/assets/cell/aloe.hdr", function (texture) {
             const pmremGenerator = new PMREMGenerator(renderer);
             pmremGenerator.compileEquirectangularShader();
             const envMap = pmremGenerator.fromEquirectangular(texture).texture;
