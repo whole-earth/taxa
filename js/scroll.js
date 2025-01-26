@@ -344,10 +344,13 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                     }
                     // 3b. Applicator Rotation (0.95 to 1.0)
                     else {
+                        activateText(productArea);
+                        /*
                         if (!productTextActivated) {
                             activateText(productArea);
                             productTextActivated = true;
                         }
+                        */
                         const rotationProgress = (productProgress - 0.95) / 0.05;
                         applicatorObject.rotation.y = smoothLerp(0, Math.PI * 0.4, rotationProgress);
                     }
