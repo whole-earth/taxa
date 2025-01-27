@@ -43,6 +43,16 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                 cellSheenTween(blobInner);
             }
 
+            // Ensure cell object is visible and product is hidden
+            cellObject.visible = true;
+            if (product) {
+                product.visible = false;
+                product.traverse(child => {
+                    if (child.material) child.visible = false;
+                });
+            }
+            if (starField) starField.visible = false;
+
             comingFrom = 'splash';
             splashCurrent = true;
             zoomCurrent = false;
@@ -51,13 +61,22 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
     }
 
     else if (zoomBool) {
-
         if (!zoomCurrent) {
             activateText(zoomArea);
             splashCurrent = false;
             zoomCurrent = true;
             zoomOutCurrent = false;
             restoreDotScale(wavingBlob);
+
+            // Ensure cell object is visible and product is hidden
+            cellObject.visible = true;
+            if (product) {
+                product.visible = false;
+                product.traverse(child => {
+                    if (child.material) child.visible = false;
+                });
+            }
+            if (starField) starField.visible = false;
         }
 
         zoomProgress = scrollProgress(zoomArea);
@@ -201,9 +220,10 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
     }
     else if (productBool) {
         if (!productCurrent) {
-
             resetProductVisibility(product, applicatorObject);
 
+            // Hide cell object and dots for better performance
+            cellObject.visible = false;
             wavingBlob.children.forEach(group => {
                 if (group.isGroup) group.visible = false;
             });
@@ -234,17 +254,8 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                     starField.updateProgress(productProgress * 2);
                 }
 
-                // __________________________
-
-
-
-                // __________________________
-
                 // 1b. Cell Scale & Product Fade (0 to 0.5)
-                product.rotation.x = Math.PI / 2;
-                product.rotation.z = 0;
                 cellObject.visible = true;
-
                 const cellScale = smoothLerp(1, 0.05, productProgress / 0.5);
                 cellObject.scale.set(cellScale, cellScale, cellScale);
 
@@ -300,11 +311,9 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
             }
             // ===== PHASE 2: Product Rotation (0.5 to 0.8) =====
             else if (0.5 <= productProgress && productProgress <= 0.8) {
-
-                // Hide star field after transition
-                if (starField) {
-                    starField.visible = false;
-                }
+                // Hide cell object and starfield after transition
+                cellObject.visible = false;
+                if (starField) starField.visible = false;
 
                 product.traverse(child => {
                     if (child.name === 'overflowMask') {

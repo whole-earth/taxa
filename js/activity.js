@@ -1,3 +1,5 @@
+// TODO BREAK THE INACTIVITY IF I SCROLL AS WELL
+
 let lastActivityTime = Date.now();
 let isAnimationSuspended = false;
 let animationFrameId = null;

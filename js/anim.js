@@ -159,9 +159,13 @@ function initScene() {
                     applicatorObject = this.object.getObjectByName('applicator');
                     if (applicatorObject) {
                         applicatorObject.position.y += 1;
-                        // Create plane with hole for overflow masking
                         const planeSize = window.innerWidth > 1600 ? 300 : 200;
-                        const holeRadius = 31.65 / 2 * 0.99;
+                        
+                        // Calculate hole size based on product width
+                        const productBox = new THREE.Box3().setFromObject(applicatorObject);
+                        const productWidth = productBox.max.x - productBox.min.x;
+                        const productHeight = productBox.max.y - productBox.min.y;
+                        const holeRadius = productWidth / 2;
 
                         const shape = new THREE.Shape();
                         shape.moveTo(-planeSize/2, -planeSize/2);
@@ -201,9 +205,8 @@ function initScene() {
                         planeMesh.visible = false;
                         planeMesh.renderOrder = 199;
                         
-                        // Position at top of applicator
-                        const box = new THREE.Box3().setFromObject(applicatorObject);
-                        planeMesh.position.y = -65; // not elegant, but works
+                        // Position at top of applicator using the bounding box
+                        planeMesh.position.y = -productHeight / 2 + 4;
                         
                         // Rotate the plane to be horizontal
                         planeMesh.rotation.x = Math.PI / 2;
@@ -381,24 +384,37 @@ function initScene() {
             const frameId = requestAnimationFrame(animate);
             setAnimationFrameId(frameId);
             
-            dotTweenGroup.update();
-            ribbonTweenGroup.update();
-            blobTweenGroup.update();
+            // Only update tween groups if they have active tweens
+            if (dotTweenGroup.getAll().length > 0) dotTweenGroup.update();
+            if (ribbonTweenGroup.getAll().length > 0) ribbonTweenGroup.update();
+            if (blobTweenGroup.getAll().length > 0) blobTweenGroup.update();
 
-            if (productAnchor) { productAnchor.lookAt(camera.position); }
-            if (starField && starField.visible) { starField.updateFacing(camera); }
+            // Only update product anchor if it exists and is visible
+            if (productAnchor && productAnchor.visible) { 
+                productAnchor.lookAt(camera.position); 
+            }
+            
+            // Only update starfield if visible and active
+            if (starField && starField.visible) { 
+                starField.updateFacing(camera); 
+            }
+
+            // Only update dot positions if wavingBlob is visible
+            if (wavingBlob.visible) {
+                [dotsGroup1, dotsGroup2, dotsGroup3, dotsGroup4, dotsGroup5].forEach(group => {
+                    if (group.visible) {
+                        group.children.forEach(sphere => {
+                            sphere.position.add(sphere.velocity);
+                            if (sphere.position.length() > dotBounds) {
+                                sphere.velocity.negate();
+                            }
+                        });
+                    }
+                });
+            }
 
             renderer.render(scene, camera);
             controls.update();
-
-            [dotsGroup1, dotsGroup2, dotsGroup3, dotsGroup4, dotsGroup5].forEach(group => {
-                group.children.forEach(sphere => {
-                    sphere.position.add(sphere.velocity);
-                    if (sphere.position.length() > dotBounds) {
-                        sphere.velocity.negate();
-                    }
-                });
-            });
         }
 
         initActivityTracking(animate);
