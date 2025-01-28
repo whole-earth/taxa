@@ -93,3 +93,37 @@ main {
   z-index: 99999 !important;
   pointer-events: auto !important;
 }
+
+#colorSelector {
+  position: fixed;
+  bottom: 4rem;
+  left: 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  z-index: 9999;
+}
+
+#colorSelector div {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+#colorSelector div:hover {
+  transform: scale(1.1);
+}
+
+#podOrange {
+  background-color: #bf541e;
+}
+
+#podGreen {
+  background-color: #2ecc71;
+}
+
+#podYellow {
+  background-color: #f1c40f;
+}

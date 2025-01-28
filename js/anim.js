@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Group } from 'tween';
+import { Group, Tween, Easing } from 'tween';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -9,6 +9,13 @@ import { dispersion, mauve, pearlBlue } from './materials.js';
 import { animatePage } from './scroll.js';
 import { StarField, starfieldParams } from './starfield.js';
 import { initActivityTracking, setAnimationFrameId } from './inactivity.js';
+
+// Define product colors as a single source of truth
+const PRODUCT_COLORS = {
+    orange: '#bf541e',
+    green: '#00a86b',
+    yellow: '#ffd700'
+};
 
 window.THREE = window.THREE || {};
 Object.assign(window.THREE, THREE)
@@ -31,6 +38,7 @@ export let ribbonTweenGroup = new Group();
 export let blobTweenGroup = new Group();
 export let applicatorObject;
 export let starField;
+export let colorTweenGroup = new Group();
 
 document.addEventListener('DOMContentLoaded', () => {
     initScene();
@@ -61,7 +69,259 @@ function initScene() {
     initLights(scene, renderer);
 
     window.addEventListener('resize', () => resizeScene(renderer, camera));
-    window.addEventListener('scroll', () => animatePage(controls, camera, cellObject, blobInner, ribbons, spheres, wavingBlob, dotBounds, product, scrollTimeout, renderer, ambientLight));
+
+    // Keep track of current color
+    let currentColorState = PRODUCT_COLORS.orange;
+
+    // Animation sequence manager
+    class ColorChangeAnimationSequence {
+        constructor(applicator, product, targetColor) {
+            this.applicator = applicator;
+            this.product = product;
+            this.targetColor = targetColor;
+            this.initialY = 0;
+            this.initialRotY = 0;
+            this.tweenGroup = colorTweenGroup;
+            console.log('Animation sequence created:', {
+                initialY: this.initialY,
+                initialRotY: this.initialRotY,
+                targetColor: this.targetColor
+            });
+        }
+
+        start() {
+            // Store initial state
+            this.initialY = this.applicator.position.y;
+            this.initialRotY = this.applicator.rotation.y;
+            console.log('Starting animation with:', {
+                applicatorY: this.applicator.position.y,
+                applicatorRotY: this.applicator.rotation.y,
+                storedInitialY: this.initialY,
+                storedInitialRotY: this.initialRotY
+            });
+
+            // Create all tweens first
+            const rotateDownTween = this.createRotationDownTween();
+            const moveUpTween = this.createMoveUpTween();
+            const colorTween = this.createColorTween();
+            const moveDownTween = this.createMoveDownTween();
+            const rotateUpTween = this.createRotationUpTween();
+
+            // Log all created tweens
+            console.log('Created tweens:', {
+                rotateDown: rotateDownTween._object === this.applicator.rotation,
+                moveUp: moveUpTween._object === this.applicator.position,
+                color: colorTween,
+                moveDown: moveDownTween._object === this.applicator.position,
+                rotateUp: rotateUpTween._object === this.applicator.rotation
+            });
+
+            // Chain them together with explicit onComplete handlers
+            rotateDownTween
+                .onComplete(() => {
+                    console.log('Rotation down complete, starting move up');
+                    moveUpTween.start();
+                });
+
+            moveUpTween
+                .onComplete(() => {
+                    console.log('Move up complete, starting color change');
+                    colorTween.start();
+                });
+
+            colorTween
+                .onComplete(() => {
+                    console.log('Color change complete, starting move down');
+                    moveDownTween.start();
+                });
+
+            moveDownTween
+                .onComplete(() => {
+                    console.log('Move down complete, starting rotation up');
+                    rotateUpTween.start();
+                });
+
+            rotateUpTween
+                .onComplete(() => {
+                    console.log('Full sequence completed, clearing tweens');
+                    this.tweenGroup.removeAll();
+                });
+
+            // Start the sequence
+            console.log('Starting tween sequence');
+            rotateDownTween.start();
+        }
+
+        createRotationDownTween() {
+            console.log('Creating rotation down tween');
+            return new Tween(this.applicator.rotation, this.tweenGroup)
+                .to({ y: -Math.PI * 0.4 }, 500)
+                .easing(Easing.Cubic.InOut)
+                .onStart(() => console.log('Rotation down started'))
+                .onUpdate(() => console.log('Rotation Y:', this.applicator.rotation.y))
+                .onComplete(() => console.log('Rotation down complete'));
+        }
+
+        createMoveUpTween() {
+            const targetY = this.initialY + 1;
+            console.log('Creating move up tween');
+            return new Tween(this.applicator.position, this.tweenGroup)
+                .to({ y: targetY }, 500)
+                .easing(Easing.Cubic.InOut)
+                .onStart(() => console.log('Move up started'))
+                .onUpdate(() => console.log('Position Y:', this.applicator.position.y))
+                .onComplete(() => console.log('Move up complete'));
+        }
+
+        createColorTween() {
+            console.log('Creating color tween');
+            const innerCapObject = this.product.getObjectByName('inner-cap');
+            if (!innerCapObject) {
+                console.warn('Inner cap not found!');
+                return new Tween({}, this.tweenGroup).to({}, 1);
+            }
+
+            const innerCapMeshes = [];
+            innerCapObject.traverse(child => {
+                if (child.isMesh) {
+                    innerCapMeshes.push(child);
+                }
+            });
+
+            // Get the current color from the actual material of the first mesh
+            const firstMesh = innerCapMeshes[0];
+            const startColor = firstMesh?.material?.color || new THREE.Color(currentColorState);
+            
+            // Create our tween object with the current RGB values
+            const currentColor = { r: startColor.r, g: startColor.g, b: startColor.b };
+            
+            // Convert target hex color to RGB
+            const targetThreeColor = new THREE.Color(this.targetColor);
+            const targetColor = { r: targetThreeColor.r, g: targetThreeColor.g, b: targetThreeColor.b };
+
+            console.log('Color tween values:', {
+                from: `rgb(${currentColor.r * 255}, ${currentColor.g * 255}, ${currentColor.b * 255})`,
+                to: `rgb(${targetColor.r * 255}, ${targetColor.g * 255}, ${targetColor.b * 255})`,
+                fromHex: startColor.getHexString(),
+                toHex: this.targetColor
+            });
+
+            return new Tween(currentColor, this.tweenGroup)
+                .to(targetColor, 700)
+                .easing(Easing.Cubic.InOut)
+                .onStart(() => {
+                    console.log('Color change started', {
+                        from: currentColorState,
+                        to: this.targetColor
+                    });
+                })
+                .onUpdate(() => {
+                    const color = new THREE.Color(currentColor.r, currentColor.g, currentColor.b);
+                    innerCapMeshes.forEach(mesh => {
+                        if (mesh.material) {
+                            mesh.material.color.copy(color);
+                            mesh.material.emissive.copy(color);
+                            mesh.material.needsUpdate = true;
+                        }
+                    });
+                })
+                .onComplete(() => {
+                    console.log('Color change complete', {
+                        finalColor: this.targetColor
+                    });
+                    currentColorState = this.targetColor;
+                });
+        }
+
+        createMoveDownTween() {
+            console.log('Creating move down tween');
+            return new Tween(this.applicator.position, this.tweenGroup)
+                .to({ y: this.initialY }, 500)
+                .easing(Easing.Cubic.InOut)
+                .onStart(() => console.log('Move down started'))
+                .onUpdate(() => console.log('Position Y:', this.applicator.position.y))
+                .onComplete(() => console.log('Move down complete'));
+        }
+
+        createRotationUpTween() {
+            console.log('Creating rotation up tween');
+            return new Tween(this.applicator.rotation, this.tweenGroup)
+                .to({ y: this.initialRotY }, 500)
+                .easing(Easing.Cubic.InOut)
+                .onStart(() => console.log('Rotation up started'))
+                .onUpdate(() => console.log('Rotation Y:', this.applicator.rotation.y))
+                .onComplete(() => console.log('Rotation up complete'));
+        }
+    }
+
+    // Add click handlers
+    document.getElementById('podOrange').addEventListener('click', () => {
+        if (!applicatorObject || !product) return;
+        new ColorChangeAnimationSequence(applicatorObject, product, PRODUCT_COLORS.orange).start();
+    });
+
+    document.getElementById('podGreen').addEventListener('click', () => {
+        if (!applicatorObject || !product) return;
+        new ColorChangeAnimationSequence(applicatorObject, product, PRODUCT_COLORS.green).start();
+    });
+
+    document.getElementById('podYellow').addEventListener('click', () => {
+        if (!applicatorObject || !product) return;
+        new ColorChangeAnimationSequence(applicatorObject, product, PRODUCT_COLORS.yellow).start();
+    });
+
+    function updateInnerCapColor(targetColorHex, shouldClearTweens = true) {
+        const innerCapObject = product?.getObjectByName('inner-cap');
+        if (!innerCapObject) {
+            console.warn('Inner cap object not found');
+            return;
+        }
+
+        // Find all meshes inside the inner-cap object
+        const innerCapMeshes = [];
+        innerCapObject.traverse(child => {
+            if (child.isMesh) {
+                innerCapMeshes.push(child);
+            }
+        });
+
+        if (innerCapMeshes.length === 0) {
+            console.warn('No inner cap meshes found');
+            return;
+        }
+
+        // Only clear tweens if explicitly requested (which we don't do during the sequence)
+        if (shouldClearTweens) {
+            colorTweenGroup.removeAll();
+        }
+        
+        // Create a color object for tweening
+        const currentColor = { r: 0, g: 0, b: 0 };
+        const currentThreeColor = new THREE.Color(currentColorState);
+        currentThreeColor.getRGB(currentColor);
+        
+        const targetColor = { r: 0, g: 0, b: 0 };
+        const targetThreeColor = new THREE.Color(targetColorHex);
+        targetThreeColor.getRGB(targetColor);
+
+        const tween = new Tween(currentColor, colorTweenGroup)
+            .to(targetColor, 700)
+            .easing(Easing.Cubic.InOut)
+            .onUpdate(() => {
+                const color = new THREE.Color(currentColor.r, currentColor.g, currentColor.b);
+                innerCapMeshes.forEach(mesh => {
+                    if (mesh.material) {
+                        mesh.material.color.copy(color);
+                        mesh.material.emissive.copy(color);
+                        mesh.material.needsUpdate = true;
+                    }
+                });
+            })
+            .onComplete(() => {
+                currentColorState = targetColorHex;
+            })
+            .start();
+    }
 
     class CellComponent {
         constructor(gltf, shader = null, renderOrder = 1) {
@@ -150,15 +410,37 @@ function initScene() {
                     this.object.traverse(child => {
                         if (child.isMesh) {
                             child.visible = false;
+                            if (!child.material) {
+                                child.material = new THREE.MeshStandardMaterial();
+                            }
                             child.material.transparent = true;
                             child.material.opacity = 0;
                             child.material.needsUpdate = true;
+                        }
+                        // Special handling for inner-cap object
+                        if (child.name === 'inner-cap') {
+                            const innerCapMeshes = [];
+                            child.traverse(innerChild => {
+                                if (innerChild.isMesh) {
+                                    innerChild.material = new THREE.MeshStandardMaterial({
+                                        color: new THREE.Color(PRODUCT_COLORS.orange),
+                                        emissive: new THREE.Color(PRODUCT_COLORS.orange),
+                                        transparent: true,
+                                        opacity: 0,
+                                        metalness: 0.5,
+                                        roughness: 0.2
+                                    });
+                                    innerChild.material.needsUpdate = true;
+                                    innerCapMeshes.push(innerChild);
+                                }
+                            });
                         }
                     });
 
                     applicatorObject = this.object.getObjectByName('applicator');
                     if (applicatorObject) {
-                        applicatorObject.position.y += 1;
+                        // Start at y=0 instead of offsetting by 1
+                        applicatorObject.position.y = 0;
                         const planeSize = window.innerWidth > 1600 ? 300 : 200;
                         
                         // Calculate hole size based on product width
@@ -257,6 +539,14 @@ function initScene() {
                 productAnchor = new THREE.Object3D();
                 productAnchor.add(product);
                 scene.add(productAnchor);
+
+                // Set initial color once product is loaded
+                const innerCap = product.getObjectByName('inner-cap');
+                if (innerCap && innerCap.material) {
+                    innerCap.material.color = new THREE.Color(currentColorState);
+                    innerCap.material.emissive = new THREE.Color(currentColorState);
+                    innerCap.material.needsUpdate = true;
+                }
             })
             .catch((error) => {
                 console.error('Failed to load product:', error);
@@ -266,6 +556,8 @@ function initScene() {
     Promise.all(loadCellObjects).then(() => {
         scene.add(cellObject);
         initSpeckles(scene, boundingBoxes);
+        // Add scroll listener after wavingBlob is initialized
+        window.addEventListener('scroll', () => animatePage(controls, camera, cellObject, blobInner, ribbons, spheres, wavingBlob, dotBounds, product, scrollTimeout, renderer, ambientLight));
         return Promise.all(loadProductObject);
     }).then(() => {
     }).catch((error) => {
@@ -387,7 +679,24 @@ function initScene() {
             const frameId = requestAnimationFrame(animate);
             setAnimationFrameId(frameId);
             
-            // Only update tween groups if they have active tweens
+            // Update all active tweens in our sequence
+            if (colorTweenGroup.getAll().length > 0) {
+                colorTweenGroup.update();
+                
+                // Log active tweens for debugging
+                const activeTweens = colorTweenGroup.getAll();
+                if (activeTweens.length > 0) {
+                    console.log('Active tweens:', activeTweens.length, 
+                        'Targets:', activeTweens.map(tween => {
+                            if (tween._object.isVector3) return 'position';
+                            if (tween._object.isEuler) return 'rotation';
+                            return 'color';
+                        })
+                    );
+                }
+            }
+            
+            // Only update other tween groups if they have active tweens
             if (dotTweenGroup.getAll().length > 0) dotTweenGroup.update();
             if (ribbonTweenGroup.getAll().length > 0) ribbonTweenGroup.update();
             if (blobTweenGroup.getAll().length > 0) blobTweenGroup.update();

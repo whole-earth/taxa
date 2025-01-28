@@ -221,6 +221,19 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
     else if (productBool) {
         if (!productCurrent) {
             resetProductVisibility(product, applicatorObject);
+            
+            // Reset product rotation and position
+            if (product) {
+                product.rotation.x = Math.PI / 2;
+                product.rotation.z = 0;
+                const productScale = 20;
+                product.scale.set(productScale, productScale, productScale);
+            }
+            
+            if (applicatorObject) {
+                applicatorObject.position.y = 1;
+                applicatorObject.rotation.y = 0;
+            }
 
             // Hide cell object and dots for better performance
             cellObject.visible = false;
@@ -233,11 +246,16 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
 
             if (starField) {
                 starField.visible = true;
+                starField.updateProgress(0); // Reset starfield progress
             }
 
             pitchCurrent = false;
             productCurrent = true;
             productTextActivated = false;
+            productPhase1Active = false;
+            productPhase1aActive = false;
+            productPhase2Active = false;
+            productPhase3Active = false;
             comingFrom = 'productArea';
         }
 
@@ -258,6 +276,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                 }
 
                 if (starField) {
+                    starField.visible = true;
                     starField.updateProgress(productProgress * 2);
                 }
 
@@ -265,7 +284,6 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                 cellObject.scale.set(cellScale, cellScale, cellScale);
 
                 if (productProgress > 0.25) {
-
                     if (!productPhase1aActive) {
                         textChildren.forEach(child => {
                             if (child.classList.contains('active')) {
@@ -361,6 +379,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                         productPhase1aActive = false;
                     }
                     productPhase3Active = true;
+                    productTextActivated = false;
                 }
 
                 if (applicatorObject) {
