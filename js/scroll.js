@@ -246,34 +246,56 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
 
             // ===== PHASE 1: Initial Transition (0 to 0.5) =====
             if (productProgress <= 0.5) {
-                // Reset visibility when entering or staying in Phase 1
-                resetProductVisibility(product, applicatorObject);
+                // Reset the flag in phase 1
+                if (!productPhase1Active) {
+                    resetProductVisibility(product, applicatorObject);
+                    cellObject.visible = true;
 
-                // 1a. Star Trails Animation (0 to 0.5)
+                    productPhase2Active = false;
+                    productPhase3Active = false;
+                    productPhase1aActive = false; // overwritten if (productProgress > 0.25) condition is met
+                    productPhase1Active = true;
+                }
+
                 if (starField) {
                     starField.updateProgress(productProgress * 2);
                 }
 
-                // 1b. Cell Scale & Product Fade (0 to 0.5)
-                cellObject.visible = true;
                 const cellScale = smoothLerp(1, 0.05, productProgress / 0.5);
                 cellObject.scale.set(cellScale, cellScale, cellScale);
 
-                // 1c. Product Scale & Fade (0.25 to 0.5)
                 if (productProgress > 0.25) {
 
-                    textChildren.forEach(child => {
-                        if (child.classList.contains('active')) {
-                            child.classList.remove('active');
+                    if (!productPhase1aActive) {
+                        textChildren.forEach(child => {
+                            if (child.classList.contains('active')) {
+                                child.classList.remove('active');
+                            }
+                        });
+                        if (applicatorObject) {
+                            product.traverse(child => {
+                                child.visible = true;
+                            });
+                            applicatorObject.traverse(child => {
+                                child.visible = true;
+                                if (child.material) {
+                                    const materials = Array.isArray(child.material) ? child.material : [child.material];
+                                    materials.forEach(mat => {
+                                        mat.visible = true;
+                                        mat.opacity = 1;
+                                        mat.needsUpdate = true;
+                                    });
+                                }
+                            });
                         }
-                    });
+                        productPhase1aActive = true;
+                    }
 
                     const fadeProgress = (productProgress - 0.25) / 0.25;
 
                     renderer.toneMappingExposure = smoothLerp(1, 0.35, fadeProgress);
                     ambientLight.intensity = smoothLerp(4, 4.6, fadeProgress);
 
-                    // Fade out cell object
                     cellObject.children.forEach(child => {
                         if (child.name != 'ribbons.glb') {
                             child.traverse(innerChild => {
@@ -289,47 +311,35 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                     const productScale = smoothLerp(20, 5, fadeProgress);
                     product.scale.set(productScale, productScale, productScale);
 
-                    if (applicatorObject) {
-
-                        product.traverse(child => {
-                            child.visible = true;
-                        });
-
-                        applicatorObject.traverse(child => {
-                            child.visible = true;
-                            if (child.material) {
-                                const materials = Array.isArray(child.material) ? child.material : [child.material];
-                                materials.forEach(mat => {
-                                    mat.visible = true;
-                                    mat.opacity = 1;
-                                    mat.needsUpdate = true;
-                                });
-                            }
-                        });
-                    }
                 }
             }
             // ===== PHASE 2: Product Rotation (0.5 to 0.8) =====
             else if (0.5 <= productProgress && productProgress <= 0.8) {
                 // Hide cell object and starfield after transition
-                cellObject.visible = false;
-                if (starField) starField.visible = false;
+                if (!productPhase2Active) {
+                    cellObject.visible = false;
+                    if (starField) starField.visible = false;
 
-                product.traverse(child => {
-                    if (child.name === 'overflowMask') {
-                        child.visible = false;
-                    } else {
-                        child.visible = true;
-                    }
-                    if (child.material) {
-                        const materials = Array.isArray(child.material) ? child.material : [child.material];
-                        materials.forEach(mat => {
-                            mat.transparent = child.name === 'Swap_name'; // if child name is 'Swap_name', set transparency to true
-                            mat.opacity = 1;
-                            mat.needsUpdate = true;
-                        });
-                    }
-                });
+                    product.traverse(child => {
+                        if (child.name === 'overflowMask') {
+                            child.visible = false;
+                        } else {
+                            child.visible = true;
+                        }
+                        if (child.material) {
+                            const materials = Array.isArray(child.material) ? child.material : [child.material];
+                            materials.forEach(mat => {
+                                mat.transparent = child.name === 'film-cover' || child.name === 'taxa-name';
+                                mat.opacity = 1;
+                                mat.needsUpdate = true;
+                            });
+                        }
+                    });
+
+                    productPhase2Active = true;
+                    productPhase1Active = false;
+                    productPhase3Active = false;
+                }
 
                 // 2a. X-axis rotation (0.5 to 0.8)
                 const rotationProgress = (productProgress - 0.5) / 0.3;
@@ -344,6 +354,15 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
 
             // ===== PHASE 3: Applicator Animation (0.8 to 1.0) =====
             else if (productProgress >= 0.8) {
+
+                if (!productPhase3Active) {
+                    if (productPhase2Active) {
+                        productPhase2Active = false;
+                        productPhase1aActive = false;
+                    }
+                    productPhase3Active = true;
+                }
+
                 if (applicatorObject) {
                     // 3a. Applicator Position (0.8 to 0.95)
                     if (productProgress <= 0.95) {
@@ -362,59 +381,8 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                 }
             }
 
-            previousProductProgress = productProgress;
         }
     }
-}
-
-function resetProductVisibility(product, applicatorObject) {
-    if (!product) return;
-    product.rotation.x = Math.PI / 2;
-    // First, set everything invisible and transparent
-    product.traverse(child => {
-        child.visible = false;
-        if (child.material) {
-            const materials = Array.isArray(child.material) ? child.material : [child.material];
-            materials.forEach(mat => {
-                mat.transparent = true;
-                mat.opacity = 0;
-                mat.needsUpdate = true;
-            });
-        }
-        // Handle meshes without materials
-        if (child.isMesh) {
-            child.visible = false;
-        }
-    });
-
-    // Then, selectively show only the applicator and overflowMask
-    if (applicatorObject) {
-        applicatorObject.traverse(child => {
-            child.visible = true;
-            if (child.material) {
-                const materials = Array.isArray(child.material) ? child.material : [child.material];
-                materials.forEach(mat => {
-                    mat.visible = true;
-                    mat.opacity = 1;
-                    mat.needsUpdate = true;
-                });
-            }
-        });
-    }
-
-    // Show overflowMask if it exists
-    product.traverse(child => {
-        if (child.name === 'overflowMask') {
-            child.visible = true;
-            if (child.material) {
-                const materials = Array.isArray(child.material) ? child.material : [child.material];
-                materials.forEach(mat => {
-                    mat.opacity = 1;
-                    mat.needsUpdate = true;
-                });
-            }
-        }
-    });
 }
 
 // =====================================================================================
@@ -442,16 +410,20 @@ let zoomCurrent = false;
 let zoomOutCurrent = false;
 let pitchCurrent = false;
 let productCurrent = false;
-let productTextActivated = false;
 
 let zoomFirstCurrent = false;
 let zoomSecondCurrent = false;
 let zoomThirdCurrent = false;
 
+let productPhase1Active = false;
+let productPhase1aActive = false;
+let productPhase2Active = false;
+let productPhase3Active = false;
+
+let productTextActivated = false;
+
 let isClickScroll = false;
 let scrollTimeout;
-
-let previousProductProgress = 0;
 
 export function animatePage(controls, camera, cellObject, blobInner, ribbons, spheres, wavingBlob, dotBounds, product, scrollTimeout, renderer, ambientLight) {
     let scrollY = window.scrollY;
@@ -701,6 +673,55 @@ function dotsTweenExplosion(wavingBlob, duration, delayBeforeFire) {
     }, (dotGroups.length - 1) * delayBeforeFire + duration);
 }
 
+function resetProductVisibility(product, applicatorObject) {
+    if (!product) return;
+    product.rotation.x = Math.PI / 2;
+    // First, set everything invisible and transparent
+    product.traverse(child => {
+        child.visible = false;
+        if (child.material) {
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            materials.forEach(mat => {
+                mat.transparent = true;
+                mat.opacity = 0;
+                mat.needsUpdate = true;
+            });
+        }
+        // Handle meshes without materials
+        if (child.isMesh) {
+            child.visible = false;
+        }
+    });
+
+    // Then, selectively show only the applicator and overflowMask
+    if (applicatorObject) {
+        applicatorObject.traverse(child => {
+            child.visible = true;
+            if (child.material) {
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                materials.forEach(mat => {
+                    mat.visible = true;
+                    mat.opacity = 1;
+                    mat.needsUpdate = true;
+                });
+            }
+        });
+    }
+
+    // Show overflowMask if it exists
+    product.traverse(child => {
+        if (child.name === 'overflowMask') {
+            child.visible = true;
+            if (child.material) {
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                materials.forEach(mat => {
+                    mat.opacity = 1;
+                    mat.needsUpdate = true;
+                });
+            }
+        }
+    });
+}
 
 function restoreDotScale(wavingBlob) {
     wavingBlob.scale.set(1, 1, 1);

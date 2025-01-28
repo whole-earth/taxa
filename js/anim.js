@@ -8,7 +8,7 @@ import { PMREMGenerator } from 'three';
 import { dispersion, mauve, pearlBlue } from './materials.js';
 import { animatePage } from './scroll.js';
 import { StarField, starfieldParams } from './starfield.js';
-import { initActivityTracking, setAnimationFrameId } from './activity.js';
+import { initActivityTracking, setAnimationFrameId } from './inactivity.js';
 
 window.THREE = window.THREE || {};
 Object.assign(window.THREE, THREE)
@@ -69,7 +69,6 @@ function initScene() {
                 this.scene = scene;
                 this.position = new THREE.Vector3(0, 0, 0);
                 this.basePath = 'https://cdn.jsdelivr.net/gh/whole-earth/taxa@main/assets/cell/';
-                // this.basePath = './assets/cell/';
                 this.loader = new GLTFLoader();
                 this.gltfFileName = gltf;
                 const dracoLoader = new DRACOLoader();
@@ -121,6 +120,7 @@ function initScene() {
                 this.scene = scene;
                 this.position = new THREE.Vector3(0, 0, 0);
                 this.basePath = 'https://cdn.jsdelivr.net/gh/whole-earth/taxa@main/assets/product/';
+                //this.basePath = 'http://127.0.0.1:5501/assets/product/';
                 this.gltfFileName = gltf;
 
                 this.loader = new GLTFLoader();
@@ -183,6 +183,7 @@ function initScene() {
                         const material = new THREE.ShaderMaterial({
                             uniforms: {
                                 color: { value: new THREE.Color('#fffbf4') }
+                                // TODO: slightly mismatched with the background color
                             },
                             vertexShader: `
                                 void main() {
@@ -197,7 +198,9 @@ function initScene() {
                             `,
                             side: THREE.DoubleSide,
                             depthWrite: true,
-                            depthTest: true
+                            depthTest: true,
+                            transparent: false,
+                            toneMapped: false
                         });
 
                         const planeMesh = new THREE.Mesh(geometry, material);
@@ -248,7 +251,7 @@ function initScene() {
     ];
 
     const loadProductObject = [
-        new productComponent("updated.glb", 200)
+        new productComponent("product.glb", 200)
             .then((createdProduct) => {
                 product = createdProduct;
                 productAnchor = new THREE.Object3D();
