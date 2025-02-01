@@ -1,0 +1,76 @@
+.pod-indicator {
+    position: relative;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+/* Progress indicator */
+.pod-indicator::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    width: calc(100% + 4px);
+    height: calc(100% + 4px);
+    border-radius: 50%;
+    border: 2px solid transparent;
+    opacity: 0;
+    transition: opacity 200ms ease;
+}
+
+/* Current state indicator */
+.pod-indicator.current::before {
+    border-color: currentColor;
+    opacity: 1;
+}
+
+/* Progress animation */
+.pod-indicator.progress-loading::before {
+    border-color: currentColor;
+    animation: borderRotate 3s linear;
+}
+
+@keyframes borderRotate {
+    0% {
+        clip-path: polygon(50% 50%, 50% 0%, 50% 0%, 50% 0%, 50% 0%, 50% 0%);
+        opacity: 1;
+    }
+    25% {
+        clip-path: polygon(50% 50%, 50% 0%, 100% 0%, 100% 0%, 100% 0%, 100% 0%);
+        opacity: 1;
+    }
+    50% {
+        clip-path: polygon(50% 50%, 50% 0%, 100% 0%, 100% 100%, 100% 100%, 100% 100%);
+        opacity: 1;
+    }
+    75% {
+        clip-path: polygon(50% 50%, 50% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 100%);
+        opacity: 1;
+    }
+    87.5% {
+        clip-path: polygon(50% 50%, 50% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 50%);
+        opacity: 0.5;
+    }
+    100% {
+        clip-path: polygon(50% 50%, 50% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%);
+        opacity: 0;
+    }
+}
+
+/* Color-specific styles */
+#podOrange {
+    background-color: #bf541e;
+    color: #bf541e;
+}
+
+#podGreen {
+    background-color: #00a86b;
+    color: #00a86b;
+}
+
+#podYellow {
+    background-color: #ffd700;
+    color: #ffd700;
+}
