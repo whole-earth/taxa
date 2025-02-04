@@ -791,7 +791,10 @@ function dotsTweenExplosion(wavingBlob, duration, groupIndex) {
         .to({ scale: 3, opacity: 0 }, duration)
         .easing(Easing.Quadratic.InOut)
         .onUpdate(() => {
+            // Update scale for the exploding group
             group.scale.setScalar(tweenState.scale);
+            
+            // Only update opacity for spheres in the current exploding group
             group.children.forEach(sphere => {
                 sphere.material.opacity = Math.max(0, tweenState.opacity);
                 sphere.material.needsUpdate = true;

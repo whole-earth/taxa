@@ -34,6 +34,52 @@ const EXPLOSION_PHASES = [
 let explodedGroups = new Set(); // Track which groups have exploded
 let dotGroupsCache = null; // Cache for dot groups
 
+// Configuration
+const CONFIG = {
+    lighting: {
+        ambientIntensity: 4,
+        envMapIntensity: 1,
+        exposure: 1,
+        toneMapping: 'ACESFilmic',
+        enableEnvironment: true
+    },
+    renderer: {
+        antialias: window.innerWidth > 768,
+        alpha: true,
+        powerPreference: 'high-performance',
+        precision: 'mediump',
+        stencil: false,
+        depth: true,
+        logarithmicDepthBuffer: false
+    },
+    camera: {
+        fov: window.innerWidth < 768 ? 90 : 60,
+        near: 0.5,
+        far: 2000,
+        position: [0, 0, 60]
+    },
+    controls: {
+        dampingFactor: 0.03,
+        autoRotateSpeed: 0.1
+    },
+    assets: {
+        meshLine: "https://unpkg.com/three.meshline@1.4.0/src/THREE.MeshLine.js",
+        envMap: "https://cdn.jsdelivr.net/gh/whole-earth/taxa-v3@main/assets/cell/aloe.hdr"
+    },
+    product: {
+        position: {
+            desktop: {
+                x: -40,  // Positive moves right
+                y: -10   // Negative moves up
+            },
+            mobile: {
+                x: 5,   // Positive moves right
+                y: -4   // Negative moves up
+            }
+        }
+    }
+};
+
 // ============================
 
 function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight) {
@@ -332,6 +378,10 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
         if (!productCurrent) {
             resetProductVisibility(product, state.applicatorObject);
             
+            // Disable auto-rotation and manual rotation when entering product area
+            controls.autoRotate = false;
+            controls.enableRotate = false;
+            
             // Reset product rotation and position
             if (product) {
                 product.rotation.x = Math.PI / 2;
@@ -491,13 +541,27 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
 
                 // 2a. X-axis rotation (0.5 to 0.8)
                 const rotationProgress = (productProgress - 0.5) / 0.3;
-                product.rotation.x = smoothLerp(Math.PI / 2, Math.PI / 15, rotationProgress);
+                product.rotation.x = smoothLerp(Math.PI / 2, Math.PI / 9, rotationProgress);
 
                 // 2b. Z-axis rotation (starts at 0.65)
                 if (rotationProgress > 0.5) {
                     const zRotationProgress = (rotationProgress - 0.5) / 0.5;
                     product.rotation.z = smoothLerp(0, -Math.PI / 5, zRotationProgress);
                 }
+
+                // 2c. Position adjustment based on screen size (0.5 to 1.0)
+                const positionProgress = (productProgress - 0.5) / 0.5;
+                const isDesktop = window.innerWidth > 768;
+                
+                // Get position distances from config
+                const { x: xDistance, y: yDistance } = isDesktop 
+                    ? CONFIG.product.position.desktop 
+                    : CONFIG.product.position.mobile;
+
+                // Apply smooth position transition and Y-axis rotation
+                product.position.x = smoothLerp(0, xDistance, positionProgress);
+                product.position.y = smoothLerp(0, yDistance, positionProgress);
+                product.rotation.y = smoothLerp(0, Math.PI / 5, positionProgress); // NEW : Rotate 30 degrees counterclockwise
             }
 
             // ===== PHASE 3: Applicator Animation (0.8 to 1.0) =====

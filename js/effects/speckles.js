@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Tween, Easing } from 'tween';
-import { state } from './anim.js';
+import { state } from '../core/anim.js';
 
 /**
  * Configuration for the speckle system
@@ -31,8 +31,23 @@ export class SpeckleSystem {
         this.dotBounds = dotBounds;
         this.spheres = [];
         this.wavingBlob = this.createWavingBlob();
-        this.dotGroups = this.createDotGroups();
         
+        // Create shared geometries for instancing
+        this.sharedGeometries = SPECKLE_CONFIG.sizes.map(size => 
+            new THREE.SphereGeometry(size, 6, 6)
+        );
+        
+        // Create one material per group
+        this.groupMaterials = Array(SPECKLE_CONFIG.groups.count).fill(null).map(() => 
+            new THREE.MeshBasicMaterial({ 
+                color: SPECKLE_CONFIG.colors.default, 
+                opacity: 0, 
+                transparent: true, 
+                depthWrite: false 
+            })
+        );
+        
+        this.dotGroups = this.createDotGroups();
         this.initializeSpeckles();
     }
 
@@ -71,15 +86,11 @@ export class SpeckleSystem {
     }
 
     createSpeckle(size, groupIndex) {
-        const sphereGeometry = new THREE.SphereGeometry(size, 6, 6);
-        const sphereMaterial = new THREE.MeshBasicMaterial({ 
-            color: SPECKLE_CONFIG.colors.default, 
-            opacity: 0, 
-            transparent: true, 
-            depthWrite: false 
-        });
+        const sizeIndex = SPECKLE_CONFIG.sizes.indexOf(size);
+        const geometry = this.sharedGeometries[sizeIndex];
         
-        const sphereMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
+        // Use the group's shared material
+        const sphereMesh = new THREE.Mesh(geometry, this.groupMaterials[groupIndex]);
         sphereMesh.position.copy(this.getRandomPositionWithinBounds());
         
         const randomDirection = new THREE.Vector3(
@@ -114,28 +125,43 @@ export class SpeckleSystem {
     updatePositions() {
         if (!this.wavingBlob.visible) return;
 
+        // Update positions in batches for better performance
         this.dotGroups.forEach(group => {
-            if (group.visible) {
-                group.children.forEach(sphere => {
+            if (!group.visible) return;
+            
+            const children = group.children;
+            const length = children.length;
+            const dotBoundsSquared = this.dotBounds * this.dotBounds;
+            
+            // Process in batches of 50 for better performance
+            for (let i = 0; i < length; i += 50) {
+                const endIdx = Math.min(i + 50, length);
+                for (let j = i; j < endIdx; j++) {
+                    const sphere = children[j];
                     sphere.position.add(sphere.velocity);
-                    if (sphere.position.length() > this.dotBounds) {
+                    
+                    // Use squared distance for better performance
+                    if (sphere.position.lengthSq() > dotBoundsSquared) {
                         sphere.velocity.negate();
                     }
-                });
+                }
             }
         });
     }
 
     tweenOpacity(targetOpacity, duration) {
-        const tweenState = { opacity: this.spheres[0].material.opacity };
+        // Skip if already at target opacity
+        if (this.groupMaterials[0].opacity === targetOpacity) return;
+        
+        const tweenState = { opacity: this.groupMaterials[0].opacity };
         
         const opacityTween = new Tween(tweenState)
             .to({ opacity: targetOpacity }, duration)
             .easing(Easing.Quadratic.InOut)
             .onUpdate(() => {
-                this.spheres.forEach(sphere => {
-                    sphere.material.opacity = tweenState.opacity;
-                    sphere.material.needsUpdate = true;
+                this.groupMaterials.forEach(material => {
+                    material.opacity = tweenState.opacity;
+                    material.needsUpdate = true;
                 });
             })
             .onComplete(() => {
@@ -156,10 +182,9 @@ export class SpeckleSystem {
             .easing(Easing.Quadratic.InOut)
             .onUpdate(() => {
                 group.scale.setScalar(tweenState.scale);
-                group.children.forEach(sphere => {
-                    sphere.material.opacity = Math.max(0, tweenState.opacity);
-                    sphere.material.needsUpdate = true;
-                });
+                // Update only this group's material opacity
+                this.groupMaterials[groupIndex].opacity = Math.max(0, tweenState.opacity);
+                this.groupMaterials[groupIndex].needsUpdate = true;
             })
             .onComplete(() => {
                 state.blobTweenGroup.remove(explosionTween);
@@ -171,9 +196,10 @@ export class SpeckleSystem {
     }
 
     updateColors(color) {
-        this.spheres.forEach(sphere => {
-            sphere.material.color = new THREE.Color(color);
-            sphere.material.needsUpdate = true;
+        // Update each group's material color
+        this.groupMaterials.forEach(material => {
+            material.color = new THREE.Color(color);
+            material.needsUpdate = true;
         });
     }
 
@@ -190,10 +216,13 @@ export class SpeckleSystem {
     }
 
     dispose() {
-        this.spheres.forEach(sphere => {
-            sphere.geometry.dispose();
-            sphere.material.dispose();
-        });
+        // Dispose shared geometries
+        this.sharedGeometries.forEach(geometry => geometry.dispose());
+        
+        // Dispose group materials
+        this.groupMaterials.forEach(material => material.dispose());
+        
+        this.spheres.length = 0; // Clear array
         this.wavingBlob.geometry.dispose();
         this.wavingBlob.material.dispose();
     }

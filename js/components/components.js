@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
-import { PRODUCT_COLORS } from './podColors.js';
-import { state, setApplicatorObject } from './anim.js';
+import { PRODUCT_COLORS } from '../effects/podColors.js';
+import { state, setApplicatorObject } from '../core/anim.js';
 
 /**
  * Base class for 3D components with common loading functionality
@@ -199,7 +199,7 @@ export class ProductComponent extends BaseComponent {
         const geometry = new THREE.ShapeGeometry(shape);
         const material = new THREE.ShaderMaterial({
             uniforms: {
-                color: { value: new THREE.Color('#fffbf4') }
+                color: { value: new THREE.Color(255/255, 251/255, 244/255) }
             },
             vertexShader: `
                 void main() {

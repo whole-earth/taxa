@@ -6,8 +6,8 @@ import { waitForMeshLine } from 'three.meshline';
  */
 export const starfieldParams = {
     lines: {
-        count: 25,
-        thickness: 1.2,
+        count: window.innerWidth < 768 ? 15 : 25, // Reduce line count on mobile
+        thickness: window.innerWidth < 768 ? 1.0 : 1.2,
         opacity: 0.8
     },
     colors: {
@@ -27,11 +27,11 @@ export const starfieldParams = {
         }
     },
     cylinder: {
-        segments: 64,
+        segments: window.innerWidth < 768 ? 32 : 64, // Reduce segments on mobile
         color: '#ff00ff',
         opacity: 0.99,
-        radiusOffset: 15,  // How much larger than the starfield diameter
-        extension: 200     // How much further the tube extends beyond the end ring
+        radiusOffset: 40,  // How much larger than the starfield diameter
+        extension: 1000     // How much further the tube extends beyond the end ring
     },
     debug: {
         enabled: false,
@@ -60,18 +60,25 @@ export class StarField extends THREE.Group {
         this.debugElements = new THREE.Group();
         this.add(this.debugElements);
         
-        // Ensure the starfield faces the camera
+        // Create frustum for culling
+        this.frustum = new THREE.Frustum();
+        this.projScreenMatrix = new THREE.Matrix4();
+        
+        // Initialize reusable objects for calculations
+        this._tempVector = new THREE.Vector3();
+        this._tempMatrix = new THREE.Matrix4();
+        
         this.rotation.set(0, Math.PI, 0);
         
-        // Adjust the geometry parameters for camera-relative positioning
+        // Adjust geometry parameters
         this.params.geometry = {
             ...this.params.geometry,
             start: {
-                z: 0,  // Start at camera near plane
+                z: 0,
                 diameter: this.params.geometry.start.diameter
             },
             end: {
-                z: 130,  // Extend forward from camera
+                z: 130,
                 diameter: this.params.geometry.end.diameter
             }
         };
@@ -104,7 +111,7 @@ export class StarField extends THREE.Group {
             side: THREE.DoubleSide,
             depthWrite: false,
             depthTest: true,
-            blending: THREE.AdditiveBlending
+            blending: THREE.NormalBlending
         });
 
         this.productTube = new THREE.Mesh(geometry, material);
@@ -148,7 +155,7 @@ export class StarField extends THREE.Group {
      * Creates the starfield lines with their materials and geometries
      * @private
      */
-    _createStarField(MeshLine, MeshLineMaterial) {
+    async _createStarField(MeshLine, MeshLineMaterial) {
         const points = this._generateUniformPoints(this.params.lines.count);
         const { start, end } = this.params.geometry;
 
@@ -174,15 +181,22 @@ export class StarField extends THREE.Group {
                 opacity: this.params.lines.opacity,
                 depthWrite: false,
                 depthTest: true,
+                blending: THREE.NormalBlending,
                 lineWidth: this.params.lines.thickness,
                 sizeAttenuation: 1,
-                resolution: new THREE.Vector2(window.innerWidth, window.innerHeight)
+                resolution: new THREE.Vector2(window.innerWidth, window.innerHeight),
+                dashArray: 0,
+                dashOffset: 0,
+                dashRatio: 0,
+                visibility: 1
             });
 
             const line = new MeshLine();
-            line.setPoints([startPoint, startPoint]);
+            line.setPoints([startPoint, startPoint.clone()]); // Use clone to prevent reference issues
             
             const mesh = new THREE.Mesh(line, material);
+            mesh.renderOrder = 1; // Ensure lines render above the cylinder
+            mesh.frustumCulled = false; // Disable frustum culling for lines
             mesh.userData.startPoint = startPoint;
             mesh.userData.endPoint = endPoint;
 
@@ -196,8 +210,19 @@ export class StarField extends THREE.Group {
      * @param {number} progress - Animation progress from 0 to 1
      */
     updateProgress(progress) {
+        if (!this.visible) return;
+        
         const { start, end } = this.params.geometry;
         const scaledProgress = Math.min(1, progress / 0.6);
+        
+        // Only update if progress has changed significantly
+        if (Math.abs(this.lastProgress - scaledProgress) < 0.001) return;
+        this.lastProgress = scaledProgress;
+        
+        // Make sure lines are visible when updating
+        this.lines.forEach(({ mesh }) => {
+            if (!mesh.visible) mesh.visible = true;
+        });
         
         this._updateLines(scaledProgress);
         this._updateCylinder(scaledProgress, start, end);
@@ -208,13 +233,19 @@ export class StarField extends THREE.Group {
      * @private
      */
     _updateLines(scaledProgress) {
-        this.lines.forEach(({ line, mesh }) => {
-            const startPoint = mesh.userData.startPoint;
-            const endPoint = mesh.userData.endPoint;
-            
-            const currentEnd = new THREE.Vector3().lerpVectors(startPoint, endPoint, scaledProgress);
-            line.setPoints([startPoint, currentEnd]);
-        });
+        // Update lines in batches with frustum culling
+        const batchSize = 40;
+        for (let i = 0; i < this.lines.length; i += batchSize) {
+            const endIdx = Math.min(i + batchSize, this.lines.length);
+            for (let j = i; j < endIdx; j++) {
+                const { line, mesh } = this.lines[j];
+                const startPoint = mesh.userData.startPoint;
+                const endPoint = mesh.userData.endPoint;
+                
+                this._tempVector.lerpVectors(startPoint, endPoint, scaledProgress);
+                line.setPoints([startPoint, this._tempVector]);
+            }
+        }
     }
 
     /**
@@ -222,22 +253,41 @@ export class StarField extends THREE.Group {
      * @private
      */
     _updateCylinder(scaledProgress, start, end) {
+        if (Math.abs(this._lastCylinderProgress - scaledProgress) < 0.01) return;
+        this._lastCylinderProgress = scaledProgress;
+        
         const totalLength = (end.z - start.z) + this.params.cylinder.extension;
         const currentLength = THREE.MathUtils.lerp(0, totalLength, scaledProgress);
         const startRadius = (start.diameter / 2) + this.params.cylinder.radiusOffset;
         const endRadius = (end.diameter / 2) + this.params.cylinder.radiusOffset;
         const currentRadius = THREE.MathUtils.lerp(startRadius, endRadius, scaledProgress);
 
+        // Skip update if changes are minimal
+        if (this._lastLength && Math.abs(this._lastLength - currentLength) < 0.1 &&
+            this._lastRadius && Math.abs(this._lastRadius - currentRadius) < 0.1) {
+            return;
+        }
+
+        this._lastLength = currentLength;
+        this._lastRadius = currentRadius;
+
+        // Adjust segment count based on distance for LOD
+        const distance = this.parent?.position.length() || 0;
+        const segmentMultiplier = Math.max(0.5, Math.min(1, 50 / distance));
+        const segments = Math.max(16, Math.floor(this.params.cylinder.segments * segmentMultiplier));
+
         const newGeometry = new THREE.CylinderGeometry(
             currentRadius,
             currentRadius,
             currentLength,
-            this.params.cylinder.segments,
+            segments,
             1,
             true
         );
         
-        this.productTube.geometry.dispose();
+        if (this.productTube.geometry) {
+            this.productTube.geometry.dispose();
+        }
         this.productTube.geometry = newGeometry;
         this.productTube.position.z = start.z + (currentLength / 2);
     }

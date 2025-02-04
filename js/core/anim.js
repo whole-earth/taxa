@@ -19,8 +19,13 @@ const CONFIG = {
     enableEnvironment: true
     },
     renderer: {
-        antialias: true,
-        alpha: true
+        antialias: window.innerWidth > 768,
+        alpha: true,
+        powerPreference: 'high-performance',
+        precision: 'mediump',
+        stencil: false,
+        depth: true,
+        logarithmicDepthBuffer: false
     },
     camera: {
         fov: window.innerWidth < 768 ? 90 : 60,
@@ -70,42 +75,116 @@ class App {
         this.boundingBoxes = [];
         this.loadedObjects = [];
         this.isInitialized = false;
+        this.animationFrameId = null;
+        this.animate = this.animate.bind(this);
         
-        this.init();
+        // Start initialization immediately
+        this.init().catch(error => console.error('Failed to initialize:', error));
         this.setupEventListeners();
     }
 
     async init() {
+        // Start animation loop immediately
+        this.startAnimationLoop();
+
         try {
-            // Initialize scene components
+            // Initialize core scene components
             this.ambientLight = this.sceneManager.initLights();
             
-            // Initialize starfield
-            state.starField = new StarField(starfieldParams);
-            state.starField.visible = false;
-            state.starField.position.set(0, 0, -20);
-            this.sceneManager.camera.add(state.starField);
-            this.sceneManager.scene.add(this.sceneManager.camera);
-
-            // Load cell components
-            await this.loadCellComponents();
+            // Setup and initialize starfield
+            await this.initializeStarfield();
             
-            // Initialize speckle system
-            if (this.blobInner && this.blobInner.getBoundingBox()) {
-                const dotBounds = this.blobInner.getBoundingBox().max.z * 0.85;
-                this.speckleSystem = new SpeckleSystem(this.sceneManager.scene, dotBounds);
-            }
+            // Load all 3D components
+            await this.loadAllComponents();
             
-            // Load product
-            await this.loadProduct();
-
-            // Mark as initialized
-            this.isInitialized = true;
-
-            // Start animation loop
-            this.animate();
+            // Reset initial state
+            this.resetInitialState();
+            
+            // Mark as fully initialized and enable activity tracking
+            this.completeInitialization();
         } catch (error) {
             console.error('Failed to initialize:', error);
+            throw error;
+        }
+    }
+
+    async initializeStarfield() {
+        state.starField = new StarField(starfieldParams);
+        state.starField.visible = true;
+        state.starField.position.set(0, 0, -20);
+        this.sceneManager.camera.add(state.starField);
+        this.sceneManager.scene.add(this.sceneManager.camera);
+        
+        // Ensure proper starfield initialization
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    async loadAllComponents() {
+        // Load cell components first
+        await this.loadCellComponents();
+        
+        // Initialize speckle system if inner blob is available
+        if (this.blobInner && this.blobInner.getBoundingBox()) {
+            const dotBounds = this.blobInner.getBoundingBox().max.z * 0.85;
+            this.speckleSystem = new SpeckleSystem(this.sceneManager.scene, dotBounds);
+        }
+        
+        // Load product last
+        await this.loadProduct();
+    }
+
+    resetInitialState() {
+        window.scrollTo(0, 0);
+        state.lastScrollY = 0;
+        
+        if (state.starField) {
+            state.starField.updateProgress(0);
+        }
+    }
+
+    completeInitialization() {
+        this.isInitialized = true;
+        // Only start activity tracking after everything is loaded
+        initActivityTracking(this.animate);
+    }
+
+    startAnimationLoop() {
+        if (!this.animationFrameId) {
+            this.animate();
+        }
+    }
+
+    animate() {
+        this.animationFrameId = requestAnimationFrame(this.animate);
+        setAnimationFrameId(this.animationFrameId);
+
+        // Update all active animations
+        this.updateActiveAnimations();
+        
+        // Render the scene
+        this.sceneManager.update();
+    }
+
+    updateActiveAnimations() {
+        const activeTweenGroups = [
+            { group: state.dotTweenGroup, active: state.dotTweenGroup.getAll().length > 0 },
+            { group: state.ribbonTweenGroup, active: state.ribbonTweenGroup.getAll().length > 0 },
+            { group: state.blobTweenGroup, active: state.blobTweenGroup.getAll().length > 0 },
+            { group: colorTweenGroup, active: colorTweenGroup.getAll().length > 0 }
+        ];
+
+        activeTweenGroups.forEach(({ group, active }) => {
+            if (active) group.update();
+        });
+
+        // Update product anchor
+        if (this.productAnchor?.visible) {
+            this.productAnchor.lookAt(this.sceneManager.camera.position);
+        }
+
+        // Update speckle system
+        if (this.speckleSystem && this.speckleSystem.wavingBlob.visible) {
+            this.speckleSystem.updatePositions();
         }
     }
 
@@ -201,30 +280,6 @@ class App {
         });
     }
 
-    animate() {
-        const frameId = requestAnimationFrame(this.animate.bind(this));
-        setAnimationFrameId(frameId);
-
-        // Update tween groups
-        if (state.dotTweenGroup.getAll().length > 0) state.dotTweenGroup.update();
-        if (state.ribbonTweenGroup.getAll().length > 0) state.ribbonTweenGroup.update();
-        if (state.blobTweenGroup.getAll().length > 0) state.blobTweenGroup.update();
-        if (colorTweenGroup.getAll().length > 0) colorTweenGroup.update();
-
-        // Update product anchor
-        if (this.productAnchor && this.productAnchor.visible) {
-            this.productAnchor.lookAt(this.sceneManager.camera.position);
-        }
-
-        // Update speckle system
-        if (this.speckleSystem) {
-            this.speckleSystem.updatePositions();
-        }
-
-        // Render scene
-        this.sceneManager.update();
-    }
-
     dispose() {
         this.sceneManager.dispose();
         this.speckleSystem.dispose();
@@ -232,8 +287,5 @@ class App {
     }
 }
 
-// Initialize app when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-    const app = new App();
-    initActivityTracking(() => app.animate());
-});
+// Start app immediately without waiting for DOMContentLoaded
+const app = new App();
