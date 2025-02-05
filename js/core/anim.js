@@ -78,6 +78,9 @@ class App {
         this.animationFrameId = null;
         this.animate = this.animate.bind(this);
         
+        // Add loading classes immediately
+        document.body.classList.add('loading', 'completing');
+        
         // Start initialization immediately
         this.init().catch(error => console.error('Failed to initialize:', error));
         this.setupEventListeners();
@@ -146,6 +149,33 @@ class App {
         this.isInitialized = true;
         // Only start activity tracking after everything is loaded
         initActivityTracking(this.animate);
+        
+        // Remove loading class to start fade in
+        setTimeout(() => {
+            document.body.classList.remove('loading');
+            
+            // Track all elements that might have transitions
+            const transitionElements = [
+                document.querySelector('.three'),
+                document.querySelector('.splash'),
+                document.querySelector('.nav'),
+                document.querySelector('.scroll-indicator')
+            ].filter(Boolean); // Remove any null elements
+            
+            let transitionsCompleted = 0;
+            const totalTransitions = transitionElements.length;
+            
+            // Listen for transitions on all elements
+            transitionElements.forEach(element => {
+                element.addEventListener('transitionend', () => {
+                    transitionsCompleted++;
+                    // Only remove completing class when all transitions are done
+                    if (transitionsCompleted === totalTransitions) {
+                        document.body.classList.remove('completing');
+                    }
+                }, { once: true });
+            });
+        }, 100);
     }
 
     startAnimationLoop() {

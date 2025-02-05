@@ -19,7 +19,7 @@ export const starfieldParams = {
     geometry: {
         start: {
             z: -50,
-            diameter: 60
+            diameter: 80
         },
         end: {
             z: 80,

@@ -127,3 +127,26 @@ main {
 #podYellow {
   background-color: #f1c40f;
 }
+
+/* Loading and completing states */
+body.loading.completing .three,
+body.loading.completing .splash,
+body.loading.completing .nav,
+body.loading.completing .scroll-indicator {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Transition state when only completing class remains */
+body.completing .three,
+body.completing .scroll-indicator {
+    opacity: 1;
+    transition: opacity 1.8s ease-out;
+}
+
+/* Delayed transitions for main and nav */
+body.completing .splash,
+body.completing .nav {
+    opacity: 1;
+    transition: opacity 1.8s ease-out 1s;
+}
