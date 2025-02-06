@@ -6,9 +6,15 @@ import { waitForMeshLine } from 'three.meshline';
  */
 export const starfieldParams = {
     lines: {
-        count: window.innerWidth < 768 ? 15 : 25, // Reduce line count on mobile
-        thickness: window.innerWidth < 768 ? 1.0 : 1.2,
-        opacity: 0.8
+        count: window.innerWidth < 768 ? 15 : 20, // Reduce line count on mobile
+        thickness: window.innerWidth < 768 ? 2.0 : 1.8, // 2.0 on mobile
+        opacity: 0.8,
+        glow: {
+            enabled: true,
+            size: window.innerWidth < 768 ? 4.0 : 3.0,
+            intensity: 0.6,
+            steps: 6  // Number of gradient steps
+        }
     },
     colors: {
         blue: '#4a9eff',
@@ -28,7 +34,7 @@ export const starfieldParams = {
     },
     cylinder: {
         segments: window.innerWidth < 768 ? 32 : 64, // Reduce segments on mobile
-        color: '#ff00ff',
+        color: '#949494',  // Changed from '#ff00ff' to a dark gray
         opacity: 0.99,
         radiusOffset: 40,  // How much larger than the starfield diameter
         extension: 1000     // How much further the tube extends beyond the end ring
@@ -152,6 +158,43 @@ export class StarField extends THREE.Group {
     }
 
     /**
+     * Creates a gradient texture for the glow effect
+     * @private
+     */
+    _createGlowGradient(color) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 128;
+        canvas.height = 1;
+        const ctx = canvas.getContext('2d');
+        
+        // Create gradient
+        const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+        
+        // Convert hex color to rgb for manipulation
+        const c = new THREE.Color(color);
+        const steps = this.params.lines.glow.steps;
+        
+        for (let i = 0; i <= steps; i++) {
+            const alpha = i === 0 ? 1 : 1 - (i / steps);
+            gradient.addColorStop(i / steps, `rgba(${Math.floor(c.r * 255)}, ${Math.floor(c.g * 255)}, ${Math.floor(c.b * 255)}, ${alpha})`);
+        }
+        
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        const texture = new THREE.CanvasTexture(
+            canvas,
+            THREE.UVMapping,
+            THREE.ClampToEdgeWrapping,
+            THREE.ClampToEdgeWrapping,
+            THREE.LinearFilter,
+            THREE.LinearFilter
+        );
+        
+        return texture;
+    }
+
+    /**
      * Creates the starfield lines with their materials and geometries
      * @private
      */
@@ -175,8 +218,25 @@ export class StarField extends THREE.Group {
                 end.z
             );
 
+            const lineColor = this._getColorForIndex(i);
+
+            // Create glow material with gradient texture
+            const glowMaterial = new MeshLineMaterial({
+                useMap: true,
+                map: this._createGlowGradient(lineColor),
+                transparent: true,
+                opacity: this.params.lines.opacity * this.params.lines.glow.intensity,
+                depthWrite: false,
+                depthTest: true,
+                blending: THREE.AdditiveBlending,
+                lineWidth: this.params.lines.thickness * this.params.lines.glow.size,
+                sizeAttenuation: 1,
+                resolution: new THREE.Vector2(window.innerWidth, window.innerHeight)
+            });
+
+            // Create main line material with original color
             const material = new MeshLineMaterial({
-                color: this._getColorForIndex(i),
+                color: lineColor,
                 transparent: true,
                 opacity: this.params.lines.opacity,
                 depthWrite: false,
@@ -191,16 +251,34 @@ export class StarField extends THREE.Group {
                 visibility: 1
             });
 
+            // Create glow line
+            const glowLine = new MeshLine();
+            glowLine.setPoints([startPoint, startPoint.clone()]);
+            const glowMesh = new THREE.Mesh(glowLine, glowMaterial);
+            glowMesh.renderOrder = 0;
+            glowMesh.frustumCulled = false;
+            glowMesh.userData.startPoint = startPoint;
+            glowMesh.userData.endPoint = endPoint;
+
+            // Create main line
             const line = new MeshLine();
-            line.setPoints([startPoint, startPoint.clone()]); // Use clone to prevent reference issues
-            
+            line.setPoints([startPoint, startPoint.clone()]);
             const mesh = new THREE.Mesh(line, material);
-            mesh.renderOrder = 1; // Ensure lines render above the cylinder
-            mesh.frustumCulled = false; // Disable frustum culling for lines
+            mesh.renderOrder = 1;
+            mesh.frustumCulled = false;
             mesh.userData.startPoint = startPoint;
             mesh.userData.endPoint = endPoint;
 
-            this.lines.push({ mesh, line, material });
+            this.lines.push({ 
+                mesh, 
+                line, 
+                material,
+                glowMesh,
+                glowLine,
+                glowMaterial 
+            });
+            
+            this.add(glowMesh);
             this.add(mesh);
         }
     }
@@ -238,12 +316,13 @@ export class StarField extends THREE.Group {
         for (let i = 0; i < this.lines.length; i += batchSize) {
             const endIdx = Math.min(i + batchSize, this.lines.length);
             for (let j = i; j < endIdx; j++) {
-                const { line, mesh } = this.lines[j];
+                const { line, mesh, glowLine, glowMesh } = this.lines[j];
                 const startPoint = mesh.userData.startPoint;
                 const endPoint = mesh.userData.endPoint;
                 
                 this._tempVector.lerpVectors(startPoint, endPoint, scaledProgress);
                 line.setPoints([startPoint, this._tempVector]);
+                glowLine.setPoints([startPoint, this._tempVector]);
             }
         }
     }

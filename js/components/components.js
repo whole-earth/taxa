@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { PRODUCT_COLORS } from '../effects/podColors.js';
-import { state, setApplicatorObject } from '../core/anim.js';
+import { setApplicatorObject } from '../core/anim.js';
 
 /**
  * Base class for 3D components with common loading functionality

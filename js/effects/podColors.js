@@ -8,6 +8,13 @@ export const PRODUCT_COLORS = {
     yellow: '#ffd700'
 };
 
+// Product type text mapping
+const PRODUCT_TYPES = {
+    [PRODUCT_COLORS.orange]: 'deodorant',
+    [PRODUCT_COLORS.yellow]: 'relief',
+    [PRODUCT_COLORS.green]: 'repellent'
+};
+
 // Keep track of current color
 export let currentColorState = PRODUCT_COLORS.orange;
 
@@ -41,10 +48,29 @@ export class ColorChangeAnimationSequence {
 
         this.isAnimating = true;  // Set flag when animation starts
 
-        // Fade out the label immediately
+        // Disable pod buttons during animation
+        ['podOrange', 'podGreen', 'podYellow'].forEach(podId => {
+            const pod = document.getElementById(podId);
+            if (pod) {
+                pod.style.pointerEvents = 'none';
+            }
+        });
+
+        // Fade out the labels immediately
         const showingLabel = document.getElementById('showingLabel');
+        const productType = document.getElementById('productType');
+        const productTypeSubtitle = document.getElementById('productTypeSubtitle');
+
         if (showingLabel) {
             showingLabel.style.opacity = '0';
+        }
+        if (productType) {
+            productType.style.transition = 'opacity 0.3s ease-out';
+            productType.style.opacity = '0';
+        }
+        if (productTypeSubtitle) {
+            productTypeSubtitle.style.transition = 'opacity 0.3s ease-out';
+            productTypeSubtitle.style.opacity = '0';
         }
 
         // Remove current class from all pods first
@@ -108,6 +134,15 @@ export class ColorChangeAnimationSequence {
                         selectedPod.classList.add('current');
                     }
                 }, 200);
+
+                // Re-enable pod buttons after animation
+                ['podOrange', 'podGreen', 'podYellow'].forEach(podId => {
+                    const pod = document.getElementById(podId);
+                    if (pod) {
+                        pod.style.pointerEvents = 'auto';
+                    }
+                });
+
                 this.isAnimating = false;
             });
 
@@ -158,6 +193,85 @@ export class ColorChangeAnimationSequence {
             .to(targetColor, 700)
             .easing(Easing.Cubic.InOut)
             .onStart(() => {
+                // Update product type text after fade out
+                const productType = document.getElementById('productType');
+                const productTypeSubtitle = document.getElementById('productTypeSubtitle');
+                const showingLabel = document.getElementById('showingLabel');
+                const productText = PRODUCT_TYPES[this.targetColor];
+                
+                setTimeout(() => {
+                    // Update all text content while still invisible
+                    if (productType && productText) {
+                        productType.textContent = productText;
+                    }
+                    
+                    if (productTypeSubtitle && productText) {
+                        // Create a temporary span to measure new text width
+                        const tempSpan = document.createElement('span');
+                        tempSpan.style.visibility = 'hidden';
+                        tempSpan.style.position = 'absolute';
+                        tempSpan.style.whiteSpace = 'nowrap';
+                        tempSpan.style.fontSize = window.getComputedStyle(productTypeSubtitle).fontSize;
+                        tempSpan.textContent = productText;
+                        document.body.appendChild(tempSpan);
+                        
+                        const newWidth = tempSpan.offsetWidth;
+                        document.body.removeChild(tempSpan);
+
+                        // Capture current width before any changes
+                        const currentWidth = productTypeSubtitle.offsetWidth;
+                        
+                        // Set up initial styles
+                        productTypeSubtitle.style.display = 'inline-block';
+                        productTypeSubtitle.style.width = currentWidth + 'px';
+                        productTypeSubtitle.style.whiteSpace = 'nowrap';
+                        productTypeSubtitle.style.overflow = 'hidden';
+                        productTypeSubtitle.style.verticalAlign = 'top';
+                        
+                        // Update the text content
+                        productTypeSubtitle.textContent = productText;
+                        
+                        // Start the width transition
+                        requestAnimationFrame(() => {
+                            productTypeSubtitle.style.transition = 'width 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
+                            productTypeSubtitle.style.width = newWidth + 'px';
+                            
+                            productTypeSubtitle.addEventListener('transitionend', function widthChange(e) {
+                                if (e.propertyName === 'width') {
+                                    productTypeSubtitle.removeEventListener('transitionend', widthChange);
+                                    
+                                    // Reset styles after width animation
+                                    productTypeSubtitle.style.display = 'inline';
+                                    productTypeSubtitle.style.width = 'auto';
+                                    productTypeSubtitle.style.verticalAlign = '';
+                                    
+                                    // Fade in all elements
+                                    const elements = [productType, productTypeSubtitle, showingLabel];
+                                    elements.forEach(el => {
+                                        if (el) {
+                                            el.style.transition = 'opacity 0.3s ease-out';
+                                            el.style.opacity = '1';
+                                        }
+                                    });
+                                }
+                            });
+                        });
+                    }
+
+                    // Update showing label text while still invisible
+                    if (showingLabel) {
+                        const labelText = {
+                            [PRODUCT_COLORS.orange]: 'Body odor',
+                            [PRODUCT_COLORS.yellow]: 'Eczema',
+                            [PRODUCT_COLORS.green]: 'Mosquito'
+                        }[this.targetColor];
+                        
+                        if (labelText) {
+                            showingLabel.textContent = labelText;
+                        }
+                    }
+                }, 300); // Wait for fade out to complete
+
                 // Remove all color classes first
                 const productCard = document.querySelector('.product-card-section.module');
                 if (productCard) {
@@ -179,23 +293,6 @@ export class ColorChangeAnimationSequence {
                         pod.classList.remove('current');
                     }
                 });
-
-                // Update and fade in the showing label text
-                const showingLabel = document.getElementById('showingLabel');
-                if (showingLabel) {
-                    const labelText = {
-                        [PRODUCT_COLORS.orange]: 'Body odor',
-                        [PRODUCT_COLORS.yellow]: 'Mosquito',
-                        [PRODUCT_COLORS.green]: 'Eczema'
-                    }[this.targetColor];
-                    
-                    if (labelText) {
-                        showingLabel.textContent = labelText;
-                        requestAnimationFrame(() => {
-                            showingLabel.style.opacity = '1';
-                        });
-                    }
-                }
             })
             .onUpdate(() => {
                 const color = new THREE.Color(currentColor.r, currentColor.g, currentColor.b);

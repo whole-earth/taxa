@@ -128,25 +128,28 @@ main {
   background-color: #f1c40f;
 }
 
-/* Loading and completing states */
-body.loading.completing .three,
-body.loading.completing .splash,
-body.loading.completing .nav,
-body.loading.completing .scroll-indicator {
+/* Initial state - everything starts hidden */
+.three, .scroll-indicator, .main, .nav {
     opacity: 0;
-    pointer-events: none;
 }
 
-/* Transition state when only completing class remains */
-body.completing .three,
-body.completing .scroll-indicator {
-    opacity: 1;
+/* First wave transition */
+.three, .scroll-indicator {
     transition: opacity 1.8s ease-out;
 }
 
-/* Delayed transitions for main and nav */
-body.completing .splash,
-body.completing .nav {
+/* Second wave transition */
+.main, .nav {
+    transition: opacity 1.8s ease-out;
+}
+
+/* Active state */
+.fade-in-primary .three,
+.fade-in-primary .scroll-indicator {
     opacity: 1;
-    transition: opacity 1.8s ease-out 1s;
+}
+
+.fade-in-secondary .main,
+.fade-in-secondary .nav {
+    opacity: 1;
 }

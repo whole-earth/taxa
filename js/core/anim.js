@@ -51,6 +51,7 @@ export const state = {
     blobTweenGroup: new Group(),
     applicatorObject: null,
     starField: null,
+    sceneManager: null,
     setLastScrollY(value) { 
         this.lastScrollY = value; 
     }
@@ -71,15 +72,13 @@ document.head.appendChild(meshLineScript);
 class App {
     constructor() {
         this.sceneManager = new SceneManager(CONFIG);
+        state.sceneManager = this.sceneManager;
         this.cellObject = new THREE.Object3D();
         this.boundingBoxes = [];
         this.loadedObjects = [];
         this.isInitialized = false;
         this.animationFrameId = null;
         this.animate = this.animate.bind(this);
-        
-        // Add loading classes immediately
-        document.body.classList.add('loading', 'completing');
         
         // Start initialization immediately
         this.init().catch(error => console.error('Failed to initialize:', error));
@@ -147,35 +146,15 @@ class App {
 
     completeInitialization() {
         this.isInitialized = true;
-        // Only start activity tracking after everything is loaded
         initActivityTracking(this.animate);
         
-        // Remove loading class to start fade in
+        // First wave - fade in three and scroll indicator
+        document.body.classList.add('fade-in-primary');
+        
+        // Second wave - fade in main and nav after 1.4s
         setTimeout(() => {
-            document.body.classList.remove('loading');
-            
-            // Track all elements that might have transitions
-            const transitionElements = [
-                document.querySelector('.three'),
-                document.querySelector('.splash'),
-                document.querySelector('.nav'),
-                document.querySelector('.scroll-indicator')
-            ].filter(Boolean); // Remove any null elements
-            
-            let transitionsCompleted = 0;
-            const totalTransitions = transitionElements.length;
-            
-            // Listen for transitions on all elements
-            transitionElements.forEach(element => {
-                element.addEventListener('transitionend', () => {
-                    transitionsCompleted++;
-                    // Only remove completing class when all transitions are done
-                    if (transitionsCompleted === totalTransitions) {
-                        document.body.classList.remove('completing');
-                    }
-                }, { once: true });
-            });
-        }, 100);
+            document.body.classList.add('fade-in-secondary');
+        }, 1400);
     }
 
     startAnimationLoop() {

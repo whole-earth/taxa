@@ -75,6 +75,86 @@ export class SceneManager {
         );
         this.scene.add(ambientLight);
 
+        // Create a fixed container for spotlight that won't rotate with controls
+        const spotlightContainer = new THREE.Object3D();
+        spotlightContainer.matrixAutoUpdate = false; // Prevent auto-updates
+        this.scene.add(spotlightContainer);
+
+        // Add spotlight for product highlighting
+        const spotLight = new THREE.SpotLight(0xffffff, 0);
+        spotLight.angle = Math.PI / 4; // 45 degrees
+        spotLight.penumbra = 0.2;
+        spotLight.decay = 1;
+        
+        // Add fixed target that won't move
+        const target = new THREE.Object3D();
+        target.matrixAutoUpdate = false; // Prevent auto-updates
+        spotlightContainer.add(target);
+        spotLight.target = target;
+        
+        // Add spotlight to fixed container
+        spotlightContainer.add(spotLight);
+        
+        // Enable and configure shadows
+        this.renderer.shadowMap.enabled = true;
+        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        spotLight.castShadow = true;
+        spotLight.shadow.mapSize.width = 512;
+        spotLight.shadow.mapSize.height = 512;
+        spotLight.shadow.camera.near = 0.5;
+        spotLight.shadow.camera.far = 500;
+
+        // Create enhanced debug helpers in the fixed container
+        // 1. SpotLight Helper (shows the cone)
+        const spotHelper = new THREE.SpotLightHelper(spotLight, 0xff0000);
+        spotHelper.visible = false;
+        spotlightContainer.add(spotHelper);
+
+        // 2. Point Helper (shows the light position)
+        const pointGeometry = new THREE.SphereGeometry(2, 16, 16);
+        const pointMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const pointHelper = new THREE.Mesh(pointGeometry, pointMaterial);
+        pointHelper.visible = false;
+        spotlightContainer.add(pointHelper);
+
+        // 3. Line Helper (shows the direction)
+        const lineGeometry = new THREE.BufferGeometry();
+        const lineMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 3 });
+        const lineHelper = new THREE.Line(lineGeometry, lineMaterial);
+        lineHelper.visible = false;
+        spotlightContainer.add(lineHelper);
+
+        // Store references
+        this.spotLight = spotLight;
+        this.spotHelper = spotHelper;
+        this.pointHelper = pointHelper;
+        this.lineHelper = lineHelper;
+        this.spotlightContainer = spotlightContainer;
+        
+        // Method to update spotlight position
+        this.setSpotlightPosition = (position, targetPosition) => {
+            spotLight.position.set(position.x, position.y, position.z);
+            target.position.set(targetPosition.x, targetPosition.y, targetPosition.z);
+            spotlightContainer.updateMatrix(); // Update the fixed matrix
+            this.updateSpotlightHelpers();
+        };
+        
+        // Method to update all helpers
+        this.updateSpotlightHelpers = () => {
+            if (spotHelper.visible) {
+                spotHelper.update();
+                pointHelper.position.copy(spotLight.position);
+                
+                // Update line helper to show direction
+                const positions = new Float32Array([
+                    spotLight.position.x, spotLight.position.y, spotLight.position.z,
+                    spotLight.target.position.x, spotLight.target.position.y, spotLight.target.position.z
+                ]);
+                lineGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                lineGeometry.attributes.position.needsUpdate = true;
+            }
+        };
+
         // Load environment map
         const rgbeLoader = new RGBELoader();
         rgbeLoader.load(
