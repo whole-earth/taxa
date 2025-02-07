@@ -6,7 +6,6 @@ export const pearlBlue = new THREE.MeshPhysicalMaterial({
   roughness: 0.4,
   metalness: 0.2,
   opacity: 1,
-  //transparent: true, TODO: check if needed to reinstate 
   side: THREE.FrontSide,
   sheen: 1,
   sheenRoughness: 1,

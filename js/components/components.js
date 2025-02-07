@@ -174,30 +174,10 @@ export class ProductComponent extends BaseComponent {
     }
 
     setupApplicator(applicator) {
-        // Start at y=0 instead of offsetting by 1
+
         applicator.position.y = 0;
-        const planeSize = window.innerWidth > 1600 ? 300 : 200;
 
-        // Calculate hole size based on product width
-        const productBox = new THREE.Box3().setFromObject(applicator);
-        const productWidth = productBox.max.x - productBox.min.x;
-        const productHeight = productBox.max.y - productBox.min.y;
-        const holeRadius = productWidth / 2;
-
-        const shape = new THREE.Shape();
-        shape.moveTo(-planeSize / 2, -planeSize / 2);
-        shape.lineTo(planeSize / 2, -planeSize / 2);
-        shape.lineTo(planeSize / 2, planeSize / 2);
-        shape.lineTo(-planeSize / 2, planeSize / 2);
-        shape.lineTo(-planeSize / 2, -planeSize / 2);
-
-        // Add the circular hole
-        const holePath = new THREE.Path();
-        holePath.absarc(0, 0, holeRadius, 0, Math.PI * 2, true);
-        shape.holes.push(holePath);
-
-        const geometry = new THREE.ShapeGeometry(shape);
-        const material = new THREE.ShaderMaterial({
+        const maskMaterial = new THREE.ShaderMaterial({
             uniforms: {
                 color: { value: new THREE.Color(255/255, 251/255, 244/255) }
             },
@@ -215,24 +195,56 @@ export class ProductComponent extends BaseComponent {
             side: THREE.DoubleSide,
             depthWrite: true,
             depthTest: true,
-            transparent: false,
+            transparent: true,
+            opacity: 1,
             toneMapped: false
         });
 
-        const planeMesh = new THREE.Mesh(geometry, material);
-        planeMesh.name = 'overflowMask';
-        planeMesh.visible = false;
-        planeMesh.renderOrder = 199;
+        const shape = new THREE.Shape();
+        const planeSize = 10;
+        shape.moveTo(-planeSize / 2, -planeSize / 2);
+        shape.lineTo(planeSize / 2, -planeSize / 2);
+        shape.lineTo(planeSize / 2, planeSize / 2);
+        shape.lineTo(-planeSize / 2, planeSize / 2);
+        shape.lineTo(-planeSize / 2, -planeSize / 2);
 
-        // Position at top of applicator using the bounding box
-        planeMesh.position.y = -productHeight / 2 + 4;
+        // Add the circular hole
+        const holePath = new THREE.Path();
+        const holeRadius = 1.04;
+        holePath.absarc(0, 0, holeRadius, 0, Math.PI * 2, true);
+        shape.holes.push(holePath);
 
-        // Rotate the plane to be horizontal
+        const planeGeometry = new THREE.ShapeGeometry(shape);
+
+        const planeMesh = new THREE.Mesh(planeGeometry, maskMaterial);
+        planeMesh.visible = true;
+        planeMesh.renderOrder = -1;
         planeMesh.rotation.x = Math.PI / 2;
 
-        applicator.add(planeMesh);
+        // Create cylinder geometry
+        const cylinderGeometry = new THREE.CylinderGeometry(
+            holeRadius * 4,  // end radius
+            holeRadius * 2,  // start radius
+            10,              // height
+            8,               // radial segments
+            1,               // height segments
+            true             // open ended
+        );
 
-        // Ensure applicator is also invisible initially
+        const cylinderMesh = new THREE.Mesh(cylinderGeometry, maskMaterial);
+        cylinderMesh.position.y = 6;
+        cylinderMesh.renderOrder = -1;
+
+        // Create a parent group for the overflow mask
+        const overflowMaskGroup = new THREE.Group();
+        overflowMaskGroup.name = 'overflowMask';
+        overflowMaskGroup.position.y = 2.75;
+
+        // Add both meshes to the group
+        overflowMaskGroup.add(planeMesh);
+        overflowMaskGroup.add(cylinderMesh);
+        applicator.add(overflowMaskGroup);
+
         applicator.traverse(child => {
             if (child.isMesh) {
                 child.visible = false;

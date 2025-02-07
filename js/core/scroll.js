@@ -11,9 +11,6 @@ const zoomOutEndFOV = splashStartFOV;
 const pitchStartFOV = zoomOutEndFOV;
 const pitchEndFOV = pitchStartFOV * 1.5;
 
-// TODO pick and confirm color
-const blobGrayColor = new THREE.Color(0xa0b4c0);
-
 const green = new THREE.Color('#92cb86');
 const orange = new THREE.Color('#ff8e00');
 const yellow = new THREE.Color('#f1ff00');
@@ -25,18 +22,18 @@ const fadeOutDuration = 180;
 // Pre-calculate explosion thresholds
 const EXPLOSION_PHASES = [
     { threshold: 0.20, index: 0 },
-    { threshold: 0.45, index: 1 },
-    { threshold: 0.65, index: 2 },
-    { threshold: 0.80, index: 3 },
-    { threshold: 0.90, index: 4 }
+    { threshold: 0.30, index: 1 },
+    { threshold: 0.45, index: 2 },
+    { threshold: 0.70, index: 3 },
+    { threshold: 0.85, index: 4 }
 ];
 
-let explodedGroups = new Set(); // Track which groups have exploded
+let explodedGroups = new Set();
 let dotGroupsCache = null;
 
 // ============================
 
-function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight) {
+function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight) {
 
     splashBool = isVisibleBetweenTopAndBottom(splashArea);
     zoomBool = isVisibleBetweenTopAndBottom(zoomArea);
@@ -81,7 +78,9 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
             splashCurrent = false;
             zoomCurrent = true;
             zoomOutCurrent = false;
-            restoreDotScale(wavingBlob);
+            if (wavingBlob) {
+                restoreDotScale(wavingBlob);
+            }
 
             // Ensure cell object is visible and product is hidden
             cellObject.visible = true;
@@ -174,8 +173,8 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
 
         if (!zoomOutCurrent) {
 
-            if (blobInner && isBlobMobilized) {
-                blobTweenMobilized(blobInner, false);
+            if (blobOuter && isBlobMobilized) {
+                blobTweenMobilized(blobOuter, false);
             }
 
             textChildren.forEach(child => {
@@ -235,8 +234,8 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                 controls.enableRotate = true;
                 controls.autoRotateSpeed = 0.2;
 
-                if (blobInner && isBlobMobilized) {
-                    blobTweenMobilized(blobInner, false);
+                if (blobOuter && isBlobMobilized) {
+                    blobTweenMobilized(blobOuter, false);
                 }
 
                 if (product) {
@@ -251,14 +250,18 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                     state.starField.visible = false;
                 }
 
-                restoreDotScale(wavingBlob);
-            } else if (comingFrom == 'zoomOutArea') {
-
-                if (blobInner && !isBlobMobilized) {
-                    blobTweenMobilized(blobInner, true);
+                if (wavingBlob) {
+                    restoreDotScale(wavingBlob);
                 }
 
-                if (spheres[0].material.opacity > 0) {
+                comingFrom = 'pitchArea';
+            } else if (comingFrom == 'zoomOutArea') {
+
+                if (blobOuter && !isBlobMobilized) {
+                    blobTweenMobilized(blobOuter, true);
+                }
+
+                if (spheres && spheres.length > 0 && spheres[0] && spheres[0].material && spheres[0].material.opacity > 0) {
                     // only trigger explosion if dots are visible
                     dotsTweenExplosion(wavingBlob, 600, 80);
                 }
@@ -281,8 +284,8 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
             controls.autoRotate = false;
             controls.enableRotate = false;
 
-            if (blobInner && !isBlobMobilized) {
-                blobTweenMobilized(blobInner, true);
+            if (blobOuter && !isBlobMobilized) {
+                blobTweenMobilized(blobOuter, true);
             }
 
             // Reset product rotation and position
@@ -300,12 +303,16 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
 
             // Hide cell object and dots for better performance
             cellObject.visible = false;
-            wavingBlob.children.forEach(group => {
-                if (group.isGroup) group.visible = false;
-            });
-            state.blobTweenGroup.removeAll();
-            state.dotTweenGroup.removeAll();
-            restoreDotScale(wavingBlob);
+            if (wavingBlob && wavingBlob.children) {
+                wavingBlob.children.forEach(group => {
+                    if (group && group.isGroup) {
+                        group.visible = false;
+                    }
+                });
+                state.blobTweenGroup.removeAll();
+                state.dotTweenGroup.removeAll();
+                restoreDotScale(wavingBlob);
+            }
 
             if (state.starField) {
                 state.starField.visible = true;
@@ -340,8 +347,8 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                     cellObject.visible = true;
 
                     // Restore blob color when scrolling back up
-                    if (blobInner && !isBlobMobilized) {
-                        blobTweenMobilized(blobInner, true);
+                    if (blobOuter && !isBlobMobilized) {
+                        blobTweenMobilized(blobOuter, true);
                     }
 
                     if (state.sceneManager?.spotLight) {
@@ -410,7 +417,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                             }
                             // Handle inner-cap group and all its children
                             if (child.name === 'inner-cap' || child.parent?.name === 'inner-cap') {
-                                if (child.material) {
+                                if (child.material && child.name !== 'top-ring') {
                                     const materials = Array.isArray(child.material) ? child.material : [child.material];
                                     materials.forEach(mat => {
                                         mat.transparent = true;
@@ -459,6 +466,8 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                             materials.forEach(mat => {
                                 // this enables the color to shine thru
                                 mat.transparent = child.name === 'film-cover' || child.name === 'taxa-name';
+                                mat.depthWrite = true;
+                                mat.depthTest = true;
                                 mat.opacity = 1;
                                 mat.needsUpdate = true;
                             });
@@ -612,39 +621,41 @@ let isClickScroll = false;
 let scrollTimeout;
 
 // Function to tween blob color for mobilization effect
-function blobTweenMobilized(blobInner, mobilize = true, grayColor = blobGrayColor) {
-    if (!blobInner) return;
+function blobTweenMobilized(blobOuter, mobilize = true) {
+    
+    if (!blobOuter || !blobOuter.children || !blobOuter.children[0]) return;
 
-    // If already in desired state, don't tween
     if (mobilize === isBlobMobilized) return;
 
-    const targetColor = mobilize ? grayColor : new THREE.Color(0x6a81ad);
+    const blobChild = blobOuter.children[0];
+    if (!blobChild.material) return;
+
+    const greenColor = new THREE.Color(0xe0f4de);
+    const baseColor = new THREE.Color(0xe4e4e4);
+
+    const targetColor = mobilize ? greenColor : baseColor;
     isBlobMobilized = mobilize;  // Update the state
 
-    blobInner.traverse(child => {
-        if (child.isMesh && child.material) {
-            const initialColor = new THREE.Color(child.material.color);
+    const initialColor = new THREE.Color(blobChild.material.color);
 
-            setTimeout(() => {
-                const blobTween = new Tween({ r: initialColor.r, g: initialColor.g, b: initialColor.b })
-                    .to({ r: targetColor.r, g: targetColor.g, b: targetColor.b }, 600)
-                    .easing(Easing.Quadratic.InOut)
-                    .onUpdate(({ r, g, b }) => {
-                        child.material.color.setRGB(r, g, b);
-                        child.material.needsUpdate = true;
-                    })
-                    .onComplete(() => {
-                        state.blobTweenGroup.remove(blobTween);
-                    });
+    setTimeout(() => {
+        const blobTween = new Tween({ r: initialColor.r, g: initialColor.g, b: initialColor.b })
+            .to({ r: targetColor.r, g: targetColor.g, b: targetColor.b }, 600)
+            .easing(Easing.Quadratic.InOut)
+            .onUpdate(({ r, g, b }) => {
+                blobChild.material.color.setRGB(r, g, b);
+                blobChild.material.needsUpdate = true;
+            })
+            .onComplete(() => {
+                state.blobTweenGroup.remove(blobTween);
+            });
 
-                state.blobTweenGroup.add(blobTween);
-                blobTween.start();
-            }, mobilize ? 200 : 0); // 200ms delay if activating mobile color, 0ms if restoring og color
-        }
-    });
+        state.blobTweenGroup.add(blobTween);
+        blobTween.start();
+    }, mobilize ? 200 : 0); // 200ms delay if activating mobile color, 0ms if restoring og color
 }
 
-export function animatePage(controls, camera, cellObject, blobInner, ribbons, spheres, wavingBlob, dotBounds, product, scrollTimeout, renderer, ambientLight) {
+export function animatePage(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, scrollTimeout, renderer, ambientLight) {
     // Get current scroll position and calculate difference from last frame
     let scrollY = window.scrollY;
     let scrollDiff = scrollY - state.lastScrollY;
@@ -689,7 +700,7 @@ export function animatePage(controls, camera, cellObject, blobInner, ribbons, sp
     // Throttle scroll logic updates
     // Mobile: 60ms throttle for better performance
     // Desktop: 40ms throttle for smoother updates
-    throttle(() => scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight), isMobile ? 60 : 40)();
+    throttle(() => scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight), isMobile ? 60 : 40)();
 
     camera.updateProjectionMatrix();
     state.lastScrollY = scrollY; // Store current scroll position for next frame
@@ -796,11 +807,11 @@ function ribbonTweenOpacity(ribbons, initOpacity, targetOpacity, duration = (fad
     }
 }
 
-function cellSheenTween(group, color = null) {
+function cellSheenTween(blobInner, color = null) {
     state.blobTweenGroup.removeAll();
-    if (!group) return;
+    if (!blobInner) return;
 
-    group.traverse(child => {
+    blobInner.traverse(child => {
         if (child.isMesh && child.material) {
             const initialColor = new THREE.Color(child.material.sheenColor);
             const targetColor = color ? new THREE.Color(color) : new THREE.Color(child.material.color);
@@ -901,10 +912,12 @@ function dotRandomizePositions(spheres, dotBounds) {
 }
 
 function dotsTweenExplosion(wavingBlob, duration, groupIndex) {
-    // Initialize cache if not exists
-    if (!dotGroupsCache) {
-        dotGroupsCache = wavingBlob.children.filter(group => group.isGroup);
+    // Initialize cache if not exists and wavingBlob exists
+    if (!dotGroupsCache && wavingBlob && wavingBlob.children) {
+        dotGroupsCache = wavingBlob.children.filter(group => group && group.isGroup);
     }
+
+    if (!dotGroupsCache) return;
 
     const group = dotGroupsCache[groupIndex];
     if (!group || explodedGroups.has(groupIndex)) return;
@@ -918,10 +931,14 @@ function dotsTweenExplosion(wavingBlob, duration, groupIndex) {
         .easing(Easing.Quadratic.InOut)
         .onUpdate(() => {
             group.scale.setScalar(tweenState.scale);
-            group.children.forEach(sphere => {
-                sphere.material.opacity = Math.max(0, tweenState.opacity);
-                sphere.material.needsUpdate = true;
-            });
+            if (group.children) {
+                group.children.forEach(sphere => {
+                    if (sphere && sphere.material) {
+                        sphere.material.opacity = Math.max(0, tweenState.opacity);
+                        sphere.material.needsUpdate = true;
+                    }
+                });
+            }
         })
         .onComplete(() => {
             state.blobTweenGroup.remove(scaleTween);
@@ -935,24 +952,39 @@ function dotsTweenExplosion(wavingBlob, duration, groupIndex) {
 function resetProductVisibility(product, applicatorObject) {
     if (!product) return;
     product.rotation.x = Math.PI / 2;
-    // First, set everything invisible and transparent
+    
+    // First handle the overflowMask
     product.traverse(child => {
-        child.visible = false;
-        if (child.material) {
-            const materials = Array.isArray(child.material) ? child.material : [child.material];
-            materials.forEach(mat => {
-                mat.transparent = true;
-                mat.opacity = 0;
-                mat.needsUpdate = true;
-            });
-        }
-        // Handle meshes without materials
-        if (child.isMesh) {
-            child.visible = false;
+        if (child.name === 'overflowMask') {
+            child.visible = true;
+            if (child.material) {
+                child.material.transparent = false;
+                child.material.depthWrite = true;
+                child.material.depthTest = true;
+                child.material.opacity = 1;
+                child.renderOrder = 1;  // Render after starfield, before other objects
+                child.material.needsUpdate = true;
+            }
         }
     });
 
-    // Then, selectively show only the applicator and overflowMask
+    // Then handle all other objects
+    product.traverse(child => {
+        if (child.name !== 'overflowMask') {
+            child.visible = false;
+            if (child.material) {
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                materials.forEach(mat => {
+                    mat.transparent = true;
+                    mat.opacity = 0;
+                    mat.renderOrder = 2;  // Render after the mask
+                    mat.needsUpdate = true;
+                });
+            }
+        }
+    });
+
+    // Handle applicator object
     if (applicatorObject) {
         applicatorObject.traverse(child => {
             child.visible = true;
@@ -961,34 +993,25 @@ function resetProductVisibility(product, applicatorObject) {
                 materials.forEach(mat => {
                     mat.visible = true;
                     mat.opacity = 1;
+                    mat.renderOrder = 2;  // Render after the mask
                     mat.needsUpdate = true;
                 });
             }
         });
     }
-
-    // Show overflowMask if it exists
-    product.traverse(child => {
-        if (child.name === 'overflowMask') {
-            child.visible = true;
-            if (child.material) {
-                const materials = Array.isArray(child.material) ? child.material : [child.material];
-                materials.forEach(mat => {
-                    mat.opacity = 1;
-                    mat.needsUpdate = true;
-                });
-            }
-        }
-    });
 }
 
 function restoreDotScale(wavingBlob) {
+    if (!wavingBlob || !wavingBlob.scale) return;
+    
     wavingBlob.scale.set(1, 1, 1);
-    wavingBlob.children.forEach(group => {
-        if (group.isGroup) {
-            group.scale.set(1, 1, 1);
-        }
-    });
+    if (wavingBlob.children) {
+        wavingBlob.children.forEach(group => {
+            if (group && group.isGroup && group.scale) {
+                group.scale.set(1, 1, 1);
+            }
+        });
+    }
 }
 
 const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
