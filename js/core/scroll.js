@@ -31,21 +31,6 @@ const EXPLOSION_PHASES = [
     { threshold: 0.90, index: 4 }
 ];
 
-// Spotlight position configuration - EASY TO ADJUST!
-const LIGHT_CONFIG = {
-    position: {
-        x: 40,    // Positive = right of product
-        y: 40,    // Positive = above product
-        z: 30     // Positive = in front of product
-    },
-    target: {
-        x: 0,     // Offset from product center
-        y: 0,     // Offset from product center
-        z: 0      // Offset from product center
-    },
-    maxIntensity: 3
-};
-
 let explodedGroups = new Set(); // Track which groups have exploded
 let dotGroupsCache = null;
 
@@ -239,14 +224,10 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
         if (!pitchCurrent) {
             activateText(pitchArea);
 
-            // Disable spotlight and all its helpers
             if (state.sceneManager?.spotLight) {
-                const { spotLight, spotHelper, pointHelper, lineHelper } = state.sceneManager;
+                const { spotLight } = state.sceneManager;
                 spotLight.visible = false;
                 spotLight.intensity = 0;
-                spotHelper.visible = false;
-                pointHelper.visible = false;
-                lineHelper.visible = false;
             }
 
             if (comingFrom == 'productArea') {
@@ -363,14 +344,10 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                         blobTweenMobilized(blobInner, true);
                     }
 
-                    // Disable spotlight and all its helpers
                     if (state.sceneManager?.spotLight) {
-                        const { spotLight, spotHelper, pointHelper, lineHelper } = state.sceneManager;
+                        const { spotLight } = state.sceneManager;
                         spotLight.visible = false;
                         spotLight.intensity = 0;
-                        spotHelper.visible = false;
-                        pointHelper.visible = false;
-                        lineHelper.visible = false;
                     }
 
                     productPhase2Active = false;
@@ -447,7 +424,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                     }
 
                     renderer.toneMappingExposure = smoothLerp(1, 0.35, fadeProgress);
-                    ambientLight.intensity = smoothLerp(4, 4.6, fadeProgress);
+                    //ambientLight.intensity = smoothLerp(4, 4.6, fadeProgress);
 
                     const productScale = isMobile
                         ? smoothLerp(16, 8, fadeProgress)  // Smaller scale for mobile
@@ -460,7 +437,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                 } else if (productProgress > 0.5 && !lightingTransitionComplete) {
                     // Force complete the lighting transition if we scrolled past it too quickly
                     renderer.toneMappingExposure = 0.35;
-                    ambientLight.intensity = 4.6;
+                    ambientLight.intensity = 4;
                     lightingTransitionComplete = true;
                 }
             }
@@ -490,27 +467,8 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
 
                     // Initialize spotlight when entering product phase
                     if (state.sceneManager?.spotLight) {
-                        const { spotLight, spotHelper, pointHelper, lineHelper } = state.sceneManager;
-
-                        // Make sure spotlight and helpers are visible
+                        const { spotLight } = state.sceneManager;
                         spotLight.visible = true;
-                        spotHelper.visible = true;
-                        pointHelper.visible = true;
-                        lineHelper.visible = true;
-
-                        // Set fixed position and target
-                        state.sceneManager.setSpotlightPosition(
-                            LIGHT_CONFIG.position,
-                            LIGHT_CONFIG.target
-                        );
-
-                        console.log('Spotlight initialized:', {
-                            position: spotLight.position,
-                            target: spotLight.target.position,
-                            visible: spotLight.visible,
-                            intensity: spotLight.intensity,
-                            angle: spotLight.angle * (180 / Math.PI) + ' degrees'
-                        });
                     }
 
                     productPhase2Active = true;
@@ -548,7 +506,6 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
 
                     // DESKTOP 2b: (0.65 to 0.8) Z-axis rotation
                     if (rotationProgress > 0.5) {
-
                         const zRotationProgress = (rotationProgress - 0.5) / 0.5;
                         product.rotation.z = smoothLerp(0, -Math.PI / 8, zRotationProgress);
 
@@ -568,7 +525,8 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                         ? (productProgress >= 0.65 ? (productProgress - 0.65) / 0.15 : 0)
                         : (rotationProgress > 0.5 ? (rotationProgress - 0.5) / 0.5 : 0);
 
-                    spotLight.intensity = smoothLerp(0, LIGHT_CONFIG.maxIntensity, lightProgress);
+                    spotLight.intensity = smoothLerp(0, 20, lightProgress);
+                    ambientLight.intensity = smoothLerp(4.6, 2.2, lightProgress);
                 }
             }
 
@@ -583,12 +541,10 @@ function scrollLogic(controls, camera, cellObject, blobInner, ribbons, spheres, 
                     productTextActivated = false;
                 }
 
-                /*
                 // Keep spotlight at full intensity during applicator animation
                 if (state.sceneManager?.spotLight) {
-                    state.sceneManager.spotLight.intensity = LIGHT_CONFIG.maxIntensity;
+                    state.sceneManager.spotLight.intensity = 20;
                 }
-                */
 
                 if (state.applicatorObject) {
                     // 3a. Applicator Position (0.8 to 0.95)

@@ -238,15 +238,20 @@ class App {
             this.productAnchor.add(product.getObject());
             this.sceneManager.scene.add(this.productAnchor);
 
+            // Attach spotlight container to the product
+            if (this.sceneManager.spotlightContainer) {
+                product.getObject().add(this.sceneManager.spotlightContainer);
+            }
+
             // Set initial color
             const innerCap = product.getObject().getObjectByName('inner-cap');
-                if (innerCap && innerCap.material) {
+            if (innerCap && innerCap.material) {
                 innerCap.material.color = new THREE.Color(PRODUCT_COLORS.orange);
                 innerCap.material.emissive = new THREE.Color(PRODUCT_COLORS.orange);
-                    innerCap.material.needsUpdate = true;
-                }
+                innerCap.material.needsUpdate = true;
+            }
         } catch (error) {
-                console.error('Failed to load product:', error);
+            console.error('Failed to load product:', error);
             throw error;
         }
     }

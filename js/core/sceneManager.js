@@ -14,7 +14,93 @@ export class SceneManager {
         this.renderer = this.initRenderer();
         this.controls = this.initControls();
         
+        // Create spotlight controls GUI
+        //this.createSpotlightControls();
+        
         this.setupEventListeners();
+    }
+
+    createSpotlightControls() {
+        // Create container
+        const container = document.createElement('div');
+        container.style.cssText = `
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            color: white;
+            font-family: monospace;
+            z-index: 100000000;
+            display: block;
+        `;
+        container.id = 'spotlight-controls';
+
+        // Add controls
+        const controls = [
+            { name: 'posX', label: 'Position X', min: -100, max: 160, step: 1, default: 145 },
+            { name: 'posY', label: 'Position Y', min: -100, max: 100, step: 1, default: -78 },
+            { name: 'posZ', label: 'Position Z', min: -100, max: 100, step: 1, default: 85 },
+            { name: 'targetX', label: 'Target X', min: -100, max: 100, step: 1, default: -44 },
+            { name: 'targetY', label: 'Target Y', min: -100, max: 100, step: 1, default: 15 },
+            { name: 'targetZ', label: 'Target Z', min: -100, max: 100, step: 1, default: -20 },
+            { name: 'intensity', label: 'Intensity', min: 0, max: 20, step: 0.5, default: 20 },
+            { name: 'angle', label: 'Angle', min: 0, max: Math.PI/2, step: 0.01, default: 4 * Math.PI / 180 },
+            { name: 'penumbra', label: 'Penumbra', min: 0, max: 1, step: 0.01, default: 1 },
+            { name: 'decay', label: 'Decay', min: 0, max: 2, step: 0.1, default: 0 }
+        ];
+
+        controls.forEach(control => {
+            const div = document.createElement('div');
+            div.style.marginBottom = '5px';
+            
+            const label = document.createElement('label');
+            label.textContent = control.label + ': ';
+            label.style.display = 'inline-block';
+            label.style.width = '100px';
+            
+            const input = document.createElement('input');
+            input.type = 'range';
+            input.min = control.min;
+            input.max = control.max;
+            input.step = control.step;
+            input.value = control.default;
+            input.style.width = '100px';
+            input.style.marginRight = '10px';
+            
+            const value = document.createElement('span');
+            value.textContent = control.default;
+            
+            div.appendChild(label);
+            div.appendChild(input);
+            div.appendChild(value);
+            container.appendChild(div);
+
+            // Store reference
+            this[control.name + 'Input'] = input;
+            this[control.name + 'Value'] = value;
+        });
+
+        // Add toggle helpers button
+        const toggleHelpers = document.createElement('button');
+        toggleHelpers.textContent = 'Toggle Helpers';
+        toggleHelpers.style.marginTop = '10px';
+        toggleHelpers.style.padding = '5px';
+        container.appendChild(toggleHelpers);
+
+        document.body.appendChild(container);
+
+        // Store container reference
+        this.spotlightControlsGUI = container;
+
+        // Add keyboard shortcut (Alt + S) to toggle GUI
+        document.addEventListener('keydown', (e) => {
+            if (e.altKey && e.key.toLowerCase() === 's') {
+                this.spotlightControlsGUI.style.display = 
+                    this.spotlightControlsGUI.style.display === 'none' ? 'block' : 'none';
+            }
+        });
     }
 
     initCamera() {
@@ -70,31 +156,31 @@ export class SceneManager {
 
     initLights() {
         const ambientLight = new THREE.AmbientLight(
-            0xffffff, 
+            0xffffff,
             this.config.lighting.ambientIntensity
         );
         this.scene.add(ambientLight);
 
-        // Create a fixed container for spotlight that won't rotate with controls
-        const spotlightContainer = new THREE.Object3D();
-        spotlightContainer.matrixAutoUpdate = false; // Prevent auto-updates
-        this.scene.add(spotlightContainer);
-
-        // Add spotlight for product highlighting
-        const spotLight = new THREE.SpotLight(0xffffff, 0);
-        spotLight.angle = Math.PI / 4; // 45 degrees
-        spotLight.penumbra = 0.2;
-        spotLight.decay = 1;
+        //=========================================================================
         
-        // Add fixed target that won't move
+        const spotlightContainer = new THREE.Object3D();
+        spotlightContainer.matrixAutoUpdate = true;
+        
+        const spotLight = new THREE.SpotLight(0xffffff, 20);
+        spotLight.angle = 4 * Math.PI / 180; // 4 degrees
+        spotLight.penumbra = 1;
+        spotLight.decay = 0;
+        spotLight.position.set(145, -78, 85);
+
+        // Add target that will move with the container
         const target = new THREE.Object3D();
-        target.matrixAutoUpdate = false; // Prevent auto-updates
+        target.position.set(-44, 15, -20);
         spotlightContainer.add(target);
         spotLight.target = target;
-        
-        // Add spotlight to fixed container
+
+        // Add spotlight to container
         spotlightContainer.add(spotLight);
-        
+
         // Enable and configure shadows
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -104,56 +190,19 @@ export class SceneManager {
         spotLight.shadow.camera.near = 0.5;
         spotLight.shadow.camera.far = 500;
 
-        // Create enhanced debug helpers in the fixed container
-        // 1. SpotLight Helper (shows the cone)
-        const spotHelper = new THREE.SpotLightHelper(spotLight, 0xff0000);
-        spotHelper.visible = false;
-        spotlightContainer.add(spotHelper);
-
-        // 2. Point Helper (shows the light position)
-        const pointGeometry = new THREE.SphereGeometry(2, 16, 16);
-        const pointMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-        const pointHelper = new THREE.Mesh(pointGeometry, pointMaterial);
-        pointHelper.visible = false;
-        spotlightContainer.add(pointHelper);
-
-        // 3. Line Helper (shows the direction)
-        const lineGeometry = new THREE.BufferGeometry();
-        const lineMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 3 });
-        const lineHelper = new THREE.Line(lineGeometry, lineMaterial);
-        lineHelper.visible = false;
-        spotlightContainer.add(lineHelper);
-
         // Store references
         this.spotLight = spotLight;
-        this.spotHelper = spotHelper;
-        this.pointHelper = pointHelper;
-        this.lineHelper = lineHelper;
         this.spotlightContainer = spotlightContainer;
-        
-        // Method to update spotlight position
+        this.spotlightTarget = target;
+
+        // Method to update spotlight position (now relative to product)
         this.setSpotlightPosition = (position, targetPosition) => {
             spotLight.position.set(position.x, position.y, position.z);
             target.position.set(targetPosition.x, targetPosition.y, targetPosition.z);
-            spotlightContainer.updateMatrix(); // Update the fixed matrix
-            this.updateSpotlightHelpers();
+            
         };
-        
-        // Method to update all helpers
-        this.updateSpotlightHelpers = () => {
-            if (spotHelper.visible) {
-                spotHelper.update();
-                pointHelper.position.copy(spotLight.position);
-                
-                // Update line helper to show direction
-                const positions = new Float32Array([
-                    spotLight.position.x, spotLight.position.y, spotLight.position.z,
-                    spotLight.target.position.x, spotLight.target.position.y, spotLight.target.position.z
-                ]);
-                lineGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-                lineGeometry.attributes.position.needsUpdate = true;
-            }
-        };
+
+        //=========================================================================
 
         // Load environment map
         const rgbeLoader = new RGBELoader();
@@ -166,7 +215,7 @@ export class SceneManager {
                 this.scene.environment = envMap;
                 this.scene.environment.mapping = THREE.EquirectangularReflectionMapping;
                 this.scene.environment.intensity = this.config.lighting.envMapIntensity;
-                
+
                 // Clean up resources
                 texture.dispose();
                 pmremGenerator.dispose();
@@ -174,6 +223,87 @@ export class SceneManager {
         );
 
         return ambientLight;
+    }
+
+    setupSpotlightControls() {
+        if (!this.spotlightControlsGUI) return;
+
+        // Position X
+        this.posXInput.addEventListener('input', (e) => {
+            this.spotLight.position.x = parseFloat(e.target.value);
+            this.posXValue.textContent = e.target.value;
+            this.updateSpotlightHelpers();
+        });
+
+        // Position Y
+        this.posYInput.addEventListener('input', (e) => {
+            this.spotLight.position.y = parseFloat(e.target.value);
+            this.posYValue.textContent = e.target.value;
+            this.updateSpotlightHelpers();
+        });
+
+        // Position Z
+        this.posZInput.addEventListener('input', (e) => {
+            this.spotLight.position.z = parseFloat(e.target.value);
+            this.posZValue.textContent = e.target.value;
+            this.updateSpotlightHelpers();
+        });
+
+        // Target X
+        this.targetXInput.addEventListener('input', (e) => {
+            this.spotlightTarget.position.x = parseFloat(e.target.value);
+            this.targetXValue.textContent = e.target.value;
+            this.updateSpotlightHelpers();
+        });
+
+        // Target Y
+        this.targetYInput.addEventListener('input', (e) => {
+            this.spotlightTarget.position.y = parseFloat(e.target.value);
+            this.targetYValue.textContent = e.target.value;
+            this.updateSpotlightHelpers();
+        });
+
+        // Target Z
+        this.targetZInput.addEventListener('input', (e) => {
+            this.spotlightTarget.position.z = parseFloat(e.target.value);
+            this.targetZValue.textContent = e.target.value;
+            this.updateSpotlightHelpers();
+        });
+
+        // Intensity
+        this.intensityInput.addEventListener('input', (e) => {
+            this.spotLight.intensity = parseFloat(e.target.value);
+            this.intensityValue.textContent = e.target.value;
+        });
+
+        // Angle
+        this.angleInput.addEventListener('input', (e) => {
+            this.spotLight.angle = parseFloat(e.target.value);
+            this.angleValue.textContent = (e.target.value * 180 / Math.PI).toFixed(1) + '°';
+            this.updateSpotlightHelpers();
+        });
+
+        // Penumbra
+        this.penumbraInput.addEventListener('input', (e) => {
+            this.spotLight.penumbra = parseFloat(e.target.value);
+            this.penumbraValue.textContent = e.target.value;
+        });
+
+        // Decay
+        this.decayInput.addEventListener('input', (e) => {
+            this.spotLight.decay = parseFloat(e.target.value);
+            this.decayValue.textContent = e.target.value;
+        });
+
+        // Toggle helpers button
+        const toggleButton = this.spotlightControlsGUI.querySelector('button');
+        toggleButton.addEventListener('click', () => {
+            const newState = !this.spotHelper.visible;
+            this.spotHelper.visible = newState;
+            this.pointHelper.visible = newState;
+            this.lineHelper.visible = newState;
+            this.updateSpotlightHelpers();
+        });
     }
 
     update() {
