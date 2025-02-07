@@ -14,9 +14,6 @@ export class SceneManager {
         this.renderer = this.initRenderer();
         this.controls = this.initControls();
         
-        // Create spotlight controls GUI
-        //this.createSpotlightControls();
-        
         this.setupEventListeners();
     }
 
@@ -171,6 +168,7 @@ export class SceneManager {
         spotLight.penumbra = 1;
         spotLight.decay = 0;
         spotLight.position.set(145, -78, 85);
+        spotLight.visible = false;
 
         // Add target that will move with the container
         const target = new THREE.Object3D();
@@ -223,87 +221,6 @@ export class SceneManager {
         );
 
         return ambientLight;
-    }
-
-    setupSpotlightControls() {
-        if (!this.spotlightControlsGUI) return;
-
-        // Position X
-        this.posXInput.addEventListener('input', (e) => {
-            this.spotLight.position.x = parseFloat(e.target.value);
-            this.posXValue.textContent = e.target.value;
-            this.updateSpotlightHelpers();
-        });
-
-        // Position Y
-        this.posYInput.addEventListener('input', (e) => {
-            this.spotLight.position.y = parseFloat(e.target.value);
-            this.posYValue.textContent = e.target.value;
-            this.updateSpotlightHelpers();
-        });
-
-        // Position Z
-        this.posZInput.addEventListener('input', (e) => {
-            this.spotLight.position.z = parseFloat(e.target.value);
-            this.posZValue.textContent = e.target.value;
-            this.updateSpotlightHelpers();
-        });
-
-        // Target X
-        this.targetXInput.addEventListener('input', (e) => {
-            this.spotlightTarget.position.x = parseFloat(e.target.value);
-            this.targetXValue.textContent = e.target.value;
-            this.updateSpotlightHelpers();
-        });
-
-        // Target Y
-        this.targetYInput.addEventListener('input', (e) => {
-            this.spotlightTarget.position.y = parseFloat(e.target.value);
-            this.targetYValue.textContent = e.target.value;
-            this.updateSpotlightHelpers();
-        });
-
-        // Target Z
-        this.targetZInput.addEventListener('input', (e) => {
-            this.spotlightTarget.position.z = parseFloat(e.target.value);
-            this.targetZValue.textContent = e.target.value;
-            this.updateSpotlightHelpers();
-        });
-
-        // Intensity
-        this.intensityInput.addEventListener('input', (e) => {
-            this.spotLight.intensity = parseFloat(e.target.value);
-            this.intensityValue.textContent = e.target.value;
-        });
-
-        // Angle
-        this.angleInput.addEventListener('input', (e) => {
-            this.spotLight.angle = parseFloat(e.target.value);
-            this.angleValue.textContent = (e.target.value * 180 / Math.PI).toFixed(1) + '°';
-            this.updateSpotlightHelpers();
-        });
-
-        // Penumbra
-        this.penumbraInput.addEventListener('input', (e) => {
-            this.spotLight.penumbra = parseFloat(e.target.value);
-            this.penumbraValue.textContent = e.target.value;
-        });
-
-        // Decay
-        this.decayInput.addEventListener('input', (e) => {
-            this.spotLight.decay = parseFloat(e.target.value);
-            this.decayValue.textContent = e.target.value;
-        });
-
-        // Toggle helpers button
-        const toggleButton = this.spotlightControlsGUI.querySelector('button');
-        toggleButton.addEventListener('click', () => {
-            const newState = !this.spotHelper.visible;
-            this.spotHelper.visible = newState;
-            this.pointHelper.visible = newState;
-            this.lineHelper.visible = newState;
-            this.updateSpotlightHelpers();
-        });
     }
 
     update() {
