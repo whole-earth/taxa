@@ -52,6 +52,8 @@ export const state = {
     applicatorObject: null,
     starField: null,
     sceneManager: null,
+    scrollTimeout: null,
+    lenis: null,
     setLastScrollY(value) { 
         this.lastScrollY = value; 
     }
@@ -69,7 +71,7 @@ const meshLineScript = document.createElement('script');
 meshLineScript.src = CONFIG.assets.meshLine;
 document.head.appendChild(meshLineScript);
 
-class App {
+export class App {
     constructor() {
         this.sceneManager = new SceneManager(CONFIG);
         state.sceneManager = this.sceneManager;
@@ -86,11 +88,8 @@ class App {
     }
 
     async init() {
-        // Start animation loop immediately
-        this.startAnimationLoop();
-
         try {
-            // Initialize core scene components
+            // Initialize core scene components first
             this.ambientLight = this.sceneManager.initLights();
             
             // Setup and initialize starfield
@@ -101,6 +100,26 @@ class App {
             
             // Reset initial state
             this.resetInitialState();
+
+            // Initialize Lenis with mobile-optimized settings
+            const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
+            state.lenis = new window.Lenis({
+                duration: isMobile ? 1.8 : 1.2,
+                smoothWheel: true,
+                wheelMultiplier: isMobile ? 0.5 : 1,
+                touchMultiplier: 1.2,
+                infinite: false,
+                orientation: 'vertical',
+                gestureOrientation: 'vertical',
+                smoothTouch: true,
+                touchInertiaMultiplier: 1, // Reduced inertia for better control
+                syncTouch: true,
+                syncTouchLerp: 0.1, // Reduced lerp for more responsive touch
+                easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)), // Custom easing function
+            });
+
+            // Start animation loop
+            this.startAnimationLoop();
             
             // Mark as fully initialized and enable activity tracking
             this.completeInitialization();
@@ -158,43 +177,73 @@ class App {
     }
 
     startAnimationLoop() {
-        if (!this.animationFrameId) {
-            this.animate();
-        }
+        let lastFrameTime = 0;
+        const fpsInterval = 1000 / 60; // Target 60fps
+        
+        const animateLoop = (time) => {
+            // Throttle animation updates to 60fps
+            const elapsed = time - lastFrameTime;
+            
+            if (elapsed > fpsInterval) {
+                if (state.lenis) {
+                    state.lenis.raf(time); // Update Lenis first
+                }
+                this.animate(time);   // Then update our animations
+                lastFrameTime = time - (elapsed % fpsInterval);
+            }
+            requestAnimationFrame(animateLoop);
+        };
+        requestAnimationFrame(animateLoop);
     }
 
-    animate() {
-        this.animationFrameId = requestAnimationFrame(this.animate);
-        setAnimationFrameId(this.animationFrameId);
-
-        // Update all active animations
-        this.updateActiveAnimations();
+    animate = (time) => {
+        const needsUpdate = this.updateActiveAnimations();
         
-        // Render the scene
-        this.sceneManager.update();
+        // Only render if there's actual animation activity
+        if (needsUpdate) {
+            this.sceneManager.update();
+        }
+
+        setAnimationFrameId(time);
     }
 
     updateActiveAnimations() {
-        const activeTweenGroups = [
-            { group: state.dotTweenGroup, active: state.dotTweenGroup.getAll().length > 0 },
-            { group: state.ribbonTweenGroup, active: state.ribbonTweenGroup.getAll().length > 0 },
-            { group: state.blobTweenGroup, active: state.blobTweenGroup.getAll().length > 0 },
-            { group: colorTweenGroup, active: colorTweenGroup.getAll().length > 0 }
+        let needsUpdate = false;
+        
+        // Check tween groups efficiently
+        const tweenGroups = [
+            state.dotTweenGroup,
+            state.ribbonTweenGroup,
+            state.blobTweenGroup,
+            colorTweenGroup
         ];
+        
+        for (const group of tweenGroups) {
+            if (group.getAll().length > 0) {
+                group.update();
+                needsUpdate = true;
+            }
+        }
 
-        activeTweenGroups.forEach(({ group, active }) => {
-            if (active) group.update();
-        });
+        // Early exit if no updates needed
+        if (!needsUpdate && 
+            !this.productAnchor?.visible && 
+            !(this.speckleSystem?.wavingBlob.visible)) {
+            return false;
+        }
 
-        // Update product anchor
+        // Update remaining elements
         if (this.productAnchor?.visible) {
             this.productAnchor.lookAt(this.sceneManager.camera.position);
+            needsUpdate = true;
         }
 
-        // Update speckle system
-        if (this.speckleSystem && this.speckleSystem.wavingBlob.visible) {
+        if (this.speckleSystem?.wavingBlob.visible) {
             this.speckleSystem.updatePositions();
+            needsUpdate = true;
         }
+
+        return needsUpdate;
     }
 
     async loadCellComponents() {
@@ -243,13 +292,6 @@ class App {
                 product.getObject().add(this.sceneManager.spotlightContainer);
             }
 
-            // Set initial color
-            const innerCap = product.getObject().getObjectByName('inner-cap');
-            if (innerCap && innerCap.material) {
-                innerCap.material.color = new THREE.Color(PRODUCT_COLORS.orange);
-                innerCap.material.emissive = new THREE.Color(PRODUCT_COLORS.orange);
-                innerCap.material.needsUpdate = true;
-            }
         } catch (error) {
             console.error('Failed to load product:', error);
             throw error;
@@ -288,7 +330,6 @@ class App {
                 this.speckleSystem?.wavingBlob,
                 this.speckleSystem?.dotBounds,
                 this.product?.getObject(),
-                null,
                 this.sceneManager.renderer,
                 this.ambientLight
             );
@@ -300,7 +341,30 @@ class App {
         this.speckleSystem.dispose();
         cancelAnimationFrame(this.animationFrameId);
     }
+
+    // Helper function to maintain your existing scroll duration logic
+    calculateScrollDuration(targetPosition) {
+        const sections = ['splash', 'zoom', 'pitch', 'product'];
+        const currentSection = sections.find(section => {
+            const elem = document.querySelector(`.${section}`);
+            return elem && isVisibleBetweenTopAndBottom(elem);
+        }) || 'splash';
+
+        const targetSection = sections.find(section => {
+            const elem = document.querySelector(`.${section}`);
+            return elem && elem.offsetTop === targetPosition;
+        });
+
+        const currentIndex = sections.indexOf(currentSection);
+        const targetIndex = sections.indexOf(targetSection);
+        const numberOfSections = Math.abs(targetIndex - currentIndex);
+
+        if (numberOfSections === 1) return 1200;
+        if (numberOfSections === 2) return 2800;
+        if (numberOfSections >= 3) return 3600;
+        return 0;
+    }
 }
 
 // Start app immediately without waiting for DOMContentLoaded
-const app = new App();
+new App();

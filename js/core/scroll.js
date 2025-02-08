@@ -333,12 +333,6 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
         if (product && product.children) {
             productProgress = scrollProgress__LastElem(productArea);
 
-            // Handle text activation when progress is past 0.95
-            if (productProgress > 0.95 && !productTextActivated) {
-                activateText(productArea, false);
-                productTextActivated = true;
-            }
-
             // ===== PHASE 1: Initial Transition (0 to 0.5) =====
             if (productProgress <= 0.5) {
                 // Reset the flag in phase 1
@@ -350,6 +344,15 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     if (blobOuter && !isBlobMobilized) {
                         blobTweenMobilized(blobOuter, true);
                     }
+
+                    // go thru product and set all materials to transparent
+                    product.traverse(child => {
+                        if (child.material) {
+                            child.material.transparent = true;
+                            child.material.depthWrite = true;
+                            child.material.depthTest = true;
+                        }
+                    });
 
                     if (state.sceneManager?.spotLight) {
                         const { spotLight } = state.sceneManager;
@@ -365,7 +368,8 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
                 if (state.starField) {
                     state.starField.visible = true;
-                    state.starField.updateProgress(productProgress * 2);
+                    //state.starField.updateProgress(productProgress * 2);
+                    state.starField.updateProgress(productProgress * 2, productBool && productProgress <= 0.5);
                 }
 
                 const cellScale = smoothLerp(1, 0.06, productProgress / 0.4);
@@ -401,28 +405,14 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     const fadeProgress = (productProgress - 0.25) / 0.25;
 
                     // Fade in specific product elements
-                    if (product) {
+                    if (product && fadeProgress > 0.5) {
                         product.traverse(child => {
-                            // Handle peel group and all its children
-                            if (child.name === 'peel' || child.parent?.name === 'peel') {
+                            if (child.name === 'peel' || child.parent?.name === 'peel' ||
+                                child.name === 'inner-cap' || child.parent?.name === 'inner-cap') {
                                 if (child.material) {
                                     const materials = Array.isArray(child.material) ? child.material : [child.material];
                                     materials.forEach(mat => {
-                                        mat.transparent = true;
-                                        // Only fade in during second half of fadeProgress
-                                        mat.opacity = fadeProgress <= 0.5 ? 0.2 : smoothLerp(0, 1, (fadeProgress - 0.5) * 2);
-                                        mat.needsUpdate = true;
-                                    });
-                                }
-                            }
-                            // Handle inner-cap group and all its children
-                            if (child.name === 'inner-cap' || child.parent?.name === 'inner-cap') {
-                                if (child.material && child.name !== 'top-ring') {
-                                    const materials = Array.isArray(child.material) ? child.material : [child.material];
-                                    materials.forEach(mat => {
-                                        mat.transparent = true;
-                                        // Only fade in during second half of fadeProgress
-                                        mat.opacity = fadeProgress <= 0.5 ? 0.2 : smoothLerp(0, 1, (fadeProgress - 0.5) * 2);
+                                        mat.opacity = smoothLerp(0, 1, (fadeProgress - 0.5) * 2);
                                         mat.needsUpdate = true;
                                     });
                                 }
@@ -431,11 +421,10 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     }
 
                     renderer.toneMappingExposure = smoothLerp(1, 0.35, fadeProgress);
-                    //ambientLight.intensity = smoothLerp(4, 4.6, fadeProgress);
 
                     const productScale = isMobile
-                        ? smoothLerp(16, 8, fadeProgress)  // Smaller scale for mobile
-                        : smoothLerp(20, 5, fadeProgress);
+                        ? smoothLerp(16, 6, fadeProgress)  // Mobile
+                        : smoothLerp(20, 5, fadeProgress);  // Desktop
                     product.scale.set(productScale, productScale, productScale);
 
                     if (fadeProgress >= 1) {
@@ -454,6 +443,11 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                 if (!productPhase2Active) {
                     cellObject.visible = false;
                     if (state.starField) state.starField.visible = false;
+
+                    const scrollIndicator = document.querySelector('.scroll-indicator');
+                    if (scrollIndicator && scrollIndicator.classList.contains('hidden')) {
+                        scrollIndicator.classList.remove('hidden');
+                    }
 
                     product.traverse(child => {
                         if (child.name === 'overflowMask') {
@@ -489,23 +483,19 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
                 // Handle product movement
                 if (isMobile) {
-                    // MOBILE 2a: (0.5 to 0.65). first complete scale animation
-                    const scaleProgress = Math.min(1, (productProgress - 0.5) / 0.15);
-                    const productScale = smoothLerp(8, 7, scaleProgress);
-                    product.scale.set(productScale, productScale, productScale);
 
-                    // MOBILE 2b: (0.65 to 0.8). adjust rotation and position
-                    if (productProgress >= 0.65) {
-                        const rotationProgress = (productProgress - 0.65) / 0.15;
+                    // MOBILE 2b: (0.5 to 0.8). adjust rotation and position
+                    if (productProgress >= 0.5) {
+                        const rotationProgress = (productProgress - 0.5) / 0.3;
 
                         product.rotation.x = smoothLerp(Math.PI / 2, Math.PI / 5.5, rotationProgress);
                         product.rotation.y = smoothLerp(0, Math.PI / 5, rotationProgress);
                         product.rotation.z = smoothLerp(0, -Math.PI / 5, rotationProgress);
 
                         product.position.x = smoothLerp(0, -5, rotationProgress);
-                        product.position.y = smoothLerp(0, 22, rotationProgress);
+                        product.position.y = smoothLerp(0, 16, rotationProgress);
 
-                        const productScaleStage2 = smoothLerp(7, 8, rotationProgress);
+                        const productScaleStage2 = smoothLerp(6, 7, rotationProgress);
                         product.scale.set(productScaleStage2, productScaleStage2, productScaleStage2);
 
                     }
@@ -545,6 +535,11 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     if (productPhase2Active) {
                         productPhase2Active = false;
                         productPhase1aActive = false;
+
+                        const scrollIndicator = document.querySelector('.scroll-indicator');
+                        if (scrollIndicator && !scrollIndicator.classList.contains('hidden')) {
+                            scrollIndicator.classList.add('hidden');
+                        }
                     }
                     productPhase3Active = true;
                     productTextActivated = false;
@@ -571,6 +566,12 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                         // rotate slightly less on mobile
                         state.applicatorObject.rotation.y = smoothLerp(0, isMobile ? Math.PI * 0.3 : Math.PI * 0.4, rotationProgress);
                     }
+                }
+
+                // Handle text activation when progress is past 0.95
+                if (productProgress > 0.95 && !productTextActivated) {
+                    activateText(productArea, false);
+                    productTextActivated = true;
                 }
             }
 
@@ -622,7 +623,7 @@ let scrollTimeout;
 
 // Function to tween blob color for mobilization effect
 function blobTweenMobilized(blobOuter, mobilize = true) {
-    
+
     if (!blobOuter || !blobOuter.children || !blobOuter.children[0]) return;
 
     if (mobilize === isBlobMobilized) return;
@@ -655,56 +656,39 @@ function blobTweenMobilized(blobOuter, mobilize = true) {
     }, mobilize ? 200 : 0); // 200ms delay if activating mobile color, 0ms if restoring og color
 }
 
-export function animatePage(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, scrollTimeout, renderer, ambientLight) {
+export function animatePage(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight) {
     // Get current scroll position and calculate difference from last frame
     let scrollY = window.scrollY;
     let scrollDiff = scrollY - state.lastScrollY;
 
-    // Mobile-optimized scroll speed calculation
+    // Mobile-optimized scroll speed calculation with reduced sensitivity
     if (isMobile) {
-        // Mobile uses larger divisor (40) to reduce sensitivity
-        // Example: 80px scroll / 40 = multiplier of 2
-        const multiplier = Math.floor(scrollDiff / 40);
-
-        // Mobile speed formula: 0.5 + (multiplier * 5), max 15
-        // Example calculations:
-        // - 40px scroll = 0.5 + (1 * 5) = 5.5
-        // - 80px scroll = 0.5 + (2 * 5) = 10.5
-        // - 120px scroll = 15 (capped)
-        controls.autoRotateSpeed = Math.min(0.5 + (multiplier * 5), 15);
-
-        // Longer timeout (200ms) on mobile to reduce CPU/GPU load
-        clearTimeout(scrollTimeout);
-        scrollTimeout = setTimeout(() => {
-            controls.autoRotateSpeed = 0.1; // Lower base speed on mobile
-        }, 200);
+        const speedFactor = Math.min(Math.abs(scrollDiff) / 30, 2); // Reduced from 20 to 30, max from 3 to 2
+        const direction = Math.sign(scrollDiff);
+        controls.autoRotateSpeed = direction * (0.3 + (speedFactor * 3)); // Reduced from 0.5 to 0.3 and 5 to 3
+        
+        clearTimeout(state.scrollTimeout);
+        state.scrollTimeout = setTimeout(() => {
+            controls.autoRotateSpeed = 0.1;
+        }, 300); // Increased from 200 to 300ms for smoother deceleration
     } else {
-        // Desktop uses smaller divisor (20) for more responsive feel
-        // Example: 40px scroll / 20 = multiplier of 2
-        const multiplier = Math.floor(scrollDiff / 20);
+        const acceleration = Math.min(Math.pow(Math.abs(scrollDiff) / 15, 2), 4);
+        const direction = Math.sign(scrollDiff);
+        controls.autoRotateSpeed = direction * (1.0 + (acceleration * 6));
 
-        // Desktop speed formula: 1.0 + (multiplier * 10), max 25
-        // Example calculations:
-        // - 20px scroll = 1.0 + (1 * 10) = 11
-        // - 40px scroll = 1.0 + (2 * 10) = 21
-        // - 60px scroll = 25 (capped)
-        controls.autoRotateSpeed = Math.min(1.0 + (multiplier * 10), 25);
-
-        // Shorter timeout (100ms) on desktop for snappier response
-        clearTimeout(scrollTimeout);
-        scrollTimeout = setTimeout(() => {
-            controls.autoRotateSpeed = 0.2; // Higher base speed on desktop
+        clearTimeout(state.scrollTimeout);
+        state.scrollTimeout = setTimeout(() => {
+            controls.autoRotateSpeed = 0.2;
         }, 100);
     }
 
-    // Throttle scroll logic updates
-    // Mobile: 60ms throttle for better performance
-    // Desktop: 40ms throttle for smoother updates
-    throttle(() => scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight), isMobile ? 60 : 40)();
+    // Use a longer throttle duration for mobile
+    const throttleDuration = isMobile ? 80 : 40; // Increased from 60 to 80ms for mobile
+    throttle(() => scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight), throttleDuration)();
 
     camera.updateProjectionMatrix();
-    state.lastScrollY = scrollY; // Store current scroll position for next frame
-};
+    state.lastScrollY = scrollY;
+}
 
 /**
  * Checks if an element is currently visible in the viewport between top and bottom
@@ -952,7 +936,7 @@ function dotsTweenExplosion(wavingBlob, duration, groupIndex) {
 function resetProductVisibility(product, applicatorObject) {
     if (!product) return;
     product.rotation.x = Math.PI / 2;
-    
+
     // First handle the overflowMask
     product.traverse(child => {
         if (child.name === 'overflowMask') {
@@ -1003,7 +987,7 @@ function resetProductVisibility(product, applicatorObject) {
 
 function restoreDotScale(wavingBlob) {
     if (!wavingBlob || !wavingBlob.scale) return;
-    
+
     wavingBlob.scale.set(1, 1, 1);
     if (wavingBlob.children) {
         wavingBlob.children.forEach(group => {
@@ -1078,76 +1062,51 @@ scrollDots.forEach(dot => {
 });
 
 function smoothScrollTo(targetPosition) {
-    const startPosition = window.scrollY;
-    const sections = ['splash', 'zoom', 'pitch', 'product'];
+    if (state.lenis) {
+        const sections = ['splash', 'zoom', 'pitch', 'product'];
+        const currentSection = sections.find(section => {
+            const elem = document.querySelector(`.${section}`);
+            return elem && isVisibleBetweenTopAndBottom(elem);
+        }) || 'splash';
 
-    let currentSection = '';
-    let targetSection = '';
+        const targetSection = sections.find(section => {
+            const elem = document.querySelector(`.${section}`);
+            return elem && elem.offsetTop === targetPosition;
+        });
 
-    sections.forEach(section => {
-        const elem = document.querySelector(`.${section}`);
-        if (section === 'zoom') {
-            const zoomOutElem = document.querySelector('.zoom-out');
-            if ((elem && isVisibleBetweenTopAndBottom(elem)) ||
-                (zoomOutElem && isVisibleBetweenTopAndBottom(zoomOutElem))) {
-                currentSection = section;
-            }
-        } else if (elem && isVisibleBetweenTopAndBottom(elem)) {
-            currentSection = section;
-        }
-    });
+        const currentIndex = sections.indexOf(currentSection);
+        const targetIndex = sections.indexOf(targetSection);
+        const numberOfSections = Math.abs(targetIndex - currentIndex);
 
-
-    sections.forEach(section => {
-        const elem = document.querySelector(`.${section}`);
-        // Special handling for the product section
-        if (section === 'product') {
-            const productElem = document.querySelector('.product');
-            if (productElem && targetPosition >= productElem.offsetTop) {
-                targetSection = 'product';
-            }
-        } else if (elem && elem.offsetTop === targetPosition) {
-            targetSection = section;
-        }
-    });
-
-    if (!currentSection && window.innerHeight + window.scrollY >= document.documentElement.scrollHeight) {
-        currentSection = 'product';
-    }
-
-    const currentIndex = sections.indexOf(currentSection);
-    const targetIndex = sections.indexOf(targetSection);
-    const numberOfSections = Math.abs(targetIndex - currentIndex);
-
-    let duration;
-    if (numberOfSections === 1) {
-        duration = 1200;
-    } else if (numberOfSections === 2) {
-        duration = 2800;
-    } else if (numberOfSections >= 3) {
-        duration = 3600;
-    } else {
-        duration = 0;
-    }
-
-    let startTime = null;
-
-    function animation(currentTime) {
-        if (!startTime) startTime = currentTime;
-        const timeElapsed = currentTime - startTime;
-        const progress = Math.min(timeElapsed / duration, 1);
-
-        const ease = progress < 0.5 ? 2 * progress * progress : -1 + (4 - 2 * progress) * progress;
-        window.scrollTo(0, startPosition + (targetPosition - startPosition) * ease);
-
-        if (timeElapsed < duration) {
-            requestAnimationFrame(animation);
+        let duration;
+        if (numberOfSections === 1) {
+            duration = isMobile ? 1500 : 1200; // Longer duration on mobile
+        } else if (numberOfSections === 2) {
+            duration = isMobile ? 3200 : 2800;
+        } else if (numberOfSections >= 3) {
+            duration = isMobile ? 4000 : 3600;
         } else {
-            isClickScroll = false;
+            duration = 0;
         }
-    }
 
-    requestAnimationFrame(animation);
+        // Use Lenis smooth scroll with easing
+        state.lenis.scrollTo(targetPosition, {
+            duration: duration,
+            easing: (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t, // Custom easing function
+            force: isMobile // Force smooth scroll on mobile
+        });
+        
+        // Reset scroll indicator after animation
+        setTimeout(() => {
+            isClickScroll = false;
+        }, duration + 100);
+    } else {
+        // Fallback to default smooth scroll if Lenis is not available
+        window.scrollTo({
+            top: targetPosition,
+            behavior: 'smooth'
+        });
+    }
 }
 
 window.addEventListener('scroll', () => {

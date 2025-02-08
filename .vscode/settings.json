@@ -1,3 +1,17 @@
 {
-    "liveServer.settings.port": 5501
+    "liveServer.settings.port": 5501,
+    "liveServer.settings.https": {
+        "enable": true,
+        "cert": "/Users/base/Dev/taxa/.cert/cert.pem",
+        "key": "/Users/base/Dev/taxa/.cert/key.pem",
+        "passphrase": "",
+        "rejectUnauthorized": false
+    },
+    "liveServer.settings.CustomBrowser": "chrome",
+    "liveServer.settings.NoBrowser": false,
+    "liveServer.settings.ignoreFiles": [
+        ".vscode/**",
+        "**/*.scss",
+        "**/*.sass"
+    ]
 }

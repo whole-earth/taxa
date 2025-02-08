@@ -14,7 +14,7 @@ let lastScrollPosition = { x: 0, y: 0 };
 let inactivityTimer = null;
 let lastPositionCheck = 0;
 
-const INACTIVITY_THRESHOLD = 16000; // 16 seconds
+const INACTIVITY_THRESHOLD = 22000; // 22 seconds
 const POSITION_CHECK_INTERVAL = 2000; // 2 seconds
 
 /**
@@ -130,8 +130,8 @@ function handleMouseMove(e) {
  */
 function handleScroll() {
     lastScrollPosition = {
-        x: window.scrollX || window.pageXOffset,
-        y: window.scrollY || window.pageYOffset
+        x: window.scrollX,
+        y: window.scrollY
     };
     resetInactivityTimer();
 }
@@ -159,8 +159,8 @@ function checkActivity(timestamp) {
     // Only check positions every POSITION_CHECK_INTERVAL
     if (deltaTime >= POSITION_CHECK_INTERVAL) {
         const currentScroll = {
-            x: window.scrollX || window.pageXOffset,
-            y: window.scrollY || window.pageYOffset
+            x: window.scrollX,
+            y: window.scrollY
         };
 
         // If no movement and not suspended, ensure timer is running
