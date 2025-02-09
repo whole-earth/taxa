@@ -31,6 +31,10 @@ const EXPLOSION_PHASES = [
 let explodedGroups = new Set();
 let dotGroupsCache = null;
 
+// Add these at the top with other state variables
+let originalInnerColors = new WeakMap();
+let originalOuterColor = null;
+
 // ============================
 
 function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight) {
@@ -174,7 +178,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
         if (!zoomOutCurrent) {
 
             if (blobOuter && isBlobMobilized) {
-                blobTweenMobilized(blobOuter, false);
+                blobTweenMobilized(blobInner, blobOuter, false);
             }
 
             textChildren.forEach(child => {
@@ -235,7 +239,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                 controls.autoRotateSpeed = 0.2;
 
                 if (blobOuter && isBlobMobilized) {
-                    blobTweenMobilized(blobOuter, false);
+                    blobTweenMobilized(blobInner, blobOuter, false);
                 }
 
                 if (product) {
@@ -258,7 +262,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
             } else if (comingFrom == 'zoomOutArea') {
 
                 if (blobOuter && !isBlobMobilized) {
-                    blobTweenMobilized(blobOuter, true);
+                    blobTweenMobilized(blobInner, blobOuter, true);
                 }
 
                 if (spheres && spheres.length > 0 && spheres[0] && spheres[0].material && spheres[0].material.opacity > 0) {
@@ -285,7 +289,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
             controls.enableRotate = false;
 
             if (blobOuter && !isBlobMobilized) {
-                blobTweenMobilized(blobOuter, true);
+                blobTweenMobilized(blobInner, blobOuter, true);
             }
 
             // Reset product rotation and position
@@ -342,7 +346,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
                     // Restore blob color when scrolling back up
                     if (blobOuter && !isBlobMobilized) {
-                        blobTweenMobilized(blobOuter, true);
+                        blobTweenMobilized(blobInner, blobOuter, true);
                     }
 
                     // go thru product and set all materials to transparent
@@ -622,37 +626,95 @@ let isClickScroll = false;
 let scrollTimeout;
 
 // Function to tween blob color for mobilization effect
-function blobTweenMobilized(blobOuter, mobilize = true) {
+function blobTweenMobilized(blobInner, blobOuter, mobilize = true) {
+    if ((!blobInner && !blobOuter) || mobilize === isBlobMobilized) return;
 
-    if (!blobOuter || !blobOuter.children || !blobOuter.children[0]) return;
+    const greenColor = new THREE.Color('#9abe8b');
+    const blueColor = new THREE.Color('#b3c5eb');
 
-    if (mobilize === isBlobMobilized) return;
-
-    const blobChild = blobOuter.children[0];
-    if (!blobChild.material) return;
-
-    const greenColor = new THREE.Color(0xe0f4de);
-    const baseColor = new THREE.Color(0xe4e4e4);
-
-    const targetColor = mobilize ? greenColor : baseColor;
-    isBlobMobilized = mobilize;  // Update the state
-
-    const initialColor = new THREE.Color(blobChild.material.color);
+    isBlobMobilized = mobilize;
 
     setTimeout(() => {
-        const blobTween = new Tween({ r: initialColor.r, g: initialColor.g, b: initialColor.b })
-            .to({ r: targetColor.r, g: targetColor.g, b: targetColor.b }, 600)
-            .easing(Easing.Quadratic.InOut)
-            .onUpdate(({ r, g, b }) => {
-                blobChild.material.color.setRGB(r, g, b);
-                blobChild.material.needsUpdate = true;
-            })
-            .onComplete(() => {
-                state.blobTweenGroup.remove(blobTween);
-            });
 
-        state.blobTweenGroup.add(blobTween);
-        blobTween.start();
+        if (blobInner) {
+            blobInner.traverse(child => {
+                if (child.isMesh && child.material) {
+                    // Store original color if not already stored
+                    if (!originalInnerColors.has(child.material)) {
+                        originalInnerColors.set(child.material, child.material.color.clone());
+                    }
+
+                    const initialColor = new THREE.Color(child.material.color);
+                    const targetColor = mobilize ? 
+                        greenColor : 
+                        originalInnerColors.get(child.material);
+
+                    const innerBlobTween = new Tween({ r: initialColor.r, g: initialColor.g, b: initialColor.b })
+                        .to({ r: targetColor.r, g: targetColor.g, b: targetColor.b }, 600)
+                        .easing(Easing.Quadratic.InOut)
+                        .onUpdate(({ r, g, b }) => {
+                            child.material.color.setRGB(r, g, b);
+                            child.material.needsUpdate = true;
+                        })
+                        .onComplete(() => {
+                            state.blobTweenGroup.remove(innerBlobTween);
+                        });
+
+                    state.blobTweenGroup.add(innerBlobTween);
+                    innerBlobTween.start();
+                }
+            });
+        }
+
+        if (blobOuter && blobOuter.children && blobOuter.children[0]) {
+            const blobChild = blobOuter.children[0];
+            if (blobChild.material) {
+                // Store original material properties if not already stored
+                if (originalOuterColor === null) {
+                    originalOuterColor = {
+                        color: blobChild.material.color.clone(),
+                        roughness: blobChild.material.roughness,
+                        metalness: blobChild.material.metalness,
+                        envMapIntensity: blobChild.material.envMapIntensity
+                    };
+                }
+
+                const initialColor = new THREE.Color(blobChild.material.color);
+                const targetColor = mobilize ? blueColor : originalOuterColor.color;
+
+                // Color transition
+                const outerBlobTween = new Tween({ 
+                    r: initialColor.r, 
+                    g: initialColor.g, 
+                    b: initialColor.b,
+                    roughness: blobChild.material.roughness,
+                    metalness: blobChild.material.metalness,
+                    envMapIntensity: blobChild.material.envMapIntensity
+                })
+                .to({ 
+                    r: targetColor.r, 
+                    g: targetColor.g, 
+                    b: targetColor.b,
+                    roughness: mobilize ? 0.8 : originalOuterColor.roughness,
+                    metalness: mobilize ? 0.1 : originalOuterColor.metalness,
+                    envMapIntensity: mobilize ? 0.5 : originalOuterColor.envMapIntensity
+                }, 600)
+                .easing(Easing.Quadratic.InOut)
+                .onUpdate(({ r, g, b, roughness, metalness, envMapIntensity }) => {
+                    blobChild.material.color.setRGB(r, g, b);
+                    blobChild.material.roughness = roughness;
+                    blobChild.material.metalness = metalness;
+                    blobChild.material.envMapIntensity = envMapIntensity;
+                    blobChild.material.needsUpdate = true;
+                })
+                .onComplete(() => {
+                    state.blobTweenGroup.remove(outerBlobTween);
+                });
+
+                state.blobTweenGroup.add(outerBlobTween);
+                outerBlobTween.start();
+            }
+        }
     }, mobilize ? 200 : 0); // 200ms delay if activating mobile color, 0ms if restoring og color
 }
 

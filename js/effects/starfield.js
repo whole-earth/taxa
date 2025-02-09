@@ -28,14 +28,14 @@ const STARFIELD_PARAMS = {
     
     // Line appearance
     lines: {
-        count: DEVICE.isMobile ? 15 : 20,
+        count: DEVICE.isMobile ? 15 : 40,
         thickness: DEVICE.isMobile ? 3.6 : 4.8,
         opacity: 1.0,
         distribution: {
-            blue: 35,    // 35% blue
-            purple: 35,  // 35% purple
-            gray: 15,    // 15% gray
-            green: 15    // 15% green
+            blue: 75,    // 35% blue
+            purple: 10,  // 35% purple
+            gray: 10,    // 15% gray
+            green: 5    // 15% green
         }
     },
 
@@ -43,16 +43,23 @@ const STARFIELD_PARAMS = {
     glow: {
         enabled: true,
         size: DEVICE.isMobile ? 4.0 : 3.0,
-        intensity: 1.2,
+        intensity: 0.3,
         steps: 6
     },
 
     // Color palette
     colors: {
+        
         blue: '#4a9eff',
         purple: '#b784ff',
         gray: '#92ffd0',
         green: '#4aff9e'
+        /*
+        blue: '#ffffff',
+        purple: '#ffffff',
+        gray: '#ffffff',
+        green: '#ffffff'    
+        */
     }
 };
 
@@ -66,8 +73,8 @@ const CYLINDER_PARAMS = {
         extension: 800       // Extra length beyond end point
     },
     appearance: {
-        color: '#949494',
-        opacity: 0.99
+        color: '#fffbf4',
+        opacity: 0.70
     },
     animation: {
         minProgressDelta: 0.005, // Minimum progress change to trigger update
@@ -193,7 +200,7 @@ export class StarField extends THREE.Group {
         this.productTube = new THREE.Mesh(geometry, material);
         this._setupProductTube(start);
         
-        this.add(this.productTube);
+        //this.add(this.productTube);
     }
 
     /**
