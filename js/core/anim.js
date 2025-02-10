@@ -280,7 +280,7 @@ export class App {
 
     async loadProduct() {
         try {
-            const product = await new ProductComponent(this.sceneManager.scene, "product.glb", 200);
+            const product = await new ProductComponent(this.sceneManager.scene, "newest.glb", 200);
             this.product = product;
             
             this.productAnchor = new THREE.Object3D();

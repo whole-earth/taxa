@@ -185,10 +185,6 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
         if (!zoomOutCurrent) {
 
-            if (isBlobMobilized) {
-                blobTweenMobilized(blobInner, blobOuter, false);
-            }
-
             textChildren.forEach(child => {
                 if (child.classList.contains('active')) {
                     child.classList.remove('active');
@@ -222,11 +218,6 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
         // Only check for explosions if we're coming from zoom and not pitch
         if (comingFrom === 'zoomOutArea' && !pitchCurrent) {
-
-            // TODO confirm new, added earlier
-            if (!isBlobMobilized) {
-                blobTweenMobilized(blobInner, blobOuter, true);
-            }
 
             const currentPhase = EXPLOSION_PHASES.find(phase =>
                 zoomOutProgress >= phase.threshold && !explodedGroups.has(phase.index)
@@ -295,6 +286,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
         camera.fov = smoothLerp(pitchStartFOV, pitchEndFOV, pitchProgress);
     }
     else if (productBool) {
+
         if (!productCurrent) {
             resetProductVisibility(product, state.applicatorObject);
 
@@ -350,13 +342,33 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
         if (product && product.children) {
             productProgress = scrollProgress__LastElem(productArea);
+            const isInPhase1 = productProgress <= 0.5;
 
             // ===== PHASE 1: Initial Transition (0 to 0.5) =====
-            if (productProgress <= 0.5) {
-                // Reset the flag in phase 1
+            if (isInPhase1) {
+                
                 if (!productPhase1Active) {
-                    resetProductVisibility(product, state.applicatorObject);
+                    // Fix state updates
+                    productPhase2Active = false;
+                    productPhase3Active = false;
+                    productPhase1aActive = false;
+                    productPhase1Active = true;
+                    lightingTransitionComplete = false;
+
+                    // Batch visibility updates
                     cellObject.visible = true;
+                    if (state.sceneManager?.spotLight) {
+                        state.sceneManager.spotLight.visible = false;
+                        state.sceneManager.spotLight.intensity = 0;
+                    }
+
+                    // Only update product if coming from phase 2
+                    if (productPhase2Active) {
+                        const productScale = isMobile ? 16 : 20;
+                        product.rotation.set(Math.PI / 2, 0, 0);
+                        product.position.set(0, 0, 0);
+                        product.scale.setScalar(productScale);
+                    }
 
                     // Restore blob color when scrolling back up
                     if (!isBlobMobilized) {
@@ -372,87 +384,103 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                         }
                     });
 
-                    if (state.sceneManager?.spotLight) {
-                        const { spotLight } = state.sceneManager;
-                        spotLight.visible = false;
-                        spotLight.intensity = 0;
+
+                }
+
+                // Cache computed values
+                const normalizedProgress = Math.min(productProgress / 0.5, 1);
+                
+                // Update starfield if visible
+                if (state.starField?.visible) {
+                    state.starField.updateProgress(productProgress * 2, true);
+                }
+
+                // Batch scale updates
+                const cellScale = smoothLerp(1, 0.06, normalizedProgress);
+                cellObject.scale.setScalar(cellScale);
+
+                const isInPhase1a = productProgress > 0.25;
+                if (isInPhase1a && !productPhase1aActive) {
+                    // Batch DOM operations
+                    const activeChildren = document.querySelectorAll('.child.active');
+                    if (activeChildren.length) {
+                        activeChildren.forEach(child => child.classList.remove('active'));
                     }
 
-                    productPhase2Active = false;
-                    productPhase3Active = false;
-                    productPhase1aActive = false; // overwritten if (productProgress > 0.25) is met
-                    productPhase1Active = true;
-                }
-
-                if (state.starField) {
-                    state.starField.visible = true;
-                    //state.starField.updateProgress(productProgress * 2);
-                    state.starField.updateProgress(productProgress * 2, productBool && productProgress <= 0.5);
-                }
-
-                const cellScale = smoothLerp(1, 0.06, productProgress / 0.4);
-                cellObject.scale.set(cellScale, cellScale, cellScale);
-
-                if (productProgress > 0.25) {
-                    if (!productPhase1aActive) {
-                        textChildren.forEach(child => {
-                            if (child.classList.contains('active')) {
-                                child.classList.remove('active');
+                    // Make product and applicator visible
+                    if (state.applicatorObject) {
+                        state.applicatorObject.traverse(child => {
+                            child.visible = true;
+                            if (child.material) {
+                                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                                materials.forEach(mat => {
+                                    mat.visible = true;
+                                    mat.transparent = true;
+                                    mat.opacity = 0;
+                                    mat.needsUpdate = true;
+                                });
                             }
                         });
-                        if (state.applicatorObject) {
-                            product.traverse(child => {
+                    }
+
+                    productPhase1aActive = true;
+                    lightingTransitionComplete = false;
+                }
+
+                // Progressive fade-in during Phase 1a
+                if (isInPhase1a) {
+                    const fadeProgress = (productProgress - 0.25) / 0.25;
+
+                    // Progressive fade for product elements
+                    if (product) {
+                        // Handle peel and inner-cap fade-in
+                        const targetNames = new Set(['peel', 'inner-cap']);
+                        product.traverse(child => {
+                            const isTargetElement = targetNames.has(child.name) || 
+                                                  (child.parent && targetNames.has(child.parent.name));
+                            
+                            if (isTargetElement) {
                                 child.visible = true;
-                            });
+                                if (child.material) {
+                                    const materials = Array.isArray(child.material) ? child.material : [child.material];
+                                    const opacity = fadeProgress > 0.5 ? smoothLerp(0, 1, (fadeProgress - 0.5) * 2) : 0;
+                                    
+                                    materials.forEach(mat => {
+                                        mat.transparent = true;
+                                        mat.opacity = opacity;
+                                        mat.needsUpdate = true;
+                                    });
+                                }
+                            }
+                        });
+
+                        // Progressive fade for applicator
+                        if (state.applicatorObject) {
                             state.applicatorObject.traverse(child => {
                                 child.visible = true;
                                 if (child.material) {
                                     const materials = Array.isArray(child.material) ? child.material : [child.material];
                                     materials.forEach(mat => {
-                                        mat.visible = true;
-                                        mat.opacity = 1;
+                                        mat.transparent = true;
+                                        mat.opacity = smoothLerp(0, 1, fadeProgress);
                                         mat.needsUpdate = true;
                                     });
                                 }
                             });
                         }
-                        productPhase1aActive = true;
-                        lightingTransitionComplete = false;
                     }
 
-                    const fadeProgress = (productProgress - 0.25) / 0.25;
-
-                    // Fade in specific product elements
-                    if (product && fadeProgress > 0.5) {
-                        product.traverse(child => {
-                            if (child.name === 'peel' || child.parent?.name === 'peel' ||
-                                child.name === 'inner-cap' || child.parent?.name === 'inner-cap') {
-                                if (child.material) {
-                                    const materials = Array.isArray(child.material) ? child.material : [child.material];
-                                    materials.forEach(mat => {
-                                        mat.opacity = smoothLerp(0, 1, (fadeProgress - 0.5) * 2);
-                                        mat.needsUpdate = true;
-                                    });
-                                }
-                            }
-                        });
-                    }
-
+                    // Update renderer and product scale
                     renderer.toneMappingExposure = smoothLerp(1, 0.35, fadeProgress);
-
+                    
                     const productScale = isMobile
                         ? smoothLerp(16, 6, fadeProgress)  // Mobile
-                        : smoothLerp(20, 5, fadeProgress);  // Desktop
-                    product.scale.set(productScale, productScale, productScale);
+                        : smoothLerp(20, 5, fadeProgress); // Desktop
+                    product.scale.setScalar(productScale);
 
                     if (fadeProgress >= 1) {
                         lightingTransitionComplete = true;
                     }
-                } else if (productProgress > 0.5 && !lightingTransitionComplete) {
-                    // Force complete the lighting transition if we scrolled past it too quickly
-                    renderer.toneMappingExposure = 0.35;
-                    ambientLight.intensity = 4;
-                    lightingTransitionComplete = true;
                 }
             }
             // ===== PHASE 2: Product Rotation (0.5 to 0.8) =====
@@ -463,33 +491,32 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     if (state.starField) state.starField.visible = false;
 
                     const scrollIndicator = document.querySelector('.scroll-indicator');
-                    if (scrollIndicator && scrollIndicator.classList.contains('hidden')) {
+                    if (scrollIndicator?.classList.contains('hidden')) {
                         scrollIndicator.classList.remove('hidden');
                     }
 
+                    // Batch product material updates
                     product.traverse(child => {
                         if (child.name === 'overflowMask') {
                             child.visible = false;
                         } else {
                             child.visible = true;
-                        }
-                        if (child.material) {
-                            const materials = Array.isArray(child.material) ? child.material : [child.material];
-                            materials.forEach(mat => {
-                                // this enables the color to shine thru
-                                mat.transparent = child.name === 'film-cover' || child.name === 'taxa-name';
-                                mat.depthWrite = true;
-                                mat.depthTest = true;
-                                mat.opacity = 1;
-                                mat.needsUpdate = true;
-                            });
+                            if (child.material) {
+                                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                                materials.forEach(mat => {
+                                    mat.transparent = child.name === 'film-cover' || child.name === 'taxa-name';
+                                    mat.depthWrite = true;
+                                    mat.depthTest = true;
+                                    mat.opacity = 1;
+                                    mat.needsUpdate = true;
+                                });
+                            }
                         }
                     });
 
-                    // Initialize spotlight when entering product phase
+                    // Initialize spotlight
                     if (state.sceneManager?.spotLight) {
-                        const { spotLight } = state.sceneManager;
-                        spotLight.visible = true;
+                        state.sceneManager.spotLight.visible = true;
                     }
 
                     productPhase2Active = true;
@@ -501,48 +528,45 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
                 // Handle product movement
                 if (isMobile) {
-
-                    // MOBILE 2b: (0.5 to 0.8). adjust rotation and position
+                    // MOBILE: Combined rotation and position update
                     if (productProgress >= 0.5) {
-                        const rotationProgress = (productProgress - 0.5) / 0.3;
-
-                        product.rotation.x = smoothLerp(Math.PI / 2, Math.PI / 5.5, rotationProgress);
-                        product.rotation.y = smoothLerp(0, Math.PI / 5, rotationProgress);
-                        product.rotation.z = smoothLerp(0, -Math.PI / 5, rotationProgress);
-
-                        product.position.x = smoothLerp(0, -5, rotationProgress);
-                        product.position.y = smoothLerp(0, 16, rotationProgress);
-
-                        const productScaleStage2 = smoothLerp(6, 7, rotationProgress);
-                        product.scale.set(productScaleStage2, productScaleStage2, productScaleStage2);
-
+                        product.rotation.set(
+                            smoothLerp(Math.PI / 2, Math.PI / 5.5, rotationProgress),
+                            smoothLerp(0, Math.PI / 5, rotationProgress),
+                            smoothLerp(0, -Math.PI / 5, rotationProgress)
+                        );
+                        product.position.set(
+                            smoothLerp(0, -5, rotationProgress),
+                            smoothLerp(0, 16, rotationProgress),
+                            0
+                        );
+                        product.scale.setScalar(smoothLerp(6, 7, rotationProgress));
                     }
                 } else {
-                    // DESKTOP 2a: (0.5 to 0.8). X-axis rotation
+                    // DESKTOP: Two-phase rotation
                     product.rotation.x = smoothLerp(Math.PI / 2, Math.PI / 12, rotationProgress);
 
-                    // DESKTOP 2b: (0.65 to 0.8) Z-axis rotation
                     if (rotationProgress > 0.5) {
                         const zRotationProgress = (rotationProgress - 0.5) / 0.5;
                         product.rotation.z = smoothLerp(0, -Math.PI / 8, zRotationProgress);
-
-                        product.position.x = smoothLerp(0, -40, zRotationProgress);
-                        product.position.y = smoothLerp(0, -24, zRotationProgress);
                         product.rotation.y = smoothLerp(0, Math.PI / 5, zRotationProgress);
-
-                        const productScaleStage2 = smoothLerp(5, 8, zRotationProgress);
-                        product.scale.set(productScaleStage2, productScaleStage2, productScaleStage2);
+                        
+                        product.position.set(
+                            smoothLerp(0, -40, zRotationProgress),
+                            smoothLerp(0, -24, zRotationProgress),
+                            0
+                        );
+                        product.scale.setScalar(smoothLerp(5, 8, zRotationProgress));
                     }
                 }
 
-                // Handle spotlight intensity animation (outside the productPhase2Active check)
+                // Optimize spotlight intensity animation
                 if (state.sceneManager?.spotLight) {
-                    const { spotLight } = state.sceneManager;
                     const lightProgress = isMobile
                         ? (productProgress >= 0.65 ? (productProgress - 0.65) / 0.15 : 0)
                         : (rotationProgress > 0.5 ? (rotationProgress - 0.5) / 0.5 : 0);
 
-                    spotLight.intensity = smoothLerp(0, 20, lightProgress);
+                    state.sceneManager.spotLight.intensity = smoothLerp(0, 20, lightProgress);
                     ambientLight.intensity = smoothLerp(4.6, 2.2, lightProgress);
                 }
             }
@@ -569,21 +593,37 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                 }
 
                 if (state.applicatorObject) {
-                    // 3a. Applicator Position (0.8 to 0.95)
-                    if (productProgress <= 0.95) {
+                    // Cache progress calculations
+                    const isInPositionPhase = productProgress <= 0.95;
+                    const isInRotationPhase = productProgress > 0.95;
+
+                    if (isInPositionPhase) {
+                        // 3a. Applicator Position (0.8 to 0.95)
                         const positionProgress = (productProgress - 0.8) / 0.15;
                         state.applicatorObject.position.y = smoothLerp(1, 0, positionProgress);
-                    }
-                    // 3b. Applicator Rotation (0.95 to 1.0)
-                    else {
+                    } else {
+                        // 3b. Applicator Rotation (0.95 to 1.0)
                         if (!productTextActivated) {
                             activateText(productArea);
                             productTextActivated = true;
                         }
                         const rotationProgress = (productProgress - 0.95) / 0.05;
-                        // rotate slightly less on mobile
-                        state.applicatorObject.rotation.y = smoothLerp(0, isMobile ? Math.PI * 0.3 : Math.PI * 0.4, rotationProgress);
+                        const maxRotation = isMobile ? Math.PI * 0.3 : Math.PI * 0.4;
+                        state.applicatorObject.rotation.y = smoothLerp(0, maxRotation, rotationProgress);
                     }
+
+                    // Ensure applicator is visible
+                    state.applicatorObject.traverse(child => {
+                        child.visible = true;
+                        if (child.material) {
+                            const materials = Array.isArray(child.material) ? child.material : [child.material];
+                            materials.forEach(mat => {
+                                mat.visible = true;
+                                mat.opacity = 1;
+                                mat.needsUpdate = true;
+                            });
+                        }
+                    });
                 }
 
                 // Handle text activation when progress is past 0.95
