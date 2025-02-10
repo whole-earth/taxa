@@ -28,7 +28,7 @@ const STARFIELD_PARAMS = {
     
     // Line appearance
     lines: {
-        count: DEVICE.isMobile ? 15 : 40,
+        count: DEVICE.isMobile ? 15 : 20,
         thickness: DEVICE.isMobile ? 3.6 : 4.8,
         opacity: 1.0,
         distribution: {
@@ -54,31 +54,6 @@ const STARFIELD_PARAMS = {
         purple: '#b784ff',
         gray: '#92ffd0',
         green: '#4aff9e'
-        /*
-        blue: '#ffffff',
-        purple: '#ffffff',
-        gray: '#ffffff',
-        green: '#ffffff'    
-        */
-    }
-};
-
-/**
- * Surrounding cylinder configuration
- */
-const CYLINDER_PARAMS = {
-    geometry: {
-        segments: DEVICE.isMobile ? 32 : 64,
-        radiusOffset: 20,     // Extra radius beyond starfield diameter
-        extension: 800       // Extra length beyond end point
-    },
-    appearance: {
-        color: '#fffbf4',
-        opacity: 0.70
-    },
-    animation: {
-        minProgressDelta: 0.005, // Minimum progress change to trigger update
-        minDimensionDelta: 0.05  // Minimum dimension change to trigger update
     }
 };
 
@@ -109,11 +84,6 @@ export const starfieldParams = {
         glow: STARFIELD_PARAMS.glow
     },
     colors: STARFIELD_PARAMS.colors,
-    cylinder: {
-        ...CYLINDER_PARAMS.geometry,
-        ...CYLINDER_PARAMS.appearance,
-        ...CYLINDER_PARAMS.animation
-    }
 };
 
 // =========================================
@@ -129,7 +99,6 @@ export class StarField extends THREE.Group {
         this.updateFrequency = DEVICE.isMobile ? 2 : 1; // Update every other frame on mobile
         
         this._setupInitialState();
-        this._initProductTube();
         this._init();
     }
 
@@ -184,68 +153,6 @@ export class StarField extends THREE.Group {
                 diameter: this.params.geometry.end.diameter 
             }
         };
-    }
-
-    /**
-     * Initializes the surrounding tube effect
-     * @private
-     */
-    _initProductTube() {
-        const { start } = this.params.geometry;
-        const radius = (start.diameter / 2) + this.params.cylinder.radiusOffset;
-        
-        const geometry = this._createCylinderGeometry();
-        const material = this._createCylinderMaterial(radius);
-        
-        this.productTube = new THREE.Mesh(geometry, material);
-        this._setupProductTube(start);
-        
-        //this.add(this.productTube);
-    }
-
-    /**
-     * Creates the cylinder geometry
-     * @private
-     */
-    _createCylinderGeometry() {
-        return new THREE.CylinderGeometry(
-            1.0, 1.0, 1.0,
-            this.params.cylinder.segments,
-            1, true
-        );
-    }
-
-    /**
-     * Creates the cylinder material with dynamic scaling
-     * @private
-     */
-    _createCylinderMaterial(radius) {
-        return new THREE.ShaderMaterial({
-            uniforms: {
-                color: { value: new THREE.Color(this.params.cylinder.color) },
-                opacity: { value: this.params.cylinder.opacity },
-                radius: { value: radius },
-                height: { value: 0.1 }
-            },
-            vertexShader: this._getCylinderVertexShader(),
-            fragmentShader: this._getCylinderFragmentShader(),
-            side: THREE.DoubleSide,
-            transparent: true,
-            depthWrite: false,
-            depthTest: true,
-            blending: THREE.NormalBlending
-        });
-    }
-
-    /**
-     * Sets up the product tube properties
-     * @private
-     */
-    _setupProductTube(start) {
-        this.productTube.position.z = start.z;
-        this.productTube.rotation.x = Math.PI / 2;
-        this.productTube.renderOrder = -10000;
-        this.productTube.visible = true;
     }
 
     /**
@@ -489,7 +396,6 @@ export class StarField extends THREE.Group {
      * @private
      */
     _updateAnimation(scaledProgress) {
-        // Only update if visible and progress changed significantly
         if (!this.visible || Math.abs(this._lastUpdateProgress - scaledProgress) < 0.001) {
             return;
         }
@@ -498,7 +404,6 @@ export class StarField extends THREE.Group {
         if (this.linesMesh) {
             this._updateLines(scaledProgress);
         }
-        this._updateCylinder(scaledProgress, this.params.geometry.start, this.params.geometry.end);
     }
 
     /**
@@ -516,78 +421,6 @@ export class StarField extends THREE.Group {
         progressAttribute.needsUpdate = true;
     }
 
-    /**
-     * Updates the cylinder animation
-     * @private
-     */
-    _updateCylinder(scaledProgress, start, end) {
-        if (!this._shouldUpdateCylinder(scaledProgress)) return;
-        
-        const { currentLength, currentRadius } = this._calculateCylinderDimensions(scaledProgress, start, end);
-        
-        if (!this._hasCylinderDimensionsChanged(currentLength, currentRadius)) return;
-        
-        this._applyCylinderUpdate(currentLength, currentRadius, start);
-    }
-
-    /**
-     * Calculates the current cylinder dimensions based on progress
-     * @private
-     */
-    _calculateCylinderDimensions(scaledProgress, start, end) {
-        const easeProgress = Math.min(1, scaledProgress );
-        
-        // Match radius progress exactly to length progress
-        const radiusProgress = easeProgress;
-        
-        const totalLength = (end.z - start.z) + (this.params.cylinder.extension * easeProgress);
-        const currentLength = THREE.MathUtils.lerp(0, totalLength, easeProgress);
-        
-        const startRadius = (start.diameter / 2) + this.params.cylinder.radiusOffset;
-        const endRadius = (end.diameter / 2) + this.params.cylinder.radiusOffset;
-        const currentRadius = THREE.MathUtils.lerp(startRadius, endRadius, radiusProgress);
-        
-        return { currentLength, currentRadius };
-    }
-
-    // =========================================
-    // Shader Code
-    // =========================================
-
-    /**
-     * Gets the cylinder vertex shader code
-     * @private
-     */
-    _getCylinderVertexShader() {
-        return `
-            uniform float radius;
-            uniform float height;
-            
-            void main() {
-                vec3 scaled = position;
-                scaled.xz *= radius;
-                scaled.y *= height;
-                
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(scaled, 1.0);
-            }
-        `;
-    }
-
-    /**
-     * Gets the cylinder fragment shader code
-     * @private
-     */
-    _getCylinderFragmentShader() {
-        return `
-            uniform vec3 color;
-            uniform float opacity;
-            
-            void main() {
-                gl_FragColor = vec4(color, opacity);
-            }
-        `;
-    }
-
     // =========================================
     // Helper Methods
     // =========================================
@@ -599,41 +432,5 @@ export class StarField extends THREE.Group {
     _resetProgress() {
         this.lastProgress = 0;
         this._updateLines(0);
-        this._updateCylinder(0, this.params.geometry.start, this.params.geometry.end);
-    }
-
-    /**
-     * Checks if the cylinder needs updating
-     * @private
-     */
-    _shouldUpdateCylinder(scaledProgress) {
-        if (Math.abs(this._lastCylinderProgress - scaledProgress) < 0.001) return false;
-        this._lastCylinderProgress = scaledProgress;
-        return true;
-    }
-
-    /**
-     * Checks if cylinder dimensions have changed significantly
-     * @private
-     */
-    _hasCylinderDimensionsChanged(currentLength, currentRadius) {
-        if (this._lastLength && Math.abs(this._lastLength - currentLength) < 0.05 &&
-            this._lastRadius && Math.abs(this._lastRadius - currentRadius) < 0.05) {
-            return false;
-        }
-        this._lastLength = currentLength;
-        this._lastRadius = currentRadius;
-        return true;
-    }
-
-    /**
-     * Applies the cylinder update
-     * @private
-     */
-    _applyCylinderUpdate(currentLength, currentRadius, start) {
-        const material = this.productTube.material;
-        material.uniforms.radius.value = currentRadius;
-        material.uniforms.height.value = currentLength;
-        this.productTube.position.z = start.z + (currentLength / 2);
     }
 } 
