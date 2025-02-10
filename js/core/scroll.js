@@ -59,6 +59,10 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                 cellSheenTween(blobInner);
             }
 
+            if (isBlobMobilized) {
+                blobTweenMobilized(blobInner, blobOuter, false);
+            }
+
             // Ensure cell object is visible and product is hidden
             cellObject.visible = true;
             if (product) {
@@ -84,6 +88,10 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
             zoomOutCurrent = false;
             if (wavingBlob) {
                 restoreDotScale(wavingBlob);
+            }
+
+            if (isBlobMobilized) {
+                blobTweenMobilized(blobInner, blobOuter, false);
             }
 
             // Ensure cell object is visible and product is hidden
@@ -177,7 +185,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
         if (!zoomOutCurrent) {
 
-            if (blobOuter && isBlobMobilized) {
+            if (isBlobMobilized) {
                 blobTweenMobilized(blobInner, blobOuter, false);
             }
 
@@ -214,6 +222,12 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
         // Only check for explosions if we're coming from zoom and not pitch
         if (comingFrom === 'zoomOutArea' && !pitchCurrent) {
+
+            // TODO confirm new, added earlier
+            if (!isBlobMobilized) {
+                blobTweenMobilized(blobInner, blobOuter, true);
+            }
+
             const currentPhase = EXPLOSION_PHASES.find(phase =>
                 zoomOutProgress >= phase.threshold && !explodedGroups.has(phase.index)
             );
@@ -238,7 +252,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                 controls.enableRotate = true;
                 controls.autoRotateSpeed = 0.2;
 
-                if (blobOuter && isBlobMobilized) {
+                if (isBlobMobilized) {
                     blobTweenMobilized(blobInner, blobOuter, false);
                 }
 
@@ -261,7 +275,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                 comingFrom = 'pitchArea';
             } else if (comingFrom == 'zoomOutArea') {
 
-                if (blobOuter && !isBlobMobilized) {
+                if (!isBlobMobilized) {
                     blobTweenMobilized(blobInner, blobOuter, true);
                 }
 
@@ -288,7 +302,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
             controls.autoRotate = false;
             controls.enableRotate = false;
 
-            if (blobOuter && !isBlobMobilized) {
+            if (!isBlobMobilized) {
                 blobTweenMobilized(blobInner, blobOuter, true);
             }
 
@@ -345,7 +359,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     cellObject.visible = true;
 
                     // Restore blob color when scrolling back up
-                    if (blobOuter && !isBlobMobilized) {
+                    if (!isBlobMobilized) {
                         blobTweenMobilized(blobInner, blobOuter, true);
                     }
 
@@ -625,12 +639,46 @@ let productTextActivated = false;
 let isClickScroll = false;
 let scrollTimeout;
 
-// Function to tween blob color for mobilization effect
+export function animatePage(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight) {
+    // Get current scroll position and calculate difference from last frame
+    let scrollY = window.scrollY;
+    let scrollDiff = scrollY - state.lastScrollY;
+
+    // Mobile-optimized scroll speed calculation with reduced sensitivity
+    if (isMobile) {
+        const speedFactor = Math.min(Math.abs(scrollDiff) / 30, 2); // Reduced from 20 to 30, max from 3 to 2
+        const direction = Math.sign(scrollDiff);
+        controls.autoRotateSpeed = direction * (0.3 + (speedFactor * 3)); // Reduced from 0.5 to 0.3 and 5 to 3
+        
+        clearTimeout(state.scrollTimeout);
+        state.scrollTimeout = setTimeout(() => {
+            controls.autoRotateSpeed = 0.1;
+        }, 300); // Increased from 200 to 300ms for smoother deceleration
+    } else {
+        const acceleration = Math.min(Math.pow(Math.abs(scrollDiff) / 15, 2), 4);
+        const direction = Math.sign(scrollDiff);
+        controls.autoRotateSpeed = direction * (1.0 + (acceleration * 6));
+
+        clearTimeout(state.scrollTimeout);
+        state.scrollTimeout = setTimeout(() => {
+            controls.autoRotateSpeed = 0.2;
+        }, 100);
+    }
+
+    // Use a longer throttle duration for mobile
+    const throttleDuration = isMobile ? 80 : 40; // Increased from 60 to 80ms for mobile
+    throttle(() => scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight), throttleDuration)();
+
+    camera.updateProjectionMatrix();
+    state.lastScrollY = scrollY;
+}
+
 function blobTweenMobilized(blobInner, blobOuter, mobilize = true) {
     if ((!blobInner && !blobOuter) || mobilize === isBlobMobilized) return;
 
     const greenColor = new THREE.Color('#9abe8b');
-    const blueColor = new THREE.Color('#b3c5eb');
+    const blueColor = new THREE.Color('#a9c3e7');
+
 
     isBlobMobilized = mobilize;
 
@@ -639,7 +687,6 @@ function blobTweenMobilized(blobInner, blobOuter, mobilize = true) {
         if (blobInner) {
             blobInner.traverse(child => {
                 if (child.isMesh && child.material) {
-                    // Store original color if not already stored
                     if (!originalInnerColors.has(child.material)) {
                         originalInnerColors.set(child.material, child.material.color.clone());
                     }
@@ -650,7 +697,7 @@ function blobTweenMobilized(blobInner, blobOuter, mobilize = true) {
                         originalInnerColors.get(child.material);
 
                     const innerBlobTween = new Tween({ r: initialColor.r, g: initialColor.g, b: initialColor.b })
-                        .to({ r: targetColor.r, g: targetColor.g, b: targetColor.b }, 600)
+                        .to({ r: targetColor.r, g: targetColor.g, b: targetColor.b }, mobilize ? 800 : 500)
                         .easing(Easing.Quadratic.InOut)
                         .onUpdate(({ r, g, b }) => {
                             child.material.color.setRGB(r, g, b);
@@ -695,10 +742,9 @@ function blobTweenMobilized(blobInner, blobOuter, mobilize = true) {
                     r: targetColor.r, 
                     g: targetColor.g, 
                     b: targetColor.b,
-                    roughness: mobilize ? 0.8 : originalOuterColor.roughness,
-                    metalness: mobilize ? 0.1 : originalOuterColor.metalness,
-                    envMapIntensity: mobilize ? 0.5 : originalOuterColor.envMapIntensity
-                }, 600)
+                    roughness: mobilize ? 0.4 : originalOuterColor.roughness,
+                    metalness: mobilize ? 0.12 : originalOuterColor.metalness
+                }, mobilize ? 1000 : 500)
                 .easing(Easing.Quadratic.InOut)
                 .onUpdate(({ r, g, b, roughness, metalness, envMapIntensity }) => {
                     blobChild.material.color.setRGB(r, g, b);
@@ -715,41 +761,7 @@ function blobTweenMobilized(blobInner, blobOuter, mobilize = true) {
                 outerBlobTween.start();
             }
         }
-    }, mobilize ? 200 : 0); // 200ms delay if activating mobile color, 0ms if restoring og color
-}
-
-export function animatePage(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight) {
-    // Get current scroll position and calculate difference from last frame
-    let scrollY = window.scrollY;
-    let scrollDiff = scrollY - state.lastScrollY;
-
-    // Mobile-optimized scroll speed calculation with reduced sensitivity
-    if (isMobile) {
-        const speedFactor = Math.min(Math.abs(scrollDiff) / 30, 2); // Reduced from 20 to 30, max from 3 to 2
-        const direction = Math.sign(scrollDiff);
-        controls.autoRotateSpeed = direction * (0.3 + (speedFactor * 3)); // Reduced from 0.5 to 0.3 and 5 to 3
-        
-        clearTimeout(state.scrollTimeout);
-        state.scrollTimeout = setTimeout(() => {
-            controls.autoRotateSpeed = 0.1;
-        }, 300); // Increased from 200 to 300ms for smoother deceleration
-    } else {
-        const acceleration = Math.min(Math.pow(Math.abs(scrollDiff) / 15, 2), 4);
-        const direction = Math.sign(scrollDiff);
-        controls.autoRotateSpeed = direction * (1.0 + (acceleration * 6));
-
-        clearTimeout(state.scrollTimeout);
-        state.scrollTimeout = setTimeout(() => {
-            controls.autoRotateSpeed = 0.2;
-        }, 100);
-    }
-
-    // Use a longer throttle duration for mobile
-    const throttleDuration = isMobile ? 80 : 40; // Increased from 60 to 80ms for mobile
-    throttle(() => scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight), throttleDuration)();
-
-    camera.updateProjectionMatrix();
-    state.lastScrollY = scrollY;
+    }, mobilize ? 250 : 0); // 250ms delay if activating mobile color, 0ms if restoring og color
 }
 
 /**
