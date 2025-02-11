@@ -3,12 +3,14 @@ import { Tween, Easing } from 'tween';
 import { state } from './anim.js';
 import { disposeHierarchy, disposeNode } from '../utils/dispose.js';
 
-const splashStartFOV = window.innerWidth < 768 ? 90 : 60;
+const isMobile = window.innerWidth < 768;
+
+const splashStartFOV = isMobile ? 80 : 60;
 const splashEndFOV = splashStartFOV * 0.55;
 const zoomStartFOV = splashEndFOV;
 const zoomEndFOV = splashEndFOV * 1.1;
 const zoomOutStartFOV = zoomEndFOV;
-const zoomOutEndFOV = splashStartFOV;
+const zoomOutEndFOV = splashStartFOV * (isMobile ? 0.85 : 1);
 const pitchStartFOV = zoomOutEndFOV;
 const pitchEndFOV = pitchStartFOV * 1.5;
 
@@ -41,7 +43,7 @@ const cleanupManager = {
     eventListeners: new Map(),
     intersectionObservers: new Set(),
     disposables: new Set(),
-    
+
     addListener(element, type, handler) {
         if (!this.eventListeners.has(element)) {
             this.eventListeners.set(element, new Map());
@@ -111,7 +113,7 @@ const cleanupManager = {
 
 function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight) {
     const previousSection = comingFrom;
-    
+
     splashBool = isVisibleBetweenTopAndBottom(splashArea);
     zoomBool = isVisibleBetweenTopAndBottom(zoomArea);
     zoomOutBool = isVisibleBetweenTopAndBottom(zoomOutArea);
@@ -303,6 +305,11 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
             if (currentPhase) {
                 dotsTweenExplosion(wavingBlob, 600, currentPhase.index);
+                
+                // Check if this was the third explosion (index 2) and trigger blob mobilization
+                if (currentPhase.index === 2 && !isBlobMobilized) {
+                    blobTweenMobilized(blobInner, blobOuter, true);
+                }
             }
         }
     }
@@ -465,7 +472,9 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     state.starField.updateProgress(productProgress * 2, productBool && productProgress <= 0.5);
                 }
 
-                const cellScale = smoothLerp(1, 0.06, Math.min(productProgress / 0.5, 1));
+                // Clamp the progress value to prevent overscroll from affecting scale
+                const clampedProgress = Math.max(0, Math.min(productProgress / 0.5, 1));
+                const cellScale = smoothLerp(1, 0.06, clampedProgress);
                 cellObject.scale.setScalar(cellScale);
 
                 if (productProgress > 0.25) {
@@ -719,61 +728,54 @@ let indicatorRAF;
 
 export function animatePage(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight) {
     let scrollY = window.scrollY;
-    let scrollDiff = scrollY - state.lastScrollY;
+    let delta = scrollY - state.lastScrollY;  // Keep signed delta for direction
+    let scrollDiff = Math.abs(delta);
 
     // Enable auto-rotation by default
     controls.autoRotate = true;
 
-    // Base rotation speeds
-    const baseSpeedMobile = 0.2;
-    const baseSpeedDesktop = 0.5;
-
     if (isMobile) {
-        const speedFactor = Math.min(Math.abs(scrollDiff) / 30, 2);
-        const direction = Math.sign(scrollDiff);
-        const scrollSpeed = direction * (0.3 + (speedFactor * 3));
-        
-        // Apply scroll speed directly and use base speed as minimum
-        controls.autoRotateSpeed = scrollSpeed + (scrollSpeed === 0 ? baseSpeedMobile : 0);
-        
-        if (scrollRAF) {
-            cancelAnimationFrame(scrollRAF);
-        }
-        scrollRAF = requestAnimationFrame(() => {
-            if (Math.abs(controls.autoRotateSpeed) < baseSpeedMobile) {
-                controls.autoRotateSpeed = direction >= 0 ? baseSpeedMobile : -baseSpeedMobile;
-            }
-        });
+        const multiplier = Math.floor(scrollDiff / 30);
+        // Scroll down: faster rotation, scroll up: slower reverse rotation
+        controls.autoRotateSpeed = delta > 0 
+            ? Math.min(0.3 + (multiplier * 3), 6)  // Normal speed for downward
+            : -Math.min(0.3 + (multiplier * 1.2), 2.4);  // Damped speed for upward
     } else {
-        const acceleration = Math.min(Math.pow(Math.abs(scrollDiff) / 15, 2), 4);
-        const direction = Math.sign(scrollDiff);
-        const scrollSpeed = direction * (1.0 + (acceleration * 6));
-        
-        // Apply scroll speed directly and use base speed as minimum
-        controls.autoRotateSpeed = scrollSpeed + (scrollSpeed === 0 ? baseSpeedDesktop : 0);
-
-        if (scrollRAF) {
-            cancelAnimationFrame(scrollRAF);
-        }
-        scrollRAF = requestAnimationFrame(() => {
-            if (Math.abs(controls.autoRotateSpeed) < baseSpeedDesktop) {
-                controls.autoRotateSpeed = direction >= 0 ? baseSpeedDesktop : -baseSpeedDesktop;
-            }
-        });
+        const multiplier = Math.floor(scrollDiff / 20);
+        // Desktop gets stronger differentiation
+        controls.autoRotateSpeed = delta > 0
+            ? Math.min(0.5 + (multiplier * 8), 20)  // Normal speed for downward
+            : -Math.min(0.5 + (multiplier * 4), 12);  // More damped speed for upward
     }
 
-    // Disable rotation only in product section
+    if (scrollRAF) {
+        cancelAnimationFrame(scrollRAF);
+    }
+
+    const resetSpeed = (timestamp) => {
+        if (!state.lastResetTime) state.lastResetTime = timestamp;
+        const elapsed = timestamp - state.lastResetTime;
+
+        if (elapsed < 100) {
+            scrollRAF = requestAnimationFrame(resetSpeed);
+        } else {
+            controls.autoRotateSpeed = isMobile ? 0.2 : 0.5;
+            state.lastResetTime = null;
+        }
+    };
+
+    scrollRAF = requestAnimationFrame(resetSpeed);
+
     if (productBool && productCurrent) {
         controls.autoRotate = false;
         controls.enableRotate = false;
     } else {
         controls.autoRotate = true;
-        // Disable manual rotation on mobile devices
-        controls.enableRotate = !isMobile;
+        controls.enableRotate = true;
+
     }
 
-    // Use a longer throttle duration for mobile
-    const throttleDuration = isMobile ? 80 : 40;
+    const throttleDuration = isMobile ? 60 : 40;
     throttle(() => scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight), throttleDuration)();
 
     camera.updateProjectionMatrix();
@@ -831,34 +833,25 @@ function smoothScrollTo(targetPosition) {
         const targetIndex = sections.indexOf(targetSection);
         const numberOfSections = Math.abs(targetIndex - currentIndex);
 
-        let duration;
-        if (numberOfSections === 1) {
-            duration = isMobile ? 1500 : 1200;
-        } else if (numberOfSections === 2) {
-            duration = isMobile ? 3200 : 2800;
-        } else if (numberOfSections >= 3) {
-            duration = isMobile ? 4000 : 3600;
-        } else {
-            duration = 0;
-        }
+        // Convert durations to seconds and use proper easing format
+        const duration = (
+            numberOfSections === 1 ? (isMobile ? 1.5 : 1.2) :
+                numberOfSections === 2 ? (isMobile ? 3.2 : 2.8) :
+                    numberOfSections >= 3 ? (isMobile ? 4.0 : 3.6) : 0
+        );
 
-        // Use Lenis smooth scroll with easing
         state.lenis.scrollTo(targetPosition, {
             duration: duration,
-            easing: (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t,
-            force: isMobile
-        });
-        
-        // Reset scroll indicator after animation using requestAnimationFrame
-        const startTime = performance.now();
-        const animate = (currentTime) => {
-            if (currentTime - startTime >= duration + 100) {
-                isClickScroll = false;
-            } else {
-                requestAnimationFrame(animate);
+            easing: t => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t, // Simplified easing syntax
+            lock: true,
+            force: isMobile,
+            onComplete: () => {
+                // Use slight delay to ensure scroll position is settled
+                setTimeout(() => {
+                    isClickScroll = false;
+                }, 100);
             }
-        };
-        requestAnimationFrame(animate);
+        });
     } else {
         window.scrollTo({
             top: targetPosition,
@@ -867,7 +860,6 @@ function smoothScrollTo(targetPosition) {
     }
 }
 
-// Define the scroll handler first
 const scrollHandler = () => {
     if (indicatorRAF) {
         cancelAnimationFrame(indicatorRAF);
@@ -875,13 +867,11 @@ const scrollHandler = () => {
     indicatorRAF = requestAnimationFrame(updateScrollIndicator);
 };
 
-// Then remove any existing listener and add the new one
 window.removeEventListener('scroll', scrollHandler);
 cleanupManager.addListener(window, 'scroll', scrollHandler);
 
-// Add section-specific cleanup methods
 function cleanupSection(section) {
-    switch(section) {
+    switch (section) {
         case 'splash':
             if (state.ribbonTweenGroup) {
                 state.ribbonTweenGroup.removeAll();
@@ -903,9 +893,7 @@ function cleanupSection(section) {
     }
 }
 
-// Consolidated cleanup function
 export function cleanup() {
-    // Cancel any active animation frames
     if (scrollRAF) {
         cancelAnimationFrame(scrollRAF);
     }
@@ -916,26 +904,20 @@ export function cleanup() {
         cancelAnimationFrame(activeTextTimeout);
     }
 
-    // Clean up all managed resources
     cleanupManager.cleanup();
 }
 
 function blobTweenMobilized(blobInner, blobOuter, mobilize = true) {
-    // Clear any existing mobilization tweens immediately
     state.mobilizeTweenGroup.removeAll();
 
     const greenColor = new THREE.Color('#9abe8b');
     const blueColor = new THREE.Color('#a9c3e7');
-
-    // Set the mobilized state immediately
     isBlobMobilized = mobilize;
 
-    // Create a completion tracker
     let innerTweensCompleted = 0;
     let totalInnerTweens = 0;
     let outerTweenCompleted = false;
 
-    // Function to force final state if needed
     const forceInnerFinalState = () => {
         if (blobInner) {
             blobInner.traverse(child => {
@@ -968,7 +950,7 @@ function blobTweenMobilized(blobInner, blobOuter, mobilize = true) {
             blobInner.traverse(child => {
                 if (child.isMesh && child.material) {
                     totalInnerTweens++;
-                    
+
                     if (!originalInnerColors.has(child.material)) {
                         originalInnerColors.set(child.material, child.material.color.clone());
                     }
@@ -1012,92 +994,69 @@ function blobTweenMobilized(blobInner, blobOuter, mobilize = true) {
                 const initialColor = new THREE.Color(blobChild.material.color);
                 const targetColor = mobilize ? blueColor : originalOuterColor.color;
 
-                const outerBlobTween = new Tween({ 
-                    r: initialColor.r, 
-                    g: initialColor.g, 
+                const outerBlobTween = new Tween({
+                    r: initialColor.r,
+                    g: initialColor.g,
                     b: initialColor.b,
                     roughness: blobChild.material.roughness,
                     metalness: blobChild.material.metalness,
                     envMapIntensity: blobChild.material.envMapIntensity
                 })
-                .to({ 
-                    r: targetColor.r, 
-                    g: targetColor.g, 
-                    b: targetColor.b,
-                    roughness: mobilize ? 0.4 : originalOuterColor.roughness,
-                    metalness: mobilize ? 0.12 : originalOuterColor.metalness
-                }, mobilize ? 1000 : 500)
-                .easing(Easing.Quadratic.InOut)
-                .onUpdate(({ r, g, b, roughness, metalness, envMapIntensity }) => {
-                    blobChild.material.color.setRGB(r, g, b);
-                    blobChild.material.roughness = roughness;
-                    blobChild.material.metalness = metalness;
-                    blobChild.material.envMapIntensity = envMapIntensity;
-                    blobChild.material.needsUpdate = true;
-                })
-                .onComplete(() => {
-                    outerTweenCompleted = true;
-                    forceOuterFinalState();
-                    state.mobilizeTweenGroup.remove(outerBlobTween);
-                });
+                    .to({
+                        r: targetColor.r,
+                        g: targetColor.g,
+                        b: targetColor.b,
+                        roughness: mobilize ? 0.4 : originalOuterColor.roughness,
+                        metalness: mobilize ? 0.12 : originalOuterColor.metalness
+                    }, mobilize ? 1000 : 500)
+                    .easing(Easing.Quadratic.InOut)
+                    .onUpdate(({ r, g, b, roughness, metalness, envMapIntensity }) => {
+                        blobChild.material.color.setRGB(r, g, b);
+                        blobChild.material.roughness = roughness;
+                        blobChild.material.metalness = metalness;
+                        blobChild.material.envMapIntensity = envMapIntensity;
+                        blobChild.material.needsUpdate = true;
+                    })
+                    .onComplete(() => {
+                        outerTweenCompleted = true;
+                        forceOuterFinalState();
+                        state.mobilizeTweenGroup.remove(outerBlobTween);
+                    });
 
                 state.mobilizeTweenGroup.add(outerBlobTween);
                 outerBlobTween.start();
             }
         }
 
-        // Backup timeout to force final state if tweens haven't completed
         setTimeout(() => {
             if (!outerTweenCompleted || innerTweensCompleted !== totalInnerTweens) {
                 forceInnerFinalState();
                 forceOuterFinalState();
             }
-        }, mobilize ? 1200 : 700); // Slightly longer than the longest tween duration
-
+        }, mobilize ? 1200 : 700);
     }, mobilize ? 250 : 0);
 }
 
-/**
- * Checks if an element is currently visible in the viewport between top and bottom
- * Used for determining which section is currently active
- * @param {HTMLElement} element - DOM element to check visibility
- * @returns {boolean} - True if element is visible between top and bottom of viewport
- */
+
 function isVisibleBetweenTopAndBottom(element) {
     const rect = element.getBoundingClientRect();
     return rect.top <= 0 && rect.bottom > 0;
 }
 
-/**
- * Calculates scroll progress through a standard element
- * Progress is normalized between 0 and 1
- * @param {HTMLElement} element - DOM element to calculate progress for
- * @returns {string} - Progress value formatted to 4 decimal places
- */
+
 function scrollProgress(element) {
     const rect = element.getBoundingClientRect();
-    // Total scrollable distance is the element's height
     const scrollableDistance = rect.height;
-    // How far we've scrolled into the element
     const scrolledDistance = Math.max(0, -rect.top);
-    // Normalize between 0 and 1
     const progress = Math.max(0, Math.min(1, scrolledDistance / scrollableDistance));
-    return parseFloat(progress).toFixed(4); // Truncate to 4 decimal places for precision
+    return parseFloat(progress).toFixed(4);
 }
 
-/**
- * Special scroll progress calculation for the last element
- * Accounts for viewport height in the calculation
- * @param {HTMLElement} element - Last DOM element to calculate progress for
- * @returns {string} - Progress value formatted to 4 decimal places
- */
+
 function scrollProgress__LastElem(element) {
     const rect = element.getBoundingClientRect();
-    // For last element, subtract viewport height from total scrollable distance
     const scrollableDistance = rect.height - window.innerHeight;
-    // How far we've scrolled into the element
     const scrolledDistance = Math.max(0, -rect.top);
-    // Normalize between 0 and 1
     const progress = Math.max(0, Math.min(1, scrolledDistance / scrollableDistance));
     return parseFloat(progress).toFixed(4);
 }
@@ -1193,7 +1152,6 @@ function dotsTweenExplosion(wavingBlob, duration, groupIndex) {
 
     explodedGroups.add(groupIndex);
 
-    // Single combined tween for better performance
     const tweenState = { scale: 1, opacity: 1 };
     const scaleTween = new Tween(tweenState)
         .to({ scale: 3, opacity: 0 }, duration)
@@ -1274,8 +1232,7 @@ function ribbonTweenOpacity(ribbons, initOpacity, targetOpacity, duration = (fad
 
 function resetProductVisibility(product, applicatorObject) {
     if (!product) return;
-    
-    // Clean up existing materials
+
     product.traverse(child => {
         if (child.material) {
             const materials = Array.isArray(child.material) ? child.material : [child.material];
@@ -1287,7 +1244,6 @@ function resetProductVisibility(product, applicatorObject) {
         }
     });
 
-    // First handle the overflowMask
     product.traverse(child => {
         if (child.name === 'overflowMask') {
             child.visible = true;
@@ -1296,13 +1252,12 @@ function resetProductVisibility(product, applicatorObject) {
                 child.material.depthWrite = true;
                 child.material.depthTest = true;
                 child.material.opacity = 1;
-                child.renderOrder = 1;  // Render after starfield, before other objects
+                child.renderOrder = 1;
                 child.material.needsUpdate = true;
             }
         }
     });
 
-    // Then handle all other objects
     product.traverse(child => {
         if (child.name !== 'overflowMask') {
             child.visible = false;
@@ -1311,14 +1266,13 @@ function resetProductVisibility(product, applicatorObject) {
                 materials.forEach(mat => {
                     mat.transparent = true;
                     mat.opacity = 0;
-                    mat.renderOrder = 2;  // Render after the mask
+                    mat.renderOrder = 2;
                     mat.needsUpdate = true;
                 });
             }
         }
     });
 
-    // Handle applicator object
     if (applicatorObject) {
         applicatorObject.traverse(child => {
             child.visible = true;
@@ -1327,7 +1281,7 @@ function resetProductVisibility(product, applicatorObject) {
                 materials.forEach(mat => {
                     mat.visible = true;
                     mat.opacity = 1;
-                    mat.renderOrder = 2;  // Render after the mask
+                    mat.renderOrder = 2;
                     mat.needsUpdate = true;
                 });
             }
@@ -1347,8 +1301,6 @@ function restoreDotScale(wavingBlob) {
         });
     }
 }
-
-const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
 
 const smoothLerp = isMobile
     ? (start, end, progress) => start + (end - start) * progress
@@ -1372,7 +1324,7 @@ function throttle(func, limit) {
 }
 
 function updateScrollIndicator() {
-    if (!isClickScroll) { // Only update if not initiated by a click
+    if (!isClickScroll) {
         scrollDots.forEach(dot => {
             const section = dot.dataset.section;
             if ((section === 'splash' && splashBool) ||

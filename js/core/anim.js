@@ -9,7 +9,6 @@ import { SceneManager } from './sceneManager.js';
 import { CellComponent, ProductComponent } from '../components/components.js';
 import { SpeckleSystem } from '../effects/speckles.js';
 
-// Configuration
 const CONFIG = {
     lighting: {
     ambientIntensity: 4,
@@ -35,7 +34,7 @@ const CONFIG = {
     },
     controls: {
         dampingFactor: 0.03,
-        autoRotateSpeed: 0.1
+        autoRotateSpeed: 0.2
     },
     assets: {
         meshLine: "https://unpkg.com/three.meshline@1.4.0/src/THREE.MeshLine.js",
@@ -43,7 +42,6 @@ const CONFIG = {
     }
 };
 
-// Global state
 export const state = {
     lastScrollY: 0,
     dotTweenGroup: new Group(),
@@ -60,10 +58,8 @@ export const state = {
     }
 };
 
-// Export state setters
 export const setApplicatorObject = (value) => { state.applicatorObject = value; };
 
-// Initialize Three.js globally for MeshLine
 window.THREE = window.THREE || {};
 Object.assign(window.THREE, THREE);
 
@@ -82,47 +78,34 @@ export class App {
         this.isInitialized = false;
         this.animationFrameId = null;
         this.animate = this.animate.bind(this);
-        
-        // Start initialization immediately
         this.init().catch(error => console.error('Failed to initialize:', error));
         this.setupEventListeners();
     }
 
     async init() {
         try {
-            // Initialize core scene components first
+
             this.ambientLight = this.sceneManager.initLights();
-            
-            // Setup and initialize starfield
-            await this.initializeStarfield();
-            
-            // Load all 3D components
             await this.loadAllComponents();
-            
-            // Reset initial state
+            await this.initializeStarfield();
             this.resetInitialState();
 
-            // Initialize Lenis with mobile-optimized settings
             const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
             state.lenis = new window.Lenis({
-                duration: isMobile ? 1.8 : 1.2,
+                duration: 2.0,
                 smoothWheel: true,
-                wheelMultiplier: isMobile ? 0.5 : 1,
-                touchMultiplier: 1.2,
+                wheelMultiplier: 0.55,
+                touchMultiplier: 3.4,
                 infinite: false,
-                orientation: 'vertical',
-                gestureOrientation: 'vertical',
                 smoothTouch: true,
-                touchInertiaMultiplier: 1, // Reduced inertia for better control
+                touchInertiaMultiplier: 3,
                 syncTouch: true,
-                syncTouchLerp: 0.1, // Reduced lerp for more responsive touch
-                easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)), // Custom easing function
+                syncTouchLerp: 1.4, // testing for mobile
+                overscroll: false
             });
 
-            // Start animation loop
             this.startAnimationLoop();
             
-            // Mark as fully initialized and enable activity tracking
             this.completeInitialization();
         } catch (error) {
             console.error('Failed to initialize:', error);
@@ -164,6 +147,7 @@ export class App {
         }
     }
 
+    // TODO PAGE-LOAD ANIMATION
     completeInitialization() {
         this.isInitialized = true;
         initActivityTracking(this.animate);
@@ -179,17 +163,16 @@ export class App {
 
     startAnimationLoop() {
         let lastFrameTime = 0;
-        const fpsInterval = 1000 / 60; // Target 60fps
+        const fpsInterval = 1000 / 60;
         
         const animateLoop = (time) => {
-            // Throttle animation updates to 60fps
             const elapsed = time - lastFrameTime;
             
             if (elapsed > fpsInterval) {
                 if (state.lenis) {
-                    state.lenis.raf(time); // Update Lenis first
+                    state.lenis.raf(time);
                 }
-                this.animate(time);   // Then update our animations
+                this.animate(time);
                 lastFrameTime = time - (elapsed % fpsInterval);
             }
             requestAnimationFrame(animateLoop);
@@ -200,7 +183,6 @@ export class App {
     animate = (time) => {
         const needsUpdate = this.updateActiveAnimations();
         
-        // Only render if there's actual animation activity
         if (needsUpdate) {
             this.sceneManager.update();
         }
@@ -211,7 +193,6 @@ export class App {
     updateActiveAnimations() {
         let needsUpdate = false;
         
-        // Check tween groups efficiently
         const tweenGroups = [
             state.dotTweenGroup,
             state.ribbonTweenGroup,
@@ -227,14 +208,12 @@ export class App {
             }
         }
 
-        // Early exit if no updates needed
         if (!needsUpdate && 
             !this.productAnchor?.visible && 
             !(this.speckleSystem?.wavingBlob.visible)) {
             return false;
         }
 
-        // Update remaining elements
         if (this.productAnchor?.visible) {
             this.productAnchor.lookAt(this.sceneManager.camera.position);
             needsUpdate = true;

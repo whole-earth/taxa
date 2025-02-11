@@ -1,24 +1,13 @@
 import * as THREE from 'three';
 import { waitForMeshLine } from 'three.meshline';
 
-// =========================================
-// Device Detection
-// =========================================
 const DEVICE = {
     MOBILE_BREAKPOINT: 768,
     isMobile: window.innerWidth < 768
 };
 
-// =========================================
-// Configuration
-// =========================================
 
-/**
- * Visual configuration for the starfield effect
- * Adjust these parameters to modify the appearance
- */
 export const starfieldParams = {
-    // Spatial layout configuration
     geometry: {
         start: {
             z: -20,           // Starting depth position
@@ -26,42 +15,21 @@ export const starfieldParams = {
         },
         end: {
             z: 60,           // Ending depth position
-            diameter: 5       // Final diameter of the starfield circle
+            diameter: 10       // Final diameter of the starfield circle
         }
     },
-    
-    // Line appearance and distribution
     lines: {
-        count: DEVICE.isMobile ? 15 : 20,
-        thickness: DEVICE.isMobile ? 3.6 : 4.8,
+        count: DEVICE.isMobile ? 21 : 14,
+        thickness: DEVICE.isMobile ? 3.8 : 11.2,
         opacity: 1.0,
-        
-        // Color distribution (must total 100)
-        distribution: {
-            blue: 75,    // 75% blue
-            purple: 10,  // 10% purple
-            gray: 10,    // 10% gray
-            green: 5     // 5% green
-        },
-        
-        // Order for spacing colors (determines the sequence when distributing)
-        colorOrder: ['blue', 'purple', 'gray', 'green']
+        basePattern: ['gray', 'blue', 'gray', 'green', 'gray', 'blue', 'purple']
     },
 
-    // Glow effect parameters
-    glow: {
-        enabled: true,
-        size: DEVICE.isMobile ? 4.0 : 3.0,
-        intensity: 0.3,
-        steps: 6
-    },
-
-    // Color palette (modify these to change the color scheme)
     colors: {
-        blue: '#4a9eff',
-        purple: '#b784ff',
-        gray: '#92ffd0',
-        green: '#4aff9e'
+        blue: '#b6c9d8',
+        purple: '#e8e2ee',
+        gray: '#bfc8da',
+        green: '#c9e2cf'
     },
 
     // Performance settings
@@ -71,76 +39,20 @@ export const starfieldParams = {
     }
 };
 
-// =========================================
-// Color Pattern Generation
-// =========================================
 
-/**
- * Generates a color pattern with percentage-based distribution but evenly spaced
- * @private
- */
 const generateColorPattern = () => {
-    const { count } = starfieldParams.lines;
-    const { distribution, colorOrder } = starfieldParams.lines;
-    
-    // Calculate how many of each color we need based on percentages
-    const colorCounts = {};
-    let remainingSlots = count;
-    
-    // First pass: calculate integer number of slots for each color
-    colorOrder.forEach(color => {
-        const percentage = distribution[color];
-        const exactCount = (percentage / 100) * count;
-        const intCount = Math.floor(exactCount);
-        colorCounts[color] = intCount;
-        remainingSlots -= intCount;
-    });
-    
-    // Second pass: distribute remaining slots based on decimal parts
-    if (remainingSlots > 0) {
-        const decimalParts = colorOrder.map(color => ({
-            color,
-            decimal: ((distribution[color] / 100) * count) % 1
-        })).sort((a, b) => b.decimal - a.decimal);
-        
-        for (let i = 0; i < remainingSlots; i++) {
-            colorCounts[decimalParts[i].color]++;
-        }
-    }
-    
-    // Create the pattern with even spacing
+    const { count, basePattern } = starfieldParams.lines;
     const pattern = [];
-    let colorIndex = 0;
-    const usedCounts = Object.fromEntries(colorOrder.map(color => [color, 0]));
     
-    // Fill pattern ensuring even distribution
-    while (pattern.length < count) {
-        const currentColor = colorOrder[colorIndex % colorOrder.length];
-        
-        // If we still have this color available, use it
-        if (usedCounts[currentColor] < colorCounts[currentColor]) {
-            pattern.push(currentColor);
-            usedCounts[currentColor]++;
-        }
-        
-        colorIndex++;
-    }
-    
-    // Apply a controlled shuffle to maintain some spacing while adding randomness
-    const shuffleWindow = Math.max(2, Math.floor(count / colorOrder.length));
-    for (let i = 0; i < pattern.length - shuffleWindow; i++) {
-        const swapWith = i + Math.floor(Math.random() * shuffleWindow);
-        [pattern[i], pattern[swapWith]] = [pattern[swapWith], pattern[i]];
+    // Simply repeat the base pattern until we have enough colors
+    for (let i = 0; i < count; i++) {
+        pattern.push(basePattern[i % basePattern.length]);
     }
     
     return pattern;
 };
 
 const COLOR_PATTERN = generateColorPattern();
-
-// =========================================
-// Shader Code
-// =========================================
 
 const SHADERS = {
     vertex: `
@@ -174,11 +86,9 @@ const SHADERS = {
             gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
         }
     `,
-    
+
     fragment: `
         uniform float opacity;
-        uniform float glowSize;
-        uniform float glowIntensity;
         
         varying vec3 vColor;
         varying float vProgress;
@@ -196,10 +106,6 @@ const SHADERS = {
     `
 };
 
-// =========================================
-// StarField Class
-// =========================================
-
 export class StarField extends THREE.Group {
     constructor(params = starfieldParams) {
         super();
@@ -207,34 +113,21 @@ export class StarField extends THREE.Group {
         this.lines = [];
         this.frameCount = 0;
         this.updateFrequency = params.performance.updateFrequency;
-        
+
         this._setupInitialState();
         this._init();
     }
 
-    // =========================================
-    // Public Methods
-    // =========================================
-
-    /**
-     * Updates the starfield animation progress
-     * @param {number} progress - Animation progress from 0 to 1
-     * @param {boolean} isInActiveArea - Whether we're in an active scroll area
-     */
     updateProgress(progress, isInActiveArea = true) {
         if (this.frameCount++ % this.updateFrequency !== 0) return;
-        
+
         if (!this._shouldUpdate(isInActiveArea)) return;
-        
+
         const scaledProgress = this._calculateProgress(progress);
         if (!this._hasProgressChanged(scaledProgress)) return;
-        
+
         this._updateAnimation(scaledProgress);
     }
-
-    // =========================================
-    // Private Setup Methods
-    // =========================================
 
     _setupInitialState() {
         this.frustum = new THREE.Frustum();
@@ -250,30 +143,27 @@ export class StarField extends THREE.Group {
     }
 
     _generateUniformPoints(count) {
-        const halfCount = Math.ceil(count / 2);
-        const topPoints = Array.from({ length: halfCount }, (_, i) => {
-            const angle = (i / halfCount) * Math.PI * 2;
-            return new THREE.Vector2(Math.cos(angle), Math.sin(angle));
-        });
-        
-        const bottomPoints = Array.from({ length: count - halfCount }, (_, i) => {
-            const angle = ((i + 0.5) / halfCount) * Math.PI * 2;
-            return new THREE.Vector2(Math.cos(angle), Math.sin(angle));
-        });
-        
-        return [...topPoints, ...bottomPoints].sort(() => Math.random() - 0.5);
+        const points = [];
+        // Generate points in clockwise order
+        for (let i = 0; i < count; i++) {
+            const angle = (i / count) * Math.PI * 2;
+            points.push(new THREE.Vector2(
+                Math.cos(angle),
+                Math.sin(angle)
+            ));
+        }
+        return points;
     }
 
     _getColorForIndex(index) {
-        const position = index % COLOR_PATTERN.length;
-        return this.config.colors[COLOR_PATTERN[position]];
+        const { basePattern } = starfieldParams.lines;
+        // Colors will now be assigned in clockwise order
+        return basePattern[index % basePattern.length];
     }
 
-    /**
-     * Creates the starfield with instanced geometry and custom shaders
-     */
     async _createStarField(MeshLine, MeshLineMaterial) {
         const { lines, geometry } = this.config;
+        // Points are now generated in clockwise order
         const points = this._generateUniformPoints(lines.count);
 
         // Create base geometry
@@ -298,9 +188,6 @@ export class StarField extends THREE.Group {
         this.add(this.linesMesh);
     }
 
-    /**
-     * Sets up instance attributes for the starfield geometry
-     */
     _setupInstanceAttributes(geometry, points) {
         const { lines, geometry: geo } = this.config;
         const startPositions = new Float32Array(lines.count * 3);
@@ -311,7 +198,7 @@ export class StarField extends THREE.Group {
         for (let i = 0; i < lines.count; i++) {
             const startRadius = geo.start.diameter / 2;
             const endRadius = geo.end.diameter / 2;
-            
+
             // Set positions
             const idx = i * 3;
             startPositions[idx] = points[i].x * startRadius;
@@ -322,8 +209,8 @@ export class StarField extends THREE.Group {
             endPositions[idx + 1] = points[i].y * endRadius;
             endPositions[idx + 2] = geo.end.z;
 
-            // Set color
-            const color = new THREE.Color(this._getColorForIndex(i));
+            // Set color based on clockwise position
+            const color = new THREE.Color(this.config.colors[this._getColorForIndex(i)]);
             colors[idx] = color.r;
             colors[idx + 1] = color.g;
             colors[idx + 2] = color.b;
@@ -337,17 +224,12 @@ export class StarField extends THREE.Group {
         geometry.setAttribute('instanceProgress', new THREE.InstancedBufferAttribute(progressArray, 1));
     }
 
-    /**
-     * Creates the shader material for the starfield
-     */
     _createShaderMaterial() {
-        const { lines, glow } = this.config;
+        const { lines } = this.config;
         return new THREE.ShaderMaterial({
             uniforms: {
                 thickness: { value: lines.thickness },
                 opacity: { value: lines.opacity },
-                glowSize: { value: glow.size },
-                glowIntensity: { value: glow.intensity },
                 resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) }
             },
             vertexShader: SHADERS.vertex,
@@ -359,14 +241,6 @@ export class StarField extends THREE.Group {
         });
     }
 
-    // =========================================
-    // Private Update Methods
-    // =========================================
-
-    /**
-     * Determines if the starfield should update
-     * @private
-     */
     _shouldUpdate(isInActiveArea) {
         if (!this.visible || !isInActiveArea) {
             if (this.lastProgress !== 0) {
@@ -377,32 +251,20 @@ export class StarField extends THREE.Group {
         return true;
     }
 
-    /**
-     * Calculates the eased and scaled progress
-     * @private
-     */
     _calculateProgress(progress) {
-        const easedProgress = progress < 0.5 
+        const easedProgress = progress < 0.5
             ? 2 * progress * progress // Ease in
             : -1 + (4 - 2 * progress) * progress; // Ease out
-            
+
         return Math.min(1, easedProgress / 0.8);
     }
 
-    /**
-     * Checks if the progress has changed significantly
-     * @private
-     */
     _hasProgressChanged(scaledProgress) {
         if (Math.abs(this.lastProgress - scaledProgress) < 0.0005) return false;
         this.lastProgress = scaledProgress;
         return true;
     }
 
-    /**
-     * Updates the animation with the current progress
-     * @private
-     */
     _updateAnimation(scaledProgress) {
         if (!this.visible || Math.abs(this._lastUpdateProgress - scaledProgress) < 0.001) {
             return;
@@ -414,29 +276,17 @@ export class StarField extends THREE.Group {
         }
     }
 
-    /**
-     * Updates the line animations
-     * @private
-     */
     _updateLines(scaledProgress) {
         const progressAttribute = this.linesMesh.geometry.getAttribute('instanceProgress');
         const data = progressAttribute.array;
-        
+
         for (let i = 0; i < this.config.lines.count; i++) {
             data[i] = scaledProgress;
         }
-        
+
         progressAttribute.needsUpdate = true;
     }
 
-    // =========================================
-    // Helper Methods
-    // =========================================
-
-    /**
-     * Resets the progress state
-     * @private
-     */
     _resetProgress() {
         this.lastProgress = 0;
         this._updateLines(0);

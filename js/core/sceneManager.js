@@ -133,9 +133,14 @@ export class SceneManager {
         controls.minPolarAngle = Math.PI / 2;
         controls.maxPolarAngle = Math.PI / 2;
 
-        // Disable rotation on touch devices
+        // Disable all touch interactions on mobile devices
         if ('ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0) {
+            controls.enabled = false; // This disables all interactions
             controls.enableRotate = false;
+            controls.enableZoom = false;
+            controls.enablePan = false;
+            controls.enableDamping = false;
+            controls.autoRotate = true; // Keep auto-rotation enabled
         }
 
         return controls;
