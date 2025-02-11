@@ -49,6 +49,7 @@ export const state = {
     dotTweenGroup: new Group(),
     ribbonTweenGroup: new Group(),
     blobTweenGroup: new Group(),
+    mobilizeTweenGroup: new Group(),
     applicatorObject: null,
     starField: null,
     sceneManager: null,
@@ -215,6 +216,7 @@ export class App {
             state.dotTweenGroup,
             state.ribbonTweenGroup,
             state.blobTweenGroup,
+            state.mobilizeTweenGroup,
             colorTweenGroup
         ];
         

@@ -137,6 +137,26 @@ function handleScroll() {
 }
 
 /**
+ * Checks if the user is scrolled within the bottom 30px of the page
+ * @returns {boolean} True if user is near bottom of page
+ */
+function isNearPageBottom() {
+    const windowHeight = window.innerHeight;
+    const documentHeight = document.documentElement.scrollHeight;
+    const scrollPosition = window.scrollY + windowHeight;
+    return documentHeight - scrollPosition <= 30;
+}
+
+/**
+ * Checks if the navigation menu is visible
+ * @returns {boolean} True if nav menu is visible
+ */
+function isNavVisible() {
+    const navBody = document.querySelector('.nav-body');
+    return navBody && window.getComputedStyle(navBody).display !== 'none';
+}
+
+/**
  * Resets the inactivity timer
  */
 function resetInactivityTimer() {
@@ -146,7 +166,10 @@ function resetInactivityTimer() {
     if (isAnimationSuspended) {
         resumeAnimation();
     }
-    inactivityTimer = setTimeout(suspendAnimation, INACTIVITY_THRESHOLD);
+    // Only set inactivity timer if not near bottom of page and nav is not visible
+    if (!isNearPageBottom() && !isNavVisible()) {
+        inactivityTimer = setTimeout(suspendAnimation, INACTIVITY_THRESHOLD);
+    }
 }
 
 /**
@@ -166,7 +189,9 @@ function checkActivity(timestamp) {
         // If no movement and not suspended, ensure timer is running
         if (!isAnimationSuspended && 
             currentScroll.x === lastScrollPosition.x && 
-            currentScroll.y === lastScrollPosition.y) {
+            currentScroll.y === lastScrollPosition.y &&
+            !isNearPageBottom() &&
+            !isNavVisible()) {
             if (!inactivityTimer) {
                 inactivityTimer = setTimeout(suspendAnimation, INACTIVITY_THRESHOLD);
             }
