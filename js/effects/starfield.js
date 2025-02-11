@@ -355,7 +355,7 @@ export class StarField extends THREE.Group {
             transparent: true,
             depthWrite: false,
             depthTest: true,
-            blending: THREE.AdditiveBlending
+            blending: THREE.NormalBlending
         });
     }
 
