@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Group } from 'tween';
-import { dispersion, mauve, pearlBlue } from '../utils/materials.js';
+import { dispersion, dispersionMobile, mauve, pearlBlue } from '../utils/materials.js';
 import { animatePage } from './scroll.js';
 import { StarField, starfieldParams } from '../effects/starfield.js';
 import { initActivityTracking, setAnimationFrameId } from '../utils/inactivity.js';
@@ -53,6 +53,7 @@ export const state = {
     sceneManager: null,
     scrollTimeout: null,
     lenis: null,
+    app: null,
     setLastScrollY(value) { 
         this.lastScrollY = value; 
     }
@@ -70,8 +71,10 @@ document.head.appendChild(meshLineScript);
 
 export class App {
     constructor() {
+        document.body.classList.add('loading');
         this.sceneManager = new SceneManager(CONFIG);
         state.sceneManager = this.sceneManager;
+        state.app = this;  // Store app instance in state
         this.cellObject = new THREE.Object3D();
         this.boundingBoxes = [];
         this.loadedObjects = [];
@@ -133,9 +136,29 @@ export class App {
             const dotBounds = this.blobInner.getBoundingBox().max.z * 0.85;
             this.speckleSystem = new SpeckleSystem(this.sceneManager.scene, dotBounds);
         }
-        
-        // Load product last
-        await this.loadProduct();
+    }
+
+    async loadProductOnDemand() {
+        if (!this.product) {
+            try {
+                const product = await new ProductComponent(this.sceneManager.scene, "newest.glb", 200);
+                this.product = product;
+                
+                this.productAnchor = new THREE.Object3D();
+                this.productAnchor.add(product.getObject());
+                this.sceneManager.scene.add(this.productAnchor);
+
+                if (this.sceneManager.directionalContainer) {
+                    product.getObject().add(this.sceneManager.directionalContainer);
+                }
+
+                return product.getObject();
+            } catch (error) {
+                console.error('Failed to load product:', error);
+                throw error;
+            }
+        }
+        return this.product.getObject();
     }
 
     resetInitialState() {
@@ -152,13 +175,14 @@ export class App {
         this.isInitialized = true;
         initActivityTracking(this.animate);
         
-        // First wave - fade in three and scroll indicator
-        document.body.classList.add('fade-in-primary');
+        // Remove loading class and start completion transition
+        document.body.classList.remove('loading');
+        document.body.classList.add('completing');
         
-        // Second wave - fade in main and nav after 1.4s
+        // Cleanup after all transitions complete
         setTimeout(() => {
-            document.body.classList.add('fade-in-secondary');
-        }, 1400);
+            document.body.classList.remove('completing');
+        }, 2800); // Matches longest transition duration (1.8s + 1s delay)
     }
 
     startAnimationLoop() {
@@ -231,7 +255,7 @@ export class App {
         try {
             const [blobInner, blobOuter, ribbons] = await Promise.all([
                 new CellComponent(this.sceneManager.scene, "blob-inner.glb", pearlBlue, 0),
-                new CellComponent(this.sceneManager.scene, "blob-outer.glb", dispersion, 2),
+                new CellComponent(this.sceneManager.scene, "blob-outer.glb", window.innerWidth < 768 ? dispersionMobile : dispersion, 2),
                 new CellComponent(this.sceneManager.scene, "ribbons.glb", mauve, 3)
             ]);
 
@@ -255,26 +279,6 @@ export class App {
             this.sceneManager.scene.add(this.cellObject);
         } catch (error) {
             console.error('Error loading cell components:', error);
-            throw error;
-        }
-    }
-
-    async loadProduct() {
-        try {
-            const product = await new ProductComponent(this.sceneManager.scene, "newest.glb", 200);
-            this.product = product;
-            
-            this.productAnchor = new THREE.Object3D();
-            this.productAnchor.add(product.getObject());
-            this.sceneManager.scene.add(this.productAnchor);
-
-            // Attach spotlight container to the product
-            if (this.sceneManager.spotlightContainer) {
-                product.getObject().add(this.sceneManager.spotlightContainer);
-            }
-
-        } catch (error) {
-            console.error('Failed to load product:', error);
             throw error;
         }
     }

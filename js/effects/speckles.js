@@ -6,7 +6,8 @@ import { state } from '../core/anim.js';
  * Configuration for the speckle system
  */
 const SPECKLE_CONFIG = {
-    count: 200,
+    count: window.innerWidth < 768 ? 140 : 200,
+    sizeMultiplier: window.innerWidth < 768 ? 1.4 : 1,
     sizes: [0.12, 0.14, 0.16, 0.18, 0.22],
     colors: {
         default: 0xff8e00
@@ -34,7 +35,7 @@ export class SpeckleSystem {
         
         // Create shared geometries for instancing
         this.sharedGeometries = SPECKLE_CONFIG.sizes.map(size => 
-            new THREE.SphereGeometry(size, 6, 6)
+            new THREE.SphereGeometry(size * SPECKLE_CONFIG.sizeMultiplier, 6, 6)
         );
         
         // Create one material per group
@@ -77,7 +78,7 @@ export class SpeckleSystem {
     }
 
     getRandomPositionWithinBounds() {
-        const scale = 0.65;
+        const scale = window.innerWidth < 768 ? 0.8 : 0.65;
         return new THREE.Vector3(
             (Math.random() * 2 - 1) * (this.dotBounds * scale),
             (Math.random() * 2 - 1) * (this.dotBounds * scale),
@@ -124,6 +125,9 @@ export class SpeckleSystem {
 
     updatePositions() {
         if (!this.wavingBlob.visible) return;
+
+        // Skip position updates on mobile
+        if (window.innerWidth < 768) return;
 
         // Update positions in batches for better performance
         this.dotGroups.forEach(group => {

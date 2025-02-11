@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Tween, Easing } from 'tween';
 import { state } from './anim.js';
-import { disposeHierarchy, disposeNode } from '../utils/dispose.js';
+import { cleanupManager } from '../utils/dispose.js';
 
 const isMobile = window.innerWidth < 768;
 
@@ -10,104 +10,13 @@ const splashEndFOV = splashStartFOV * 0.55;
 const zoomStartFOV = splashEndFOV;
 const zoomEndFOV = splashEndFOV * 1.1;
 const zoomOutStartFOV = zoomEndFOV;
-const zoomOutEndFOV = splashStartFOV * (isMobile ? 0.85 : 1);
+const zoomOutEndFOV = zoomOutStartFOV * 1.2;
 const pitchStartFOV = zoomOutEndFOV;
-const pitchEndFOV = pitchStartFOV * 1.5;
+const pitchEndFOV = pitchStartFOV * 1.8;
 
 const green = new THREE.Color('#92cb86');
-const orange = new THREE.Color('#ff8e00');
+const orange = new THREE.Color('#ffbb65');
 const yellow = new THREE.Color('#f1ff00');
-const scrollDots = document.querySelectorAll('.scroll-dot');
-
-const fadeInDuration = 500;
-const fadeOutDuration = 180;
-
-// Pre-calculate explosion thresholds
-const EXPLOSION_PHASES = [
-    { threshold: 0.20, index: 0 },
-    { threshold: 0.30, index: 1 },
-    { threshold: 0.45, index: 2 },
-    { threshold: 0.70, index: 3 },
-    { threshold: 0.85, index: 4 }
-];
-
-let explodedGroups = new Set();
-let dotGroupsCache = null;
-
-// Add these at the top with other state variables
-let originalInnerColors = new WeakMap();
-let originalOuterColor = null;
-
-// Add after other state variables
-const cleanupManager = {
-    eventListeners: new Map(),
-    intersectionObservers: new Set(),
-    disposables: new Set(),
-
-    addListener(element, type, handler) {
-        if (!this.eventListeners.has(element)) {
-            this.eventListeners.set(element, new Map());
-        }
-        const elementListeners = this.eventListeners.get(element);
-        if (!elementListeners.has(type)) {
-            elementListeners.set(type, new Set());
-        }
-        elementListeners.get(type).add(handler);
-        element.addEventListener(type, handler);
-    },
-
-    removeListener(element, type, handler) {
-        const elementListeners = this.eventListeners.get(element);
-        if (elementListeners && elementListeners.has(type)) {
-            const handlers = elementListeners.get(type);
-            if (handlers.has(handler)) {
-                element.removeEventListener(type, handler);
-                handlers.delete(handler);
-            }
-            if (handlers.size === 0) {
-                elementListeners.delete(type);
-            }
-        }
-    },
-
-    removeAllListeners(element) {
-        if (this.eventListeners.has(element)) {
-            const elementListeners = this.eventListeners.get(element);
-            elementListeners.forEach((handlers, type) => {
-                handlers.forEach(handler => {
-                    element.removeEventListener(type, handler);
-                });
-            });
-            this.eventListeners.delete(element);
-        }
-    },
-
-    addDisposable(object) {
-        this.disposables.add(object);
-    },
-
-    cleanup() {
-        // Clean up event listeners
-        this.eventListeners.forEach((elementListeners, element) => {
-            this.removeAllListeners(element);
-        });
-        this.eventListeners.clear();
-
-        // Clean up intersection observers
-        this.intersectionObservers.forEach(observer => observer.disconnect());
-        this.intersectionObservers.clear();
-
-        // Clean up Three.js resources
-        this.disposables.forEach(object => {
-            if (object.isObject3D) {
-                disposeHierarchy(object);
-            } else if (object.dispose) {
-                object.dispose();
-            }
-        });
-        this.disposables.clear();
-    }
-};
 
 // ============================
 
@@ -123,7 +32,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
     // Cleanup previous section if we've changed sections
     if (previousSection !== comingFrom) {
-        cleanupSection(previousSection);
+        cleanupSection(previousSection, wavingBlob);
     }
 
     if (splashBool) {
@@ -146,10 +55,9 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
             // Ensure cell object is visible and product is hidden
             cellObject.visible = true;
             if (product) {
-                product.visible = false;
-                product.traverse(child => {
-                    if (child.material) child.visible = false;
-                });
+                if (!cleanupManager.disposedProduct) {
+                    cleanupManager.disposeProduct(product);
+                }
             }
             if (state.starField) state.starField.visible = false;
 
@@ -177,10 +85,9 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
             // Ensure cell object is visible and product is hidden
             cellObject.visible = true;
             if (product) {
-                product.visible = false;
-                product.traverse(child => {
-                    if (child.material) child.visible = false;
-                });
+                if (!cleanupManager.disposedProduct) {
+                    cleanupManager.disposeProduct(product);
+                }
             }
             if (state.starField) state.starField.visible = false;
         }
@@ -265,6 +172,10 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
         if (!zoomOutCurrent) {
 
+            if (isBlobMobilized) {
+                blobTweenMobilized(blobInner, blobOuter, false, 800);
+            }
+
             textChildren.forEach(child => {
                 if (child.classList.contains('active')) {
                     child.classList.remove('active');
@@ -279,58 +190,39 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
             // Only setup explosions if coming from zoom area
             if (comingFrom !== 'pitchArea') {
                 explodedGroups.clear();
+                const explosionDuration = 2000; // Total duration in ms
 
-                // Reset visibility and scale of all groups
-                if (dotGroupsCache) {
-                    dotGroupsCache.forEach(group => {
-                        group.visible = true;
-                        group.scale.setScalar(1);
-                        group.children.forEach(sphere => {
-                            sphere.material.opacity = 1;
-                            sphere.material.needsUpdate = true;
-                        });
-                    });
-                }
+                // Trigger blob color change with same duration
+                blobTweenMobilized(blobInner, blobOuter, true, explosionDuration);
+
+                // Schedule explosions based on time thresholds
+                EXPLOSION_PHASES.forEach(phase => {
+                    setTimeout(() => {
+                        if (zoomOutCurrent && !explodedGroups.has(phase.index)) {
+                            dotsTweenExplosion(wavingBlob, explosionDuration * (1 - phase.threshold), phase.index);
+                            explodedGroups.add(phase.index);
+                        }
+                    }, explosionDuration * phase.threshold);
+                });
             }
 
             comingFrom = 'zoomOutArea';
-        }
-
-        // Only check for explosions if we're coming from zoom and not pitch
-        if (comingFrom === 'zoomOutArea' && !pitchCurrent) {
-
-            const currentPhase = EXPLOSION_PHASES.find(phase =>
-                zoomOutProgress >= phase.threshold && !explodedGroups.has(phase.index)
-            );
-
-            if (currentPhase) {
-                dotsTweenExplosion(wavingBlob, 600, currentPhase.index);
-                
-                // Check if this was the third explosion (index 2) and trigger blob mobilization
-                if (currentPhase.index === 2 && !isBlobMobilized) {
-                    blobTweenMobilized(blobInner, blobOuter, true);
-                }
-            }
         }
     }
     else if (pitchBool) {
         if (!pitchCurrent) {
             activateText(pitchArea);
 
-            if (state.sceneManager?.spotLight) {
-                const { spotLight } = state.sceneManager;
-                spotLight.visible = false;
-                spotLight.intensity = 0;
+            if (state.sceneManager?.directionalLight) {
+                const { directionalLight } = state.sceneManager;
+                directionalLight.visible = false;
+                directionalLight.intensity = 0;
             }
 
             if (comingFrom == 'productArea') {
                 controls.autoRotate = true;
                 controls.enableRotate = true;
                 controls.autoRotateSpeed = 0.2;
-
-                if (isBlobMobilized) {
-                    blobTweenMobilized(blobInner, blobOuter, false);
-                }
 
                 if (product) {
                     product.traverse(child => {
@@ -357,7 +249,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
                 if (spheres && spheres.length > 0 && spheres[0] && spheres[0].material && spheres[0].material.opacity > 0) {
                     // only trigger explosion if dots are visible
-                    dotsTweenExplosion(wavingBlob, 600, 80);
+                    dotsTweenExplosion(wavingBlob, 800, 80);
                 }
             }
 
@@ -372,40 +264,80 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
     }
     else if (productBool) {
         if (!productCurrent) {
-            resetProductVisibility(product, state.applicatorObject);
+            // Load product on demand when entering product section
+            if (!product) {
+                // Keep cell visible during product loading
+                state.app.loadProductOnDemand().then(loadedProduct => {
+                    product = loadedProduct;
 
-            // Disable auto-rotation and manual rotation when entering product area
-            controls.autoRotate = false;
-            controls.enableRotate = false;
+                    // Setup initial state before making visible
+                    if (product) {
+                        product.rotation.x = Math.PI / 2;
+                        product.rotation.z = 0;
+                        const productScale = isMobile ? 16 : 20;
+                        product.scale.set(productScale, productScale, productScale);
 
-            if (!isBlobMobilized) {
-                blobTweenMobilized(blobInner, blobOuter, true);
-            }
+                        if (state.applicatorObject) {
+                            state.applicatorObject.position.y = 1;
+                            state.applicatorObject.rotation.y = 0;
+                        }
 
-            // Reset product rotation and position
-            if (product) {
-                product.rotation.x = Math.PI / 2;
-                product.rotation.z = 0;
-                const productScale = isMobile ? 16 : 20;
-                product.scale.set(productScale, productScale, productScale);
-            }
+                        // Now that everything is set up, make product visible and reset visibility
+                        product.visible = true;
+                        resetProductVisibility(product, state.applicatorObject);
+                        cleanupManager.disposedProduct = false;  // Allow product to be shown
 
-            if (state.applicatorObject) {
-                state.applicatorObject.position.y = 1;
-                state.applicatorObject.rotation.y = 0;
-            }
-
-            // Hide cell object and dots for better performance
-            cellObject.visible = false;
-            if (wavingBlob && wavingBlob.children) {
-                wavingBlob.children.forEach(group => {
-                    if (group && group.isGroup) {
-                        group.visible = false;
+                        // Only hide cell object after product is ready
+                        cellObject.visible = false;
+                        if (wavingBlob && wavingBlob.children) {
+                            wavingBlob.children.forEach(group => {
+                                if (group && group.isGroup) {
+                                    group.visible = false;
+                                }
+                            });
+                            state.blobTweenGroup.removeAll();
+                            state.dotTweenGroup.removeAll();
+                            restoreDotScale(wavingBlob);
+                        }
                     }
+
+                    // Disable auto-rotation and manual rotation when entering product area
+                    controls.autoRotate = false;
+                    controls.enableRotate = false;
                 });
-                state.blobTweenGroup.removeAll();
-                state.dotTweenGroup.removeAll();
-                restoreDotScale(wavingBlob);
+            } else {
+                resetProductVisibility(product, state.applicatorObject);
+                cleanupManager.disposedProduct = false;  // Allow product to be shown
+
+                // Disable auto-rotation and manual rotation when entering product area
+                controls.autoRotate = false;
+                controls.enableRotate = false;
+
+                // Reset product rotation and position
+                if (product) {
+                    product.rotation.x = Math.PI / 2;
+                    product.rotation.z = 0;
+                    const productScale = isMobile ? 16 : 20;
+                    product.scale.set(productScale, productScale, productScale);
+                }
+
+                if (state.applicatorObject) {
+                    state.applicatorObject.position.y = 1;
+                    state.applicatorObject.rotation.y = 0;
+                }
+
+                // Hide cell object only when product is ready
+                cellObject.visible = false;
+                if (wavingBlob && wavingBlob.children) {
+                    wavingBlob.children.forEach(group => {
+                        if (group && group.isGroup) {
+                            group.visible = false;
+                        }
+                    });
+                    state.blobTweenGroup.removeAll();
+                    state.dotTweenGroup.removeAll();
+                    restoreDotScale(wavingBlob);
+                }
             }
 
             if (state.starField) {
@@ -424,9 +356,15 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
             comingFrom = 'productArea';
         }
 
-        if (product && product.children) {
-            productProgress = scrollProgress__LastElem(productArea);
+        productProgress = scrollProgress__LastElem(productArea);
 
+        if (productProgress > 0.5 && !cleanupManager.disposedCellAndStarfield) {
+            cleanupManager.disposeCellAndStarfield(cellObject, state.starField);
+        } else if (productProgress <= 0.5 && cleanupManager.disposedCellAndStarfield) {
+            cleanupManager.reinstateCellAndStarfield(cellObject, state.starField);
+        }
+
+        if (product && product.children) {
             // ===== PHASE 1: Initial Transition (0 to 0.5) =====
             if (productProgress <= 0.5) {
                 if (!productPhase1Active) {
@@ -439,6 +377,10 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                         product.position.set(0, 0, 0);
                         const productScale = isMobile ? 16 : 20;
                         product.scale.set(productScale, productScale, productScale);
+
+                        renderer.toneMappingExposure = 1.0;
+                        ambientLight.intensity = 4.6;
+                        lightingTransitionComplete = true;
                     }
 
                     // Restore blob color when scrolling back up
@@ -455,10 +397,10 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                         }
                     });
 
-                    if (state.sceneManager?.spotLight) {
-                        const { spotLight } = state.sceneManager;
-                        spotLight.visible = false;
-                        spotLight.intensity = 0;
+                    if (state.sceneManager?.directionalLight) {
+                        const { directionalLight } = state.sceneManager;
+                        directionalLight.visible = false;
+                        directionalLight.intensity = 0;
                     }
 
                     productPhase2Active = false;
@@ -484,6 +426,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                                 child.classList.remove('active');
                             }
                         });
+
                         if (state.applicatorObject) {
                             product.traverse(child => {
                                 child.visible = true;
@@ -522,21 +465,16 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                         });
                     }
 
-                    renderer.toneMappingExposure = smoothLerp(1, 0.35, fadeProgress);
+                    renderer.toneMappingExposure = smoothLerp(1, 0.6, fadeProgress);
 
                     const productScale = isMobile
-                        ? smoothLerp(16, 6, fadeProgress)  // Mobile
+                        ? smoothLerp(16, 5, fadeProgress)  // Mobile
                         : smoothLerp(20, 5, fadeProgress);  // Desktop
                     product.scale.setScalar(productScale);
 
                     if (fadeProgress >= 1) {
                         lightingTransitionComplete = true;
                     }
-                } else if (productProgress > 0.5 && !lightingTransitionComplete) {
-                    // Force complete the lighting transition if we scrolled past it too quickly
-                    renderer.toneMappingExposure = 0.35;
-                    ambientLight.intensity = 4;
-                    lightingTransitionComplete = true;
                 }
             }
             // ===== PHASE 2: Product Rotation (0.5 to 0.8) =====
@@ -570,10 +508,10 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                         }
                     });
 
-                    // Initialize spotlight when entering product phase
-                    if (state.sceneManager?.spotLight) {
-                        const { spotLight } = state.sceneManager;
-                        spotLight.visible = true;
+                    // Initialize directional light when entering product phase
+                    if (state.sceneManager?.directionalLight) {
+                        const { directionalLight } = state.sceneManager;
+                        directionalLight.visible = true;
                     }
 
                     productPhase2Active = true;
@@ -583,6 +521,9 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
                 const rotationProgress = (productProgress - 0.5) / 0.3;
 
+                renderer.toneMappingExposure = smoothLerp(0.6, 0.36, rotationProgress);
+
+
                 // Handle product movement
                 if (isMobile) {
 
@@ -590,14 +531,14 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     if (productProgress >= 0.5) {
                         const rotationProgress = (productProgress - 0.5) / 0.3;
 
-                        product.rotation.x = smoothLerp(Math.PI / 2, Math.PI / 5.5, rotationProgress);
+                        product.rotation.x = smoothLerp(Math.PI / 2, Math.PI / 7, rotationProgress);
                         product.rotation.y = smoothLerp(0, Math.PI / 5, rotationProgress);
-                        product.rotation.z = smoothLerp(0, -Math.PI / 5, rotationProgress);
+                        product.rotation.z = smoothLerp(0, -Math.PI / 6, rotationProgress);
 
                         product.position.x = smoothLerp(0, -5, rotationProgress);
-                        product.position.y = smoothLerp(0, 16, rotationProgress);
+                        product.position.y = smoothLerp(0, 6, rotationProgress);
 
-                        const productScaleStage2 = smoothLerp(6, 7, rotationProgress);
+                        const productScaleStage2 = smoothLerp(5, 6, rotationProgress);
                         product.scale.setScalar(productScaleStage2);
 
                     }
@@ -610,8 +551,8 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                         const zRotationProgress = (rotationProgress - 0.5) / 0.5;
                         product.rotation.z = smoothLerp(0, -Math.PI / 8, zRotationProgress);
 
-                        product.position.x = smoothLerp(0, -40, zRotationProgress);
-                        product.position.y = smoothLerp(0, -24, zRotationProgress);
+                        product.position.x = smoothLerp(0, -36, zRotationProgress);
+                        product.position.y = smoothLerp(0, -26, zRotationProgress);
                         product.rotation.y = smoothLerp(0, Math.PI / 5, zRotationProgress);
 
                         const productScaleStage2 = smoothLerp(5, 8, zRotationProgress);
@@ -619,21 +560,26 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     }
                 }
 
-                // Handle spotlight intensity animation (outside the productPhase2Active check)
-                if (state.sceneManager?.spotLight) {
-                    const { spotLight } = state.sceneManager;
+                // Handle directional light intensity animation (outside the productPhase2Active check)
+                if (state.sceneManager?.directionalLight) {
+                    const { directionalLight } = state.sceneManager;
                     const lightProgress = isMobile
                         ? (productProgress >= 0.65 ? (productProgress - 0.65) / 0.15 : 0)
                         : (rotationProgress > 0.5 ? (rotationProgress - 0.5) / 0.5 : 0);
 
-                    spotLight.intensity = smoothLerp(0, 20, lightProgress);
-                    ambientLight.intensity = smoothLerp(4.6, 2.2, lightProgress);
+                    directionalLight.intensity = smoothLerp(0, 20, lightProgress);
+                    ambientLight.intensity = smoothLerp(4.6, 3.2, lightProgress);
                 }
             }
 
             // ===== PHASE 3: Applicator Animation (0.8 to 1.0) =====
             else if (productProgress >= 0.8) {
                 if (!productPhase3Active) {
+
+                    renderer.toneMappingExposure = 0.36;
+                    ambientLight.intensity = 3.2;
+                    lightingTransitionComplete = true;
+
                     if (productPhase2Active) {
                         productPhase2Active = false;
                         productPhase1aActive = false;
@@ -647,9 +593,9 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     productTextActivated = false;
                 }
 
-                // Keep spotlight at full intensity during applicator animation
-                if (state.sceneManager?.spotLight) {
-                    state.sceneManager.spotLight.intensity = 20;
+                // Keep directional light at full intensity during applicator animation
+                if (state.sceneManager?.directionalLight) {
+                    state.sceneManager.directionalLight.intensity = 20;
                 }
 
                 if (state.applicatorObject) {
@@ -694,6 +640,10 @@ const zoomFirst = document.querySelector('#zoomFirst');
 const zoomSecond = document.querySelector('#zoomSecond');
 const zoomThird = document.querySelector('#zoomThird');
 const zoomElements = [zoomFirst, zoomSecond, zoomThird];
+const scrollDots = document.querySelectorAll('.scroll-dot');
+
+const fadeInDuration = 500;
+const fadeOutDuration = 180;
 
 let splashBool, zoomBool, zoomOutBool, pitchBool, productBool;
 let splashProgress, zoomProgress, zoomOutProgress, pitchProgress, productProgress;
@@ -726,9 +676,23 @@ let scrollTimeout;
 let scrollRAF;
 let indicatorRAF;
 
+let explodedGroups = new Set();
+let dotGroupsCache = null;
+let originalInnerColors = new WeakMap();
+let originalOuterColor = null;
+
+// Update the explosion phases to be time percentages
+const EXPLOSION_PHASES = [
+    { threshold: 0.05, index: 0 },
+    { threshold: 0.15, index: 1 },
+    { threshold: 0.3, index: 2 },
+    { threshold: 0.4, index: 3 },
+    { threshold: 0.5, index: 4 }
+];
+
 export function animatePage(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight) {
     let scrollY = window.scrollY;
-    let delta = scrollY - state.lastScrollY;  // Keep signed delta for direction
+    let delta = scrollY - state.lastScrollY;
     let scrollDiff = Math.abs(delta);
 
     // Enable auto-rotation by default
@@ -737,12 +701,12 @@ export function animatePage(controls, camera, cellObject, blobInner, blobOuter, 
     if (isMobile) {
         const multiplier = Math.floor(scrollDiff / 30);
         // Scroll down: faster rotation, scroll up: slower reverse rotation
-        controls.autoRotateSpeed = delta > 0 
-            ? Math.min(0.3 + (multiplier * 3), 6)  // Normal speed for downward
-            : -Math.min(0.3 + (multiplier * 1.2), 2.4);  // Damped speed for upward
+        controls.autoRotateSpeed = delta > 0
+            ? Math.min(0.5 + (multiplier * 3), 10)  // Normal speed for downward
+            : -Math.min(0.5 + (multiplier * 1.2), 6);  // Damped speed for upward
     } else {
+        // Desktop logic
         const multiplier = Math.floor(scrollDiff / 20);
-        // Desktop gets stronger differentiation
         controls.autoRotateSpeed = delta > 0
             ? Math.min(0.5 + (multiplier * 8), 20)  // Normal speed for downward
             : -Math.min(0.5 + (multiplier * 4), 12);  // More damped speed for upward
@@ -775,7 +739,7 @@ export function animatePage(controls, camera, cellObject, blobInner, blobOuter, 
 
     }
 
-    const throttleDuration = isMobile ? 60 : 40;
+    const throttleDuration = isMobile ? 200 : 100;
     throttle(() => scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight), throttleDuration)();
 
     camera.updateProjectionMatrix();
@@ -870,7 +834,7 @@ const scrollHandler = () => {
 window.removeEventListener('scroll', scrollHandler);
 cleanupManager.addListener(window, 'scroll', scrollHandler);
 
-function cleanupSection(section) {
+function cleanupSection(section, wavingBlob) {
     switch (section) {
         case 'splash':
             if (state.ribbonTweenGroup) {
@@ -884,6 +848,12 @@ function cleanupSection(section) {
             if (state.blobTweenGroup) {
                 state.blobTweenGroup.removeAll();
             }
+            // Force complete any pending explosions
+            EXPLOSION_PHASES.forEach(phase => {
+                if (!explodedGroups.has(phase.index)) {
+                    dotsTweenExplosion(wavingBlob, 60, phase.index);
+                }
+            });
             break;
         case 'product':
             if (state.starField) {
@@ -907,11 +877,12 @@ export function cleanup() {
     cleanupManager.cleanup();
 }
 
-function blobTweenMobilized(blobInner, blobOuter, mobilize = true) {
+function blobTweenMobilized(blobInner, blobOuter, mobilize = true, duration = 200) {
     state.mobilizeTweenGroup.removeAll();
 
     const greenColor = new THREE.Color('#9abe8b');
-    const blueColor = new THREE.Color('#a9c3e7');
+    const blueColor = new THREE.Color('#7592c3');
+
     isBlobMobilized = mobilize;
 
     let innerTweensCompleted = 0;
@@ -938,8 +909,8 @@ function blobTweenMobilized(blobInner, blobOuter, mobilize = true) {
             if (blobChild.material) {
                 const targetColor = mobilize ? blueColor : originalOuterColor.color;
                 blobChild.material.color.copy(targetColor);
-                blobChild.material.roughness = mobilize ? 0.4 : originalOuterColor.roughness;
-                blobChild.material.metalness = mobilize ? 0.12 : originalOuterColor.metalness;
+                blobChild.material.roughness = mobilize ? 0.6 : originalOuterColor.roughness;
+                blobChild.material.metalness = mobilize ? 0.1 : originalOuterColor.metalness;
                 blobChild.material.needsUpdate = true;
             }
         }
@@ -959,7 +930,7 @@ function blobTweenMobilized(blobInner, blobOuter, mobilize = true) {
                     const targetColor = mobilize ? greenColor : originalInnerColors.get(child.material);
 
                     const innerBlobTween = new Tween({ r: initialColor.r, g: initialColor.g, b: initialColor.b })
-                        .to({ r: targetColor.r, g: targetColor.g, b: targetColor.b }, mobilize ? 800 : 500)
+                        .to({ r: targetColor.r, g: targetColor.g, b: targetColor.b }, duration)
                         .easing(Easing.Quadratic.InOut)
                         .onUpdate(({ r, g, b }) => {
                             child.material.color.setRGB(r, g, b);
@@ -987,7 +958,9 @@ function blobTweenMobilized(blobInner, blobOuter, mobilize = true) {
                         color: blobChild.material.color.clone(),
                         roughness: blobChild.material.roughness,
                         metalness: blobChild.material.metalness,
-                        envMapIntensity: blobChild.material.envMapIntensity
+                        envMapIntensity: blobChild.material.envMapIntensity,
+                        transmission: blobChild.material.transmission,
+                        reflectivity: blobChild.material.reflectivity
                     };
                 }
 
@@ -1000,21 +973,27 @@ function blobTweenMobilized(blobInner, blobOuter, mobilize = true) {
                     b: initialColor.b,
                     roughness: blobChild.material.roughness,
                     metalness: blobChild.material.metalness,
-                    envMapIntensity: blobChild.material.envMapIntensity
+                    envMapIntensity: blobChild.material.envMapIntensity,
+                    transmission: blobChild.material.transmission,
+                    reflectivity: blobChild.material.reflectivity
                 })
                     .to({
                         r: targetColor.r,
                         g: targetColor.g,
                         b: targetColor.b,
                         roughness: mobilize ? 0.4 : originalOuterColor.roughness,
-                        metalness: mobilize ? 0.12 : originalOuterColor.metalness
-                    }, mobilize ? 1000 : 500)
+                        metalness: mobilize ? 0 : originalOuterColor.metalness,
+                        transmission: mobilize ? 0.6 : originalOuterColor.transmission,
+                        reflectivity: mobilize ? 0.4 : originalOuterColor.reflectivity
+                    }, duration)
                     .easing(Easing.Quadratic.InOut)
-                    .onUpdate(({ r, g, b, roughness, metalness, envMapIntensity }) => {
+                    .onUpdate(({ r, g, b, roughness, metalness, envMapIntensity, transmission, reflectivity }) => {
                         blobChild.material.color.setRGB(r, g, b);
                         blobChild.material.roughness = roughness;
                         blobChild.material.metalness = metalness;
                         blobChild.material.envMapIntensity = envMapIntensity;
+                        blobChild.material.transmission = transmission;
+                        blobChild.material.reflectivity = reflectivity;
                         blobChild.material.needsUpdate = true;
                     })
                     .onComplete(() => {
@@ -1033,16 +1012,27 @@ function blobTweenMobilized(blobInner, blobOuter, mobilize = true) {
                 forceInnerFinalState();
                 forceOuterFinalState();
             }
-        }, mobilize ? 1200 : 700);
+        }, duration + 200);
     }, mobilize ? 250 : 0);
-}
 
+    // Add materials to cleanup manager when creating/modifying them
+    if (blobInner) {
+        blobInner.traverse(child => {
+            if (child.isMesh && child.material) {
+                cleanupManager.addDisposable(child.material); // Add material to disposables
+            }
+        });
+    }
+
+    if (blobOuter && blobOuter.children[0]?.material) {
+        cleanupManager.addDisposable(blobOuter.children[0].material); // Add outer material
+    }
+}
 
 function isVisibleBetweenTopAndBottom(element) {
     const rect = element.getBoundingClientRect();
     return rect.top <= 0 && rect.bottom > 0;
 }
-
 
 function scrollProgress(element) {
     const rect = element.getBoundingClientRect();
@@ -1051,7 +1041,6 @@ function scrollProgress(element) {
     const progress = Math.max(0, Math.min(1, scrolledDistance / scrollableDistance));
     return parseFloat(progress).toFixed(4);
 }
-
 
 function scrollProgress__LastElem(element) {
     const rect = element.getBoundingClientRect();
@@ -1111,7 +1100,6 @@ function dotTweenOpacity(spheres, initialOpacity, targetOpacity, wavingBlob, dur
         state.dotTweenGroup.add(scaleTween);
         scaleTween.start();
     }
-
 }
 
 function dotUpdateColors(spheres, color) {
@@ -1151,17 +1139,22 @@ function dotsTweenExplosion(wavingBlob, duration, groupIndex) {
     if (!group || explodedGroups.has(groupIndex)) return;
 
     explodedGroups.add(groupIndex);
+    group.visible = true;
 
     const tweenState = { scale: 1, opacity: 1 };
     const scaleTween = new Tween(tweenState)
         .to({ scale: 3, opacity: 0 }, duration)
-        .easing(Easing.Quadratic.InOut)
+        .easing(Easing.Cubic.Out)
         .onUpdate(() => {
             group.scale.setScalar(tweenState.scale);
             if (group.children) {
                 group.children.forEach(sphere => {
                     if (sphere && sphere.material) {
-                        sphere.material.opacity = Math.max(0, tweenState.opacity);
+                        const opacityDelay = 0.4;
+                        const normalizedTime = tweenState.scale / 3;
+                        const opacity = normalizedTime < opacityDelay ? 1 :
+                            1 - ((normalizedTime - opacityDelay) / (1 - opacityDelay));
+                        sphere.material.opacity = Math.max(0, opacity);
                         sphere.material.needsUpdate = true;
                     }
                 });
@@ -1169,7 +1162,7 @@ function dotsTweenExplosion(wavingBlob, duration, groupIndex) {
         })
         .onComplete(() => {
             state.blobTweenGroup.remove(scaleTween);
-            group.visible = false; // Hide group after explosion for better performance
+            group.visible = false;
         });
 
     state.blobTweenGroup.add(scaleTween);
@@ -1303,7 +1296,9 @@ function restoreDotScale(wavingBlob) {
 }
 
 const smoothLerp = isMobile
-    ? (start, end, progress) => start + (end - start) * progress
+    ? (start, end, progress) => {
+        return start + (end - start) * (progress < 0.5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2);
+    }
     : (start, end, progress) => start + (end - start) * smoothstep(progress);
 
 function smoothstep(x) {
@@ -1311,14 +1306,13 @@ function smoothstep(x) {
 }
 
 function throttle(func, limit) {
-    let inThrottle;
+    let inThrottle, lastRan;
     return function () {
-        const args = arguments;
         const context = this;
-        if (!inThrottle) {
+        const args = arguments;
+        if (!lastRan || Date.now() - lastRan >= limit) {
             func.apply(context, args);
-            inThrottle = true;
-            setTimeout(() => inThrottle = false, limit);
+            lastRan = Date.now();
         }
     };
 }

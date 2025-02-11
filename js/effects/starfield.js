@@ -19,8 +19,8 @@ export const starfieldParams = {
         }
     },
     lines: {
-        count: DEVICE.isMobile ? 21 : 14,
-        thickness: DEVICE.isMobile ? 3.8 : 11.2,
+        count: DEVICE.isMobile ? 14 : 14,
+        thickness: DEVICE.isMobile ? 10 : 11.2,
         opacity: 1.0,
         basePattern: ['gray', 'blue', 'gray', 'green', 'gray', 'blue', 'purple']
     },

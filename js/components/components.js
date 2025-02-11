@@ -114,6 +114,8 @@ export class ProductComponent extends BaseComponent {
                 fullPath,
                 (gltf) => {
                     this.object = gltf.scene;
+                    // Make entire object invisible initially
+                    this.object.visible = false;
                     this.object.position.copy(this.position);
                     this.object.name = this.gltfFileName.split('/').pop();
                     this.centerObject(this.object);
