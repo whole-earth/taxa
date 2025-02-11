@@ -6,36 +6,32 @@ const DEVICE = {
     isMobile: window.innerWidth < 768
 };
 
-
 export const starfieldParams = {
     geometry: {
         start: {
-            z: -20,           // Starting depth position
-            diameter: 50      // Starting diameter of the starfield circle
+            z: -20,      // Starting depth position
+            diameter: 50 // Starting diameter of the starfield circle
         },
         end: {
-            z: 60,           // Ending depth position
-            diameter: 10       // Final diameter of the starfield circle
+            z: 60,       // Ending depth position
+            diameter: 10 // Final diameter of the starfield circle
         }
     },
     lines: {
-        count: DEVICE.isMobile ? 14 : 14,
-        thickness: DEVICE.isMobile ? 10 : 11.2,
+        count: DEVICE.isMobile ? 7 : 14,
+        thickness: DEVICE.isMobile ? 16 : 11.2,
         opacity: 1.0,
         basePattern: ['gray', 'blue', 'gray', 'green', 'gray', 'blue', 'purple']
     },
-
     colors: {
         blue: '#b6c9d8',
         purple: '#e8e2ee',
         gray: '#bfc8da',
         green: '#c9e2cf'
     },
-
-    // Performance settings
     performance: {
         updateFrequency: DEVICE.isMobile ? 2 : 1, // Update every N frames
-        progressThreshold: 0.0005 // Minimum progress change to trigger update
+        progressThreshold: 0.001 // Minimum progress change to trigger update
     }
 };
 
@@ -43,16 +39,12 @@ export const starfieldParams = {
 const generateColorPattern = () => {
     const { count, basePattern } = starfieldParams.lines;
     const pattern = [];
-    
-    // Simply repeat the base pattern until we have enough colors
     for (let i = 0; i < count; i++) {
         pattern.push(basePattern[i % basePattern.length]);
     }
-    
+
     return pattern;
 };
-
-const COLOR_PATTERN = generateColorPattern();
 
 const SHADERS = {
     vertex: `
@@ -157,13 +149,11 @@ export class StarField extends THREE.Group {
 
     _getColorForIndex(index) {
         const { basePattern } = starfieldParams.lines;
-        // Colors will now be assigned in clockwise order
         return basePattern[index % basePattern.length];
     }
 
     async _createStarField(MeshLine, MeshLineMaterial) {
         const { lines, geometry } = this.config;
-        // Points are now generated in clockwise order
         const points = this._generateUniformPoints(lines.count);
 
         // Create base geometry

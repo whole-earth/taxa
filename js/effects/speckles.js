@@ -2,30 +2,28 @@ import * as THREE from 'three';
 import { Tween, Easing } from 'tween';
 import { state } from '../core/anim.js';
 
-/**
- * Configuration for the speckle system
- */
 const SPECKLE_CONFIG = {
     count: window.innerWidth < 768 ? 140 : 200,
-    sizeMultiplier: window.innerWidth < 768 ? 1.4 : 1,
-    sizes: [0.12, 0.14, 0.16, 0.18, 0.22],
+    sizeMultiplier: window.innerWidth < 768 ? 1.2 : 1,
+    sizes: window.innerWidth < 768 ? 
+        [0.14, 0.18, 0.22] :  // Fewer size variations on mobile
+        [0.12, 0.14, 0.16, 0.18, 0.22],
     colors: {
         default: 0xff8e00
     },
     groups: {
-        count: 5,
-        velocityMultipliers: [0.8, 0.9, 1.0, 1.1, 1.2]
+        count: window.innerWidth < 768 ? 3 : 5,
+        velocityMultipliers: window.innerWidth < 768 ? 
+            [0.8, 1.0, 1.2] :  // Mobile: 3 groups
+            [0.8, 0.9, 1.0, 1.1, 1.2]  // Desktop: 5 groups
     },
     animation: {
-        fadeInDuration: 500,
-        fadeOutDuration: 180,
-        baseVelocity: 0.014
+        fadeInDuration: window.innerWidth < 768 ? 400 : 500,
+        fadeOutDuration: window.innerWidth < 768 ? 150 : 180,
+        baseVelocity: window.innerWidth < 768 ? 0.018 : 0.014
     }
 };
 
-/**
- * Manages the speckle/dot animation system
- */
 export class SpeckleSystem {
     constructor(scene, dotBounds) {
         this.scene = scene;
@@ -44,7 +42,8 @@ export class SpeckleSystem {
                 color: SPECKLE_CONFIG.colors.default, 
                 opacity: 0, 
                 transparent: true, 
-                depthWrite: false 
+                depthWrite: false,
+                precision: window.innerWidth < 768 ? 'lowp' : 'mediump'  // Lower precision on mobile
             })
         );
         
@@ -78,7 +77,7 @@ export class SpeckleSystem {
     }
 
     getRandomPositionWithinBounds() {
-        const scale = window.innerWidth < 768 ? 0.8 : 0.65;
+        const scale = window.innerWidth < 768 ? 1 : 0.65;
         return new THREE.Vector3(
             (Math.random() * 2 - 1) * (this.dotBounds * scale),
             (Math.random() * 2 - 1) * (this.dotBounds * scale),
@@ -126,8 +125,9 @@ export class SpeckleSystem {
     updatePositions() {
         if (!this.wavingBlob.visible) return;
 
-        // Skip position updates on mobile
-        if (window.innerWidth < 768) return;
+        const isMobile = window.innerWidth < 768;
+        
+        if (isMobile && (Date.now() % 2 !== 0)) return;  // Update every 2nd frame on mobile
 
         // Update positions in batches for better performance
         this.dotGroups.forEach(group => {
@@ -137,9 +137,11 @@ export class SpeckleSystem {
             const length = children.length;
             const dotBoundsSquared = this.dotBounds * this.dotBounds;
             
-            // Process in batches of 50 for better performance
-            for (let i = 0; i < length; i += 50) {
-                const endIdx = Math.min(i + 50, length);
+            // Larger batches on mobile for better performance
+            const batchSize = isMobile ? 15 : 50;  // Even smaller batches on mobile
+            
+            for (let i = 0; i < length; i += batchSize) {
+                const endIdx = Math.min(i + batchSize, length);
                 for (let j = i; j < endIdx; j++) {
                     const sphere = children[j];
                     sphere.position.add(sphere.velocity);
@@ -147,6 +149,12 @@ export class SpeckleSystem {
                     // Use squared distance for better performance
                     if (sphere.position.lengthSq() > dotBoundsSquared) {
                         sphere.velocity.negate();
+                        // On mobile, slightly randomize the velocity when bouncing to avoid patterns
+                        if (isMobile) {
+                            sphere.velocity.x *= 0.95 + Math.random() * 0.1;
+                            sphere.velocity.y *= 0.95 + Math.random() * 0.1;
+                            sphere.velocity.z *= 0.95 + Math.random() * 0.1;
+                        }
                     }
                 }
             }
@@ -180,13 +188,16 @@ export class SpeckleSystem {
         const group = this.dotGroups[groupIndex];
         if (!group) return;
 
+        const isMobile = window.innerWidth < 768;
         const tweenState = { scale: 1, opacity: 1 };
         const explosionTween = new Tween(tweenState)
-            .to({ scale: 3, opacity: 0 }, duration)
+            .to({ 
+                scale: isMobile ? 2.5 : 3,  // Smaller scale on mobile
+                opacity: 0 
+            }, isMobile ? duration * 0.8 : duration)  // Faster duration on mobile MAYBE NOT
             .easing(Easing.Quadratic.InOut)
             .onUpdate(() => {
                 group.scale.setScalar(tweenState.scale);
-                // Update only this group's material opacity
                 this.groupMaterials[groupIndex].opacity = Math.max(0, tweenState.opacity);
                 this.groupMaterials[groupIndex].needsUpdate = true;
             })

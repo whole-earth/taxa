@@ -173,7 +173,8 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
         if (!zoomOutCurrent) {
 
             if (isBlobMobilized) {
-                blobTweenMobilized(blobInner, blobOuter, false, 800);
+                const duration = window.innerWidth < 768 ? 500 : 800;
+                blobTweenMobilized(blobInner, blobOuter, false, duration);
             }
 
             textChildren.forEach(child => {
@@ -193,7 +194,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                 const explosionDuration = 2000; // Total duration in ms
 
                 // Trigger blob color change with same duration
-                blobTweenMobilized(blobInner, blobOuter, true, explosionDuration);
+                blobTweenMobilized(blobInner, blobOuter, true, window.innerWidth < 768 ? (explosionDuration * 0.7) : explosionDuration);
 
                 // Schedule explosions based on time thresholds
                 EXPLOSION_PHASES.forEach(phase => {
@@ -881,7 +882,9 @@ function blobTweenMobilized(blobInner, blobOuter, mobilize = true, duration = 20
     state.mobilizeTweenGroup.removeAll();
 
     const greenColor = new THREE.Color('#9abe8b');
-    const blueColor = new THREE.Color('#7592c3');
+    const desktopBlueColor = new THREE.Color('#7592c3');
+    const mobileBlueColor = new THREE.Color('#4e6291');
+    const blueColor = window.innerWidth < 768 ? mobileBlueColor : desktopBlueColor;
 
     isBlobMobilized = mobilize;
 
@@ -1170,6 +1173,7 @@ function dotsTweenExplosion(wavingBlob, duration, groupIndex) {
 }
 
 function cellSheenTween(blobInner, color = null) {
+    if (isMobile) return;
     state.blobTweenGroup.removeAll();
     if (!blobInner) return;
 

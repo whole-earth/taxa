@@ -36,14 +36,13 @@ export const dispersion = new THREE.MeshPhysicalMaterial({
   depthWrite: true
 });
 
-export const dispersionMobile = new THREE.MeshPhysicalMaterial({
+export const dispersionMobile = new THREE.MeshStandardMaterial({
   color: new THREE.Color('#8f9897'),
   transparent: true,
   roughness: 0.2,
   metalness: 0.4,
   opacity: 0.65,
   envMapIntensity: 4,
-  reflectivity: 1,
   side: THREE.DoubleSide,
   depthWrite: true
 });

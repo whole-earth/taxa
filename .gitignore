@@ -2,3 +2,5 @@ taxa-render/
 .DS_Store
 arrow.html
 .cert/
+.vscode/
+.env

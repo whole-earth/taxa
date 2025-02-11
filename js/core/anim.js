@@ -93,7 +93,9 @@ export class App {
             await this.initializeStarfield();
             this.resetInitialState();
 
-            const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
+            const isMobile = ('ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0) && window.innerWidth < 768;
+            console.log('Mobile device detected, initializing smoothScroll to mobile params');
+            /*
             state.lenis = new window.Lenis({
                 duration: 2.0,
                 smoothWheel: true,
@@ -105,6 +107,11 @@ export class App {
                 syncTouch: true,
                 syncTouchLerp: 1.4, // testing for mobile
                 overscroll: false
+            });
+            */
+            state.lenis = new window.Lenis({
+                overscroll: false,
+                wheelMultiplier: 0.55,
             });
 
             this.startAnimationLoop();
