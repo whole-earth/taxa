@@ -10,9 +10,9 @@ const splashEndFOV = splashStartFOV * 0.55;
 const zoomStartFOV = splashEndFOV;
 const zoomEndFOV = splashEndFOV * 1.1;
 const zoomOutStartFOV = zoomEndFOV;
-const zoomOutEndFOV = zoomOutStartFOV * 1.2;
+const zoomOutEndFOV = zoomOutStartFOV * 1.1;
 const pitchStartFOV = zoomOutEndFOV;
-const pitchEndFOV = pitchStartFOV * 1.8;
+const pitchEndFOV = pitchStartFOV * 1.3;
 
 const green = new THREE.Color('#92cb86');
 const orange = new THREE.Color('#ffbb65');
@@ -65,6 +65,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
             splashCurrent = true;
             zoomCurrent = false;
             zoomFirstCurrent = false;
+            pitchTextActivated = false;
         }
     }
 
@@ -74,6 +75,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
             splashCurrent = false;
             zoomCurrent = true;
             zoomOutCurrent = false;
+            pitchTextActivated = false;
             if (wavingBlob) {
                 restoreDotScale(wavingBlob);
             }
@@ -166,9 +168,10 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
             }
         }
     }
+    
     else if (zoomOutBool) {
-        zoomOutProgress = scrollProgress(zoomOutArea);
-        camera.fov = smoothLerp(zoomOutStartFOV, zoomOutEndFOV, zoomOutProgress);
+        //zoomOutProgress = scrollProgress(zoomOutArea);
+        //camera.fov = smoothLerp(zoomOutStartFOV, zoomOutEndFOV, zoomOutProgress);
 
         if (!zoomOutCurrent) {
 
@@ -187,11 +190,12 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
             zoomThirdCurrent = false;
             zoomOutCurrent = true;
             pitchCurrent = false;
+            pitchTextActivated = false;
 
             // Only setup explosions if coming from zoom area
             if (comingFrom !== 'pitchArea') {
                 explodedGroups.clear();
-                const explosionDuration = 2000; // Total duration in ms
+                const explosionDuration = 1400; // Total duration in ms
 
                 // Trigger blob color change with same duration
                 blobTweenMobilized(blobInner, blobOuter, true, window.innerWidth < 768 ? (explosionDuration * 0.7) : explosionDuration);
@@ -205,6 +209,14 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                         }
                     }, explosionDuration * phase.threshold);
                 });
+
+                // Add text activation at 2/3 mark of explosion duration
+                setTimeout(() => {
+                    if (zoomOutCurrent) {
+                        activateText(pitchArea);
+                        pitchTextActivated = true;
+                    }
+                }, explosionDuration * 0.4);
             }
 
             comingFrom = 'zoomOutArea';
@@ -212,7 +224,12 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
     }
     else if (pitchBool) {
         if (!pitchCurrent) {
-            activateText(pitchArea);
+
+            // check if not already activated
+            if (!pitchTextActivated) {
+                activateText(pitchArea);
+                pitchTextActivated = true;
+            }
 
             if (state.sceneManager?.directionalLight) {
                 const { directionalLight } = state.sceneManager;
@@ -425,6 +442,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                         textChildren.forEach(child => {
                             if (child.classList.contains('active')) {
                                 child.classList.remove('active');
+                                pitchTextActivated = false;
                             }
                         });
 
@@ -666,10 +684,11 @@ let productPhase1Active = false;
 let productPhase1aActive = false;
 let productPhase2Active = false;
 let productPhase3Active = false;
-let lightingTransitionComplete = false;
 let isBlobMobilized = false;
 
+let lightingTransitionComplete = false;
 let productTextActivated = false;
+let pitchTextActivated = false;
 
 let isClickScroll = false;
 let scrollTimeout;
@@ -685,10 +704,10 @@ let originalOuterColor = null;
 // Update the explosion phases to be time percentages
 const EXPLOSION_PHASES = [
     { threshold: 0.05, index: 0 },
-    { threshold: 0.15, index: 1 },
-    { threshold: 0.3, index: 2 },
-    { threshold: 0.4, index: 3 },
-    { threshold: 0.5, index: 4 }
+    { threshold: 0.25, index: 1 },
+    { threshold: 0.45, index: 2 },
+    { threshold: 0.65, index: 3 },
+    { threshold: 0.85, index: 4 }
 ];
 
 export function animatePage(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight) {
