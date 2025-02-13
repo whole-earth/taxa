@@ -3,6 +3,7 @@ import { Tween, Easing } from 'tween';
 import { state } from './anim.js';
 import { cleanupManager } from '../utils/dispose.js';
 import { MOBILIZE_GREEN, DESKTOP_BLUE, MOBILE_BLUE } from '../utils/materials.js';
+import { initActivityTracking, setAnimationFrameId } from '../utils/inactivity.js';
 
 const isMobile = window.innerWidth < 768;
 
@@ -22,6 +23,10 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
     productBool = isVisibleBetweenTopAndBottom(productArea);
     updateScrollIndicator();
 
+    // Get speckleSystem from state
+    const speckleSystem = state.app?.speckleSystem;
+    if (!speckleSystem) return;
+
     // Determine previous section from boolean flags
     const previousSection =
         splashCurrent ? 'splash' :
@@ -36,13 +41,11 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
     updateScrollIndicator();
 
     if (splashBool) {
-
         // TODO: is it more performant to aniamte the scale of the cell, or the fov of the camera?
         splashProgress = scrollProgress(splashArea);
         camera.fov = smoothLerp(splashStartFOV, splashEndFOV, splashProgress);
 
         if (!splashCurrent) {
-
             if (!cellObject.visible) {
                 cellObject.visible = true;
             }
@@ -50,7 +53,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
             activateText(splashArea);
 
             if (zoomCurrent) {
-                dotTweenOpacity(spheres, 1, 0, wavingBlob, fadeOutDuration);
+                speckleSystem.tweenOpacity(0, 0);
                 ribbonTweenOpacity(ribbons, 0, 1);
                 cellSheenTween(blobInner);
                 zoomCurrent = false;
@@ -75,16 +78,13 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
     }
 
     else if (zoomBool) {
-
         if (!zoomCurrent) {
-            dotTweenOpacity(spheres, 0, 1, wavingBlob, fadeInDuration);
+            speckleSystem.tweenOpacity(1, fadeInDuration);
 
             if (splashCurrent) {
                 ribbonTweenOpacity(ribbons, 1, 0);
                 splashCurrent = false;
-
             } else if (pitchCurrent) {
-
                 if (wavingBlob) {
                     restoreDotScale(wavingBlob);
                     wavingBlob.children.forEach(group => {
@@ -100,7 +100,6 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                 }
 
                 cellSheenTween(blobInner);
-
 
                 if (!cellObject.visible) {
                     cellObject.visible = true;
@@ -121,22 +120,27 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
             activateText(zoomArea);
         }
 
-        // TODO i only really need this for telling which third of the section im in. can i make the performance less expensive?
-        zoomProgress = scrollProgress(zoomArea);
+        // Debounced section detection
+        const now = performance.now();
+        if (now - lastZoomUpdate > ZOOM_UPDATE_INTERVAL) {
+            zoomProgress = scrollProgress(zoomArea);
+            cachedZoomSection = Math.floor(zoomProgress * 3);
+            lastZoomUpdate = now;
+        }
 
         if (zoomFirst && zoomSecond && zoomThird) {
-            if (zoomProgress >= 0 && zoomProgress < 1 / 3) {
+            if (cachedZoomSection === 0) {
                 if (!zoomFirstCurrent) {
                     activateText__ZoomChild(zoomFirst);
                     if (zoomCurrent && !zoomSecondCurrent) {
                         cellSheenTween(blobInner, orange);
                     } else if (zoomSecondCurrent) {
-                        dotTweenOpacity(spheres, 1, 0, wavingBlob, fadeOutDuration);
+                        speckleSystem.tweenOpacity(0, fadeOutDuration);
                         setTimeout(() => {
                             if (zoomFirstCurrent) {
-                                dotUpdateColors(spheres, orange);
-                                dotRandomizePositions(spheres, dotBounds);
-                                dotTweenOpacity(spheres, 0, 1, wavingBlob, fadeInDuration);
+                                speckleSystem.updateColors(orange);
+                                speckleSystem.randomizePositions();
+                                speckleSystem.tweenOpacity(1, fadeInDuration);
                             }
                         }, fadeOutDuration);
                     }
@@ -144,34 +148,33 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     zoomSecondCurrent = false;
                 }
             }
-            else if (zoomProgress >= 1 / 3 && zoomProgress < 2 / 3) {
+            else if (cachedZoomSection === 1) {
                 if (!zoomSecondCurrent) {
                     activateText__ZoomChild(zoomSecond);
-                    dotTweenOpacity(spheres, 1, 0, wavingBlob, fadeOutDuration);
+                    speckleSystem.tweenOpacity(0, fadeOutDuration);
                     setTimeout(() => {
                         if (zoomSecondCurrent) {
-                            dotUpdateColors(spheres, yellow);
-                            dotRandomizePositions(spheres, dotBounds);
-                            dotTweenOpacity(spheres, 0, 1, wavingBlob, fadeInDuration);
+                            speckleSystem.updateColors(yellow);
+                            speckleSystem.randomizePositions();
+                            speckleSystem.tweenOpacity(1, fadeInDuration);
                             cellSheenTween(blobInner, yellow);
                         }
                     }, fadeOutDuration);
+                    zoomFirstCurrent = false;
+                    zoomSecondCurrent = true;
+                    zoomThirdCurrent = false;
                 }
-
-                zoomFirstCurrent = false;
-                zoomSecondCurrent = true;
-                zoomThirdCurrent = false;
             }
-            else if (zoomProgress >= 2 / 3 && zoomProgress <= 1) {
+            else if (cachedZoomSection === 2) {
                 if (!zoomThirdCurrent) {
                     activateText__ZoomChild(zoomThird);
                     if (zoomSecondCurrent) {
-                        dotTweenOpacity(spheres, 1, 0, wavingBlob, fadeOutDuration);
+                        speckleSystem.tweenOpacity(0, fadeOutDuration);
                         setTimeout(() => {
                             if (zoomThirdCurrent) {
-                                dotUpdateColors(spheres, green);
-                                dotRandomizePositions(spheres, dotBounds);
-                                dotTweenOpacity(spheres, 0, 1, wavingBlob, fadeInDuration);
+                                speckleSystem.updateColors(green);
+                                speckleSystem.randomizePositions();
+                                speckleSystem.tweenOpacity(1, fadeInDuration);
                                 cellSheenTween(blobInner, green);
                             }
                         }, fadeOutDuration);
@@ -181,7 +184,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                                 group.visible = true;
                             }
                         });
-                        dotTweenOpacity(spheres, 0, 1, wavingBlob, fadeInDuration);
+                        speckleSystem.tweenOpacity(1, fadeInDuration);
                         cellSheenTween(blobInner, green);
                     }
                     zoomSecondCurrent = false;
@@ -192,9 +195,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
     }
 
     else if (pitchBool) {
-
         if (!pitchCurrent) {
-
             if (!pitchTextActivated) {
                 activateText(pitchArea);
                 pitchTextActivated = true;
@@ -202,21 +203,18 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
             // if coming from zoom, trigger explosion
             if (zoomThirdCurrent) {
-
                 if (!isBlobMobilized) {
                     explodedGroups.clear();
-                    const explosionDuration = 1000; // Total duration in ms
+                    const explosionDuration = 1600; // Total duration in ms
 
                     // Trigger blob color change with same duration
-                    //blobTweenMobilized(blobInner, blobOuter, true, window.innerWidth < 768 ? (explosionDuration * 0.7) : explosionDuration);
-                    blobTweenMobilized(blobInner, blobOuter, true, explosionDuration);
-
+                    blobTweenMobilized(blobInner, blobOuter, true, explosionDuration * 0.7);
 
                     // Schedule explosions based on time thresholds
                     EXPLOSION_PHASES.forEach(phase => {
                         setTimeout(() => {
                             if (zoomThirdCurrent && !explodedGroups.has(phase.index)) {
-                                dotsTweenExplosion(wavingBlob, explosionDuration * (1 - phase.threshold), phase.index);
+                                speckleSystem.tweenExplosion(explosionDuration * (1 - phase.threshold), phase.index);
                                 explodedGroups.add(phase.index);
                             }
                         }, explosionDuration * phase.threshold);
@@ -229,7 +227,6 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                             pitchTextActivated = true;
                         }
                     }, explosionDuration * 0.4);
-
                 }
 
                 pitchCurrent = true;
@@ -257,20 +254,10 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     directionalLight.visible = false;
                     directionalLight.intensity = 0;
                 }
-
-                // cleanup dots
-                if (spheres && spheres.length > 0 && spheres[0] && spheres[0].material && spheres[0].material.opacity > 0) {
-                    // only trigger explosion if dots are visible
-                    dotsTweenExplosion(wavingBlob, 800, 80);
-                }
-
             }
             zoomCurrent = false;
             pitchCurrent = true;
         }
-
-        //pitchProgress = scrollProgress(pitchArea);
-        //camera.fov = smoothLerp(pitchStartFOV, pitchEndFOV, pitchProgress);
     }
     else if (productBool) {
         if (!productCurrent) {
@@ -368,9 +355,15 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
         productProgress = scrollProgress__LastElem(productArea);
 
         if (productProgress > 0.5 && !cleanupManager.disposedCellAndStarfield) {
-            //cleanupManager.disposeCellAndStarfield(cellObject, state.starField);
+            console.log('🔄 Product progress > 0.5, disposing cell and starfield');
+            cleanupManager.disposeCellAndStarfield(cellObject, state.starField);
         } else if (productProgress <= 0.5 && cleanupManager.disposedCellAndStarfield) {
-            //cleanupManager.reinstateCellAndStarfield(cellObject, state.starField);
+            console.log('🔄 Product progress <= 0.5, reinstating cell and starfield');
+            cleanupManager.reinstateCellAndStarfield(cellObject, state.starField);
+            // Ensure cell is visible when reinstated
+            if (cellObject) {
+                cellObject.visible = true;
+            }
         }
 
         if (product && product.children) {
@@ -384,7 +377,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     document.querySelector('.nav').classList.remove('clear');
                     navClearFlag = false;
                 }
-                
+
                 if (!productPhase1Active) {
                     resetProductVisibility(product, state.applicatorObject);
                     cellObject.visible = true;
@@ -497,7 +490,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     renderer.toneMappingExposure = smoothLerp(1, 0.6, fadeProgress);
 
                     const productScale = isMobile
-                        ? smoothLerp(16, 2.6, fadeProgress)  // Mobile
+                        ? smoothLerp(16, 3.4, fadeProgress)  // Mobile
                         : smoothLerp(20, 3, fadeProgress);  // Desktop
                     product.scale.setScalar(productScale);
 
@@ -521,7 +514,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     if (!isMobile) {
                         product.scale.setScalar(3);
                     } else if (isMobile) {
-                        product.scale.setScalar(1.6); // TODO update
+                        product.scale.setScalar(3.4); // TODO update
                     }
 
                     product.traverse(child => {
@@ -564,7 +557,6 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
                 renderer.toneMappingExposure = smoothLerp(0.6, 0.36, rotationProgress);
 
-
                 // Handle product movement
                 if (isMobile) {
 
@@ -576,10 +568,10 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                         product.rotation.y = smoothLerp(0, Math.PI / 5, rotationProgress);
                         product.rotation.z = smoothLerp(0, -Math.PI / 6, rotationProgress);
 
-                        product.position.x = smoothLerp(0, -5, rotationProgress);
-                        product.position.y = smoothLerp(0, 6, rotationProgress);
+                        product.position.x = smoothLerp(0, -2, rotationProgress);
+                        product.position.y = smoothLerp(0, 4, rotationProgress);
 
-                        const productScaleStage2 = smoothLerp(2.6, 4, rotationProgress);
+                        const productScaleStage2 = smoothLerp(3.4, 2, rotationProgress);
                         product.scale.setScalar(productScaleStage2);
 
                     }
@@ -672,13 +664,49 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                 pitchCurrent ? 'pitch' :
                     productCurrent ? 'product' : null;
 
+    // Only handle cleanup during actual section transitions
     if (previousSection !== newSection) {
-        // Only clean up if NOT transitioning from splash to zoom
-        // TODO FIX CLEANUP
-        if (!(previousSection === 'splash' && newSection === 'zoom')) {
-            //cleanupSection(previousSection, wavingBlob);
-        }
+        console.log(`🔄 Section changed from ${previousSection} to ${newSection}`);
+        
+        // Use the new centralized disposal logic
+        cleanupManager.handleVisibilityAndDisposal({
+            cellObject,
+            starField: state.starField,
+            speckleSystem: state.app?.speckleSystem,
+            product,
+            ribbons,
+            wavingBlob,
+            splashBool,
+            zoomBool,
+            pitchBool,
+            productBool,
+            productProgress,
+            section: newSection,
+            explodedGroups
+        });
     }
+
+    // Special case: Handle product progress threshold crossing
+    if (productCurrent) {
+        cleanupManager.handleVisibilityAndDisposal({
+            cellObject,
+            starField: state.starField,
+            speckleSystem: state.app?.speckleSystem,
+            product,
+            ribbons,
+            wavingBlob,
+            splashBool,
+            zoomBool,
+            pitchBool,
+            productBool,
+            productProgress,
+            section: newSection,
+            explodedGroups
+        });
+    }
+
+    camera.updateProjectionMatrix();
+    state.lastScrollY = scrollY;
 }
 
 // =====================================================================================
@@ -738,11 +766,11 @@ let originalOuterScale = null;
 
 // Update the explosion phases to be time percentages
 const EXPLOSION_PHASES = [
-    { threshold: 0.05, index: 0 },
-    { threshold: 0.25, index: 1 },
+    { threshold: 0.01, index: 0 },
+    { threshold: 0.2, index: 1 },
     { threshold: 0.45, index: 2 },
-    { threshold: 0.65, index: 3 },
-    { threshold: 0.85, index: 4 }
+    { threshold: 0.7, index: 3 },
+    { threshold: 0.9, index: 4 }
 ];
 
 export function animatePage(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight) {
@@ -889,36 +917,6 @@ const scrollHandler = () => {
 window.removeEventListener('scroll', scrollHandler);
 //cleanupManager.addListener(window, 'scroll', scrollHandler);
 
-function cleanupSection(section, wavingBlob) {
-    switch (section) {
-        case 'splash':
-            if (state.ribbonTweenGroup) {
-                state.ribbonTweenGroup.removeAll();
-            }
-            break;
-        case 'zoom':
-            if (state.dotTweenGroup) {
-                state.dotTweenGroup.removeAll();
-            }
-            if (state.blobTweenGroup) {
-                state.blobTweenGroup.removeAll();
-            }
-            /*
-            // Force complete any pending explosions
-            EXPLOSION_PHASES.forEach(phase => {
-                if (!explodedGroups.has(phase.index)) {
-                    dotsTweenExplosion(wavingBlob, 60, phase.index);
-                }
-            }); */
-            break;
-        case 'product':
-            if (state.starField) {
-                state.starField.visible = false;
-            }
-            break;
-    }
-}
-
 export function cleanup() {
     if (scrollRAF) {
         cancelAnimationFrame(scrollRAF);
@@ -977,7 +975,7 @@ function blobTweenMobilized(blobInner, blobOuter, mobilize = true, duration = 20
     // Single tween for all inner materials and scale
     if (innerMaterialsData.length > 0) {
         const startScale = blobInner.scale.x;
-        const targetScale = mobilize ? 1.2 : originalInnerScale.x;
+        const targetScale = mobilize ? 1.1 : originalInnerScale.x;
 
         const combinedTween = new Tween({ t: 0, scale: startScale })
             .to({ t: 1, scale: targetScale }, duration)
@@ -1133,113 +1131,6 @@ function activateText__ZoomChild(activeElement) {
             }
         });
     }
-}
-
-function dotTweenOpacity(spheres, initialOpacity, targetOpacity, wavingBlob, duration = 300) {
-    state.dotTweenGroup.removeAll();
-    spheres.forEach(sphere => {
-        const currentState = { opacity: initialOpacity };
-        const targetState = { opacity: targetOpacity };
-
-        const sphereTween = new Tween(currentState)
-            .to(targetState, duration)
-            .easing(Easing.Quadratic.InOut)
-            .onUpdate(() => {
-                sphere.material.opacity = currentState.opacity;
-                sphere.material.needsUpdate = true;
-            })
-            .onComplete(() => {
-                state.dotTweenGroup.remove(sphereTween);
-            });
-
-        state.dotTweenGroup.add(sphereTween);
-        sphereTween.start();
-    });
-
-    if (initialOpacity === 0 && targetOpacity === 1) {
-        const initialScale = { scale: 0.96 };
-        const targetScale = { scale: 1.0 };
-
-        const scaleTween = new Tween(initialScale)
-            .to(targetScale, (duration))
-            .easing(Easing.Quadratic.InOut)
-            .onUpdate(() => {
-                wavingBlob.scale.set(initialScale.scale, initialScale.scale, initialScale.scale);
-            })
-            .onComplete(() => {
-                state.dotTweenGroup.remove(scaleTween);
-            });
-
-        state.dotTweenGroup.add(scaleTween);
-        scaleTween.start();
-    }
-}
-
-function dotUpdateColors(spheres, color) {
-    spheres.forEach(sphere => {
-        sphere.material.color = new THREE.Color(color);
-        sphere.material.needsUpdate = true;
-    });
-}
-
-function dotRandomizePositions(spheres, dotBounds) {
-    spheres.forEach(sphere => {
-        const randomPosition = getRandomPositionWithinBounds(dotBounds);
-        sphere.position.copy(randomPosition);
-        const randomDirection = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
-        sphere.velocity = randomDirection.multiplyScalar(0.014);
-        sphere.position.needsUpdate = true;
-        sphere.velocity.needsUpdate = true;
-    });
-
-    function getRandomPositionWithinBounds(bounds) {
-        const x = (Math.random() * 2 - 1) * (bounds * 0.65);
-        const y = (Math.random() * 2 - 1) * (bounds * 0.65);
-        const z = (Math.random() * 2 - 1) * (bounds * 0.65);
-        return new THREE.Vector3(x, y, z);
-    }
-}
-
-function dotsTweenExplosion(wavingBlob, duration, groupIndex) {
-    // Initialize cache if not exists and wavingBlob exists
-    if (!dotGroupsCache && wavingBlob && wavingBlob.children) {
-        dotGroupsCache = wavingBlob.children.filter(group => group && group.isGroup);
-    }
-
-    if (!dotGroupsCache) return;
-
-    const group = dotGroupsCache[groupIndex];
-    if (!group || explodedGroups.has(groupIndex)) return;
-
-    explodedGroups.add(groupIndex);
-    group.visible = true;
-
-    const tweenState = { scale: 1, opacity: 1 };
-    const scaleTween = new Tween(tweenState)
-        .to({ scale: 3, opacity: 0 }, duration)
-        .easing(Easing.Cubic.Out)
-        .onUpdate(() => {
-            group.scale.setScalar(tweenState.scale);
-            if (group.children) {
-                group.children.forEach(sphere => {
-                    if (sphere && sphere.material) {
-                        const opacityDelay = 0.4;
-                        const normalizedTime = tweenState.scale / 3;
-                        const opacity = normalizedTime < opacityDelay ? 1 :
-                            1 - ((normalizedTime - opacityDelay) / (1 - opacityDelay));
-                        sphere.material.opacity = Math.max(0, opacity);
-                        sphere.material.needsUpdate = true;
-                    }
-                });
-            }
-        })
-        .onComplete(() => {
-            state.blobTweenGroup.remove(scaleTween);
-            group.visible = false;
-        });
-
-    state.blobTweenGroup.add(scaleTween);
-    scaleTween.start();
 }
 
 function cellSheenTween(blobInner, color = null) {
@@ -1410,6 +1301,7 @@ function updateScrollIndicator() {
     }
 }
 
+// Scroll navigator
 scrollDots.forEach(dot => {
     const clickHandler = () => {
         const section = dot.dataset.section;
@@ -1447,3 +1339,8 @@ if (zoomArea) {
         cachedViewportHeight = window.innerHeight;
     }, { passive: true });
 }
+
+// Add these near the top with other state variables
+let lastZoomUpdate = 0;
+let cachedZoomSection = -1;
+const ZOOM_UPDATE_INTERVAL = isMobile ? 100 : 30; // ms between updates
