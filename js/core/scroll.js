@@ -199,7 +199,6 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                 activateText(pitchArea);
                 pitchTextActivated = true;
             }
-            document.querySelector('.nav').classList.remove('clear');
 
             // if coming from zoom, trigger explosion
             if (zoomThirdCurrent) {
@@ -262,7 +261,6 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                 // cleanup dots
                 if (spheres && spheres.length > 0 && spheres[0] && spheres[0].material && spheres[0].material.opacity > 0) {
                     // only trigger explosion if dots are visible
-                    //console.log('cleanup remaining dots');
                     dotsTweenExplosion(wavingBlob, 800, 80);
                 }
 
@@ -378,10 +376,18 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
         if (product && product.children) {
             // ===== PHASE 1: Initial Transition (0 to 0.5) =====
             if (productProgress <= 0.5) {
+
+                if (productProgress > 0.18 && !navClearFlag) {
+                    document.querySelector('.nav').classList.add('clear');
+                    navClearFlag = true;
+                } else if (productProgress <= 0.18 && navClearFlag) {
+                    document.querySelector('.nav').classList.remove('clear');
+                    navClearFlag = false;
+                }
+                
                 if (!productPhase1Active) {
                     resetProductVisibility(product, state.applicatorObject);
                     cellObject.visible = true;
-                    document.querySelector('.nav').classList.add('clear');
 
                     // Restore product rotation and position when coming from phase 2
                     if (productPhase2Active) {
@@ -406,6 +412,14 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                             child.material.transparent = true;
                             child.material.depthWrite = true;
                             child.material.depthTest = true;
+                            child.material.needsUpdate = true;
+                        }
+
+                        if (child.name === 'outer-cap' && child.material) {
+                            if (child.material.ior != 200) {
+                                child.material.ior = 200;
+                                child.material.needsUpdate = true;
+                            }
                         }
                     });
 
@@ -526,6 +540,12 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                                 mat.opacity = 1;
                                 mat.needsUpdate = true;
                             });
+                        }
+                        if (child.name === 'outer-cap' && child.material) {
+                            if (child.material.ior != 1.5) {
+                                child.material.ior = 1.5;
+                                child.material.needsUpdate = true;
+                            }
                         }
                     });
 
@@ -701,6 +721,7 @@ let isBlobMobilized = false;
 let lightingTransitionComplete = false;
 let productTextActivated = false;
 let pitchTextActivated = false;
+let navClearFlag = false;
 
 let isClickScroll = false;
 let scrollTimeout;

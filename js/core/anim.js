@@ -11,11 +11,11 @@ import { SpeckleSystem } from '../effects/speckles.js';
 
 const CONFIG = {
     lighting: {
-    ambientIntensity: 4,
-    envMapIntensity: 1,
-    exposure: 1,
-    toneMapping: 'ACESFilmic',
-    enableEnvironment: true
+        ambientIntensity: 4,
+        envMapIntensity: 1,
+        exposure: 1,
+        toneMapping: 'ACESFilmic',
+        enableEnvironment: true
     },
     renderer: {
         antialias: window.innerWidth > 768,
@@ -54,8 +54,8 @@ export const state = {
     scrollTimeout: null,
     lenis: null,
     app: null,
-    setLastScrollY(value) { 
-        this.lastScrollY = value; 
+    setLastScrollY(value) {
+        this.lastScrollY = value;
     }
 };
 
@@ -97,27 +97,27 @@ export class App {
             if (isMobile) {
                 console.log('Mobile device detected, initializing smoothScroll to mobile params');
             }
-                /*
-            state.lenis = new window.Lenis({
-                duration: 2.0,
-                smoothWheel: true,
-                wheelMultiplier: 0.55,
-                touchMultiplier: 3.4,
-                infinite: false,
-                smoothTouch: true,
-                touchInertiaMultiplier: 3,
-                syncTouch: true,
-                syncTouchLerp: 1.4, // testing for mobile
-                overscroll: false
-            });
-            */
+            /*
+        state.lenis = new window.Lenis({
+            duration: 2.0,
+            smoothWheel: true,
+            wheelMultiplier: 0.55,
+            touchMultiplier: 3.4,
+            infinite: false,
+            smoothTouch: true,
+            touchInertiaMultiplier: 3,
+            syncTouch: true,
+            syncTouchLerp: 1.4, // testing for mobile
+            overscroll: false
+        });
+        */
             state.lenis = new window.Lenis({
                 overscroll: false,
                 wheelMultiplier: 0.55,
             });
 
             this.startAnimationLoop();
-            
+
             this.completeInitialization();
         } catch (error) {
             console.error('Failed to initialize:', error);
@@ -131,7 +131,7 @@ export class App {
         state.starField.position.set(0, 0, -20);
         this.sceneManager.camera.add(state.starField);
         this.sceneManager.scene.add(this.sceneManager.camera);
-        
+
         // Ensure proper starfield initialization
         await new Promise(resolve => setTimeout(resolve, 100));
     }
@@ -139,7 +139,7 @@ export class App {
     async loadAllComponents() {
         // Load cell components first
         await this.loadCellComponents();
-        
+
         // Initialize speckle system if inner blob is available
         if (this.blobInner && this.blobInner.getBoundingBox()) {
             const dotBounds = this.blobInner.getBoundingBox().max.z * 0.85;
@@ -152,16 +152,28 @@ export class App {
             try {
                 const product = await new ProductComponent(this.sceneManager.scene, "wednesday.glb", 200);
                 this.product = product;
-                
+
+                // Add reflectivity to outer-cap
+                const productObj = product.getObject();
+                const applicatorGroup = productObj.getObjectByName('applicator');
+                if (applicatorGroup) {
+                    applicatorGroup.traverse(child => {
+                        if (child.name === 'outer-cap' && child.material) {
+                            child.material.ior = 200;
+                            child.material.needsUpdate = true;
+                        }
+                    });
+                }
+
                 this.productAnchor = new THREE.Object3D();
-                this.productAnchor.add(product.getObject());
+                this.productAnchor.add(productObj);
                 this.sceneManager.scene.add(this.productAnchor);
 
                 if (this.sceneManager.directionalContainer) {
-                    product.getObject().add(this.sceneManager.directionalContainer);
+                    productObj.add(this.sceneManager.directionalContainer);
                 }
 
-                return product.getObject();
+                return productObj;
             } catch (error) {
                 console.error('Failed to load product:', error);
                 throw error;
@@ -173,7 +185,7 @@ export class App {
     resetInitialState() {
         window.scrollTo(0, 0);
         state.lastScrollY = 0;
-        
+
         if (state.starField) {
             state.starField.updateProgress(0);
         }
@@ -183,11 +195,11 @@ export class App {
     completeInitialization() {
         this.isInitialized = true;
         initActivityTracking(this.animate);
-        
+
         // Remove loading class and start completion transition
         document.body.classList.remove('loading');
         document.body.classList.add('completing');
-        
+
         // Cleanup after all transitions complete
         setTimeout(() => {
             document.body.classList.remove('completing');
@@ -197,10 +209,10 @@ export class App {
     startAnimationLoop() {
         let lastFrameTime = 0;
         const fpsInterval = 1000 / 60;
-        
+
         const animateLoop = (time) => {
             const elapsed = time - lastFrameTime;
-            
+
             if (elapsed > fpsInterval) {
                 if (state.lenis) {
                     state.lenis.raf(time);
@@ -215,7 +227,7 @@ export class App {
 
     animate = (time) => {
         const needsUpdate = this.updateActiveAnimations();
-        
+
         if (needsUpdate) {
             this.sceneManager.update();
         }
@@ -225,7 +237,7 @@ export class App {
 
     updateActiveAnimations() {
         let needsUpdate = false;
-        
+
         const tweenGroups = [
             state.dotTweenGroup,
             state.ribbonTweenGroup,
@@ -233,7 +245,7 @@ export class App {
             state.mobilizeTweenGroup,
             colorTweenGroup
         ];
-        
+
         for (const group of tweenGroups) {
             if (group.getAll().length > 0) {
                 group.update();
@@ -241,8 +253,8 @@ export class App {
             }
         }
 
-        if (!needsUpdate && 
-            !this.productAnchor?.visible && 
+        if (!needsUpdate &&
+            !this.productAnchor?.visible &&
             !(this.speckleSystem?.wavingBlob.visible)) {
             return false;
         }
@@ -312,7 +324,7 @@ export class App {
         // Scroll handler
         window.addEventListener('scroll', () => {
             if (!this.isInitialized) return;
-            
+
             animatePage(
                 this.sceneManager.controls,
                 this.sceneManager.camera,
