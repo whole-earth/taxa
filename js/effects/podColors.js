@@ -151,7 +151,7 @@ export class ColorChangeAnimationSequence {
 
     createRotationDownTween() {
         return new Tween(this.applicator.rotation, this.tweenGroup)
-            .to({ y: -Math.PI * 0.4 }, 500)
+            .to({ y: -Math.PI * 0.26 }, 500)
             .easing(Easing.Cubic.InOut)
     }
 

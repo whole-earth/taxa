@@ -165,7 +165,7 @@ export const cleanupManager = {
                     }
                     if (child.geometry) {
                         child.geometry.dispose();
-                        //console.log('Disposed cell geometry:', child.geometry);
+                        console.log('Disposed cell geometry:', child.geometry);
                     }
                 });
                 cellObject.visible = false;
@@ -177,15 +177,15 @@ export const cleanupManager = {
             }
             
             this.disposedCellAndStarfield = true;
-            //console.log('Cell and starfield disposal complete');
+            console.log('Cell and starfield disposal complete');
         } else {
-            //console.log('Cell and starfield already disposed');
+            console.log('Cell and starfield already disposed');
         }
     },
 
     reinstateCellAndStarfield(cellObject, starField) {
         if (this.disposedCellAndStarfield) {
-            //console.log('Reinstating cell and starfield...');
+            console.log('Reinstating cell and starfield...');
             if (cellObject) {
                 cellObject.visible = this.originalCellVisibility;
             }
@@ -193,7 +193,7 @@ export const cleanupManager = {
                 starField.visible = this.originalStarfieldVisibility;
             }
             this.disposedCellAndStarfield = false;
-            //console.log('Cell and starfield reinstated');
+            console.log('Cell and starfield reinstated');
         }
     },
 
@@ -215,7 +215,7 @@ export const cleanupManager = {
     },
 
     cleanup() {
-        //console.log('Starting cleanup process...');
+        console.log('Starting cleanup process...');
         
         // Clear any pending disposal timeouts
         this.disposeTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
@@ -226,28 +226,28 @@ export const cleanupManager = {
             this.removeAllListeners(element);
         });
         this.eventListeners.clear();
-        //console.log('Cleaned up all event listeners');
+        console.log('Cleaned up all event listeners');
 
         // Clean up intersection observers
         this.intersectionObservers.forEach(observer => {
             observer.disconnect();
-            //console.log('Disconnected intersection observer:', observer);
+            console.log('Disconnected intersection observer:', observer);
         });
         this.intersectionObservers.clear();
-        //console.log('Cleaned up all intersection observers');
+        console.log('Cleaned up all intersection observers');
 
         // Clean up Three.js resources
         this.disposables.forEach(object => {
             if (object.isObject3D) {
                 this.disposeHierarchy(object);
-                //console.log('Disposed 3D object hierarchy:', object);
+                console.log('Disposed 3D object hierarchy:', object);
             } else if (object.dispose) {
                 this.disposeNode(object);
-                //console.log('Disposed object:', object);
+                console.log('Disposed object:', object);
             }
         });
         this.disposables.clear();
         this.resetDisposalFlags();
-        //console.log('Cleanup process complete');
+        console.log('Cleanup process complete');
     }
 }; 

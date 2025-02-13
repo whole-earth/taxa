@@ -85,7 +85,8 @@ export class SceneManager {
         const directionalContainer = new THREE.Object3D();
         directionalContainer.matrixAutoUpdate = true;
         
-        const spotLight = new THREE.SpotLight(0xfff9f0, 20);
+        // TODO CHANGE TO WHITE
+        const spotLight = new THREE.SpotLight(0x64f106, 20);
         spotLight.position.set(36, -50, 75);
         spotLight.visible = false;
         spotLight.angle = Math.PI/4;

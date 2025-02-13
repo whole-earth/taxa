@@ -94,8 +94,10 @@ export class App {
             this.resetInitialState();
 
             const isMobile = ('ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0) && window.innerWidth < 768;
-            console.log('Mobile device detected, initializing smoothScroll to mobile params');
-            /*
+            if (isMobile) {
+                console.log('Mobile device detected, initializing smoothScroll to mobile params');
+            }
+                /*
             state.lenis = new window.Lenis({
                 duration: 2.0,
                 smoothWheel: true,
@@ -148,7 +150,7 @@ export class App {
     async loadProductOnDemand() {
         if (!this.product) {
             try {
-                const product = await new ProductComponent(this.sceneManager.scene, "newest.glb", 200);
+                const product = await new ProductComponent(this.sceneManager.scene, "wednesday.glb", 200);
                 this.product = product;
                 
                 this.productAnchor = new THREE.Object3D();
