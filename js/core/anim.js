@@ -212,7 +212,6 @@ export class App {
 
         const animateLoop = (time) => {
             this.animationFrameId = requestAnimationFrame(animateLoop);
-            console.log(`Animation frame requested: ${this.animationFrameId}`);
 
             const elapsed = time - lastFrameTime;
             if (elapsed > fpsInterval) {
@@ -225,7 +224,6 @@ export class App {
         };
         
         this.animationFrameId = requestAnimationFrame(animateLoop);
-        console.log(`Initial animation frame requested: ${this.animationFrameId}`);
     }
 
     animate = (time) => {
