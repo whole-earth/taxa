@@ -3,7 +3,7 @@ import { Tween, Easing } from 'tween';
 import { state } from './anim.js';
 import { cleanupManager } from '../utils/dispose.js';
 import { MOBILIZE_GREEN, DESKTOP_BLUE, MOBILE_BLUE } from '../utils/materials.js';
-import { initActivityTracking, setAnimationFrameId } from '../utils/inactivity.js';
+import { initInactivityManager } from '../utils/inactivity.js';
 
 const isMobile = window.innerWidth < 768;
 

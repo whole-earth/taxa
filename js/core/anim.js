@@ -3,11 +3,11 @@ import { Group } from 'tween';
 import { dispersion, dispersionMobile, mauve, pearlBlue } from '../utils/materials.js';
 import { animatePage } from './scroll.js';
 import { StarField, starfieldParams } from '../effects/starfield.js';
-import { initActivityTracking, setAnimationFrameId } from '../utils/inactivity.js';
 import { PRODUCT_COLORS, ColorChangeAnimationSequence, colorTweenGroup } from '../effects/podColors.js';
 import { SceneManager } from './sceneManager.js';
 import { CellComponent, ProductComponent } from '../components/components.js';
 import { SpeckleSystem } from '../effects/speckles.js';
+import { initInactivityManager } from '../utils/inactivity.js';
 
 const CONFIG = {
     lighting: {
@@ -74,7 +74,7 @@ export class App {
         document.body.classList.add('loading');
         this.sceneManager = new SceneManager(CONFIG);
         state.sceneManager = this.sceneManager;
-        state.app = this;  // Store app instance in state
+        state.app = this;
         this.cellObject = new THREE.Object3D();
         this.boundingBoxes = [];
         this.loadedObjects = [];
@@ -87,7 +87,6 @@ export class App {
 
     async init() {
         try {
-
             this.ambientLight = this.sceneManager.initLights();
             await this.loadAllComponents();
             await this.initializeStarfield();
@@ -191,10 +190,11 @@ export class App {
         }
     }
 
-    // TODO PAGE-LOAD ANIMATION
     completeInitialization() {
         this.isInitialized = true;
-        initActivityTracking(this.animate);
+        
+        // Initialize inactivity manager
+        initInactivityManager(this);
 
         // Remove loading class and start completion transition
         document.body.classList.remove('loading');
@@ -211,8 +211,10 @@ export class App {
         const fpsInterval = 1000 / 60;
 
         const animateLoop = (time) => {
-            const elapsed = time - lastFrameTime;
+            this.animationFrameId = requestAnimationFrame(animateLoop);
+            console.log(`Animation frame requested: ${this.animationFrameId}`);
 
+            const elapsed = time - lastFrameTime;
             if (elapsed > fpsInterval) {
                 if (state.lenis) {
                     state.lenis.raf(time);
@@ -220,19 +222,17 @@ export class App {
                 this.animate(time);
                 lastFrameTime = time - (elapsed % fpsInterval);
             }
-            requestAnimationFrame(animateLoop);
         };
-        requestAnimationFrame(animateLoop);
+        
+        this.animationFrameId = requestAnimationFrame(animateLoop);
+        console.log(`Initial animation frame requested: ${this.animationFrameId}`);
     }
 
     animate = (time) => {
         const needsUpdate = this.updateActiveAnimations();
-
         if (needsUpdate) {
             this.sceneManager.update();
         }
-
-        setAnimationFrameId(time);
     }
 
     updateActiveAnimations() {
