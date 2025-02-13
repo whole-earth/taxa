@@ -184,7 +184,7 @@ export class SpeckleSystem {
         const tweenState = { scale: 1, opacity: 1 };
         const explosionTween = new Tween(tweenState)
             .to({ 
-                scale: isMobile ? 2.5 : 3,  // Smaller scale on mobile
+                scale: 1.4,  // Smaller scale on mobile
                 opacity: 0 
             }, isMobile ? duration * 0.8 : duration)  // Faster duration on mobile MAYBE NOT
             .easing(Easing.Quadratic.InOut)
