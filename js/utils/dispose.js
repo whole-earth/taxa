@@ -1,3 +1,5 @@
+import { state } from '../core/anim.js';
+
 export const cleanupManager = {
     eventListeners: new Map(),
     intersectionObservers: new Set(),
@@ -260,19 +262,70 @@ export const cleanupManager = {
     disposeSpeckles(speckleSystem) {
         if (!speckleSystem || this.componentStates.speckles.isDisposed) return;
         
-        console.log('\n✨ Disposing speckle system');
-        this.disposeWithCaching(speckleSystem.wavingBlob, 'speckles');
-        speckleSystem.dispose();
-        console.log('✅ Speckle system disposed\n');
+        console.log('\n✨ Fading out speckle system');
+        
+        try {
+            // Instead of hiding, just set opacity to 0
+            if (speckleSystem.wavingBlob) {
+                speckleSystem.wavingBlob.traverse(child => {
+                    if (child.material) {
+                        child.material.opacity = 0;
+                        child.material.needsUpdate = true;
+                    }
+                });
+            }
+            
+            if (speckleSystem.dotGroups) {
+                speckleSystem.dotGroups.forEach(group => {
+                    if (group && group.children) {
+                        group.children.forEach(child => {
+                            if (child.material) {
+                                child.material.opacity = 0;
+                                child.material.needsUpdate = true;
+                            }
+                        });
+                    }
+                });
+            }
+            
+            // Mark as disposed but keep the system running
+            this.componentStates.speckles.isDisposed = true;
+            this.componentStates.speckles.isVisible = false;
+            
+            console.log('✅ Speckle system faded out\n');
+        } catch (error) {
+            console.error('❌ Error fading out speckle system:', error);
+            this.componentStates.speckles.isDisposed = true;
+        }
     },
 
     reinstateSpeckles(speckleSystem) {
         if (!speckleSystem || !this.componentStates.speckles.isDisposed) return;
         
-        console.log('\n✨ Reinstating speckle system');
-        this.reinstateWithCache(speckleSystem.wavingBlob, 'speckles');
-        speckleSystem.initializeSpeckles();
-        console.log('✅ Speckle system reinstated\n');
+        console.log('\n✨ Fading in speckle system');
+        
+        try {
+            
+            if (speckleSystem.dotGroups) {
+                speckleSystem.dotGroups.forEach(group => {
+                    if (group && group.children) {
+                        group.children.forEach(child => {
+                            if (child.material) {
+                                child.material.opacity = 1;
+                                child.material.needsUpdate = true;
+                            }
+                        });
+                    }
+                });
+            }
+            
+            this.componentStates.speckles.isDisposed = false;
+            this.componentStates.speckles.isVisible = true;
+            
+            console.log('✅ Speckle system faded in\n');
+        } catch (error) {
+            console.error('❌ Error fading in speckle system:', error);
+        }
     },
 
     disposeRibbons(ribbons) {

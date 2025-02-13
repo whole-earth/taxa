@@ -9,7 +9,7 @@ const SPECKLE_CONFIG = {
         [0.14, 0.18, 0.22] :  // Fewer size variations on mobile
         [0.12, 0.14, 0.16, 0.18, 0.22],
     colors: {
-        default: 0xff8e00
+        default: 0xffbb65
     },
     groups: {
         count: window.innerWidth < 768 ? 3 : 5,
@@ -52,15 +52,7 @@ export class SpeckleSystem {
     }
 
     createWavingBlob() {
-        const waveGeom = new THREE.SphereGeometry(this.dotBounds, 32, 32);
-        const waveMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0x92cb86, 
-            opacity: 0, 
-            transparent: true, 
-            depthWrite: false, 
-            depthTest: false 
-        });
-        const wavingBlob = new THREE.Mesh(waveGeom, waveMaterial);
+        const wavingBlob = new THREE.Group();
         wavingBlob.renderOrder = 5;
         this.scene.add(wavingBlob);
         return wavingBlob;
@@ -238,7 +230,6 @@ export class SpeckleSystem {
         this.groupMaterials.forEach(material => material.dispose());
         
         this.spheres.length = 0; // Clear array
-        this.wavingBlob.geometry.dispose();
-        this.wavingBlob.material.dispose();
+        this.wavingBlob.children.forEach(child => child.geometry.dispose());
     }
 } 
