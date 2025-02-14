@@ -588,9 +588,9 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                         product.rotation.z = smoothLerp(0, -Math.PI / 8, zRotationProgress);
 
                         product.position.x = smoothLerp(0, -20, zRotationProgress);
-                        product.position.y = smoothLerp(0, -14, zRotationProgress);
+                        product.position.y = smoothLerp(0, -16, zRotationProgress);
 
-                        const productScale = smoothLerp(4, 5, zRotationProgress);
+                        const productScale = smoothLerp(4, 5.5, zRotationProgress);
                         product.scale.setScalar(productScale);
 
                     }
@@ -826,7 +826,7 @@ export function animatePage(controls, camera, cellObject, blobInner, blobOuter, 
 
     }
 
-    const throttleDuration = isMobile ? 200 : 100;
+    const throttleDuration = isMobile ? 100 : 100;
     throttle(() => scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight), throttleDuration)();
 
     camera.updateProjectionMatrix();

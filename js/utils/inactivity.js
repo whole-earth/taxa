@@ -6,7 +6,7 @@
 class InactivityManager {
     constructor() {
         // Increase thresholds for better performance
-        this.INACTIVITY_THRESHOLD = 30000; // 30 seconds
+        this.INACTIVITY_THRESHOLD = 40000; // 40 seconds
         this.CHECK_INTERVAL = 3000; // Check every 3 seconds
         this.THROTTLE_DELAY = 250; // More aggressive throttling
         this.BOTTOM_THRESHOLD = 40; // Bottom page threshold

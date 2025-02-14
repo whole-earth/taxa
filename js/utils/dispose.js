@@ -1,4 +1,4 @@
-import { state } from '../core/anim.js';
+//import { state } from '../core/anim.js';
 
 export const cleanupManager = {
     eventListeners: new Map(),
@@ -262,39 +262,81 @@ export const cleanupManager = {
     disposeSpeckles(speckleSystem) {
         if (!speckleSystem || this.componentStates.speckles.isDisposed) return;
         
-        // console.log('\n✨ Fading out speckle system');
+        console.time('disposeSpeckles');
+        console.log('\n🎯 Starting speckle system disposal process');
         
         try {
-            // Instead of hiding, just set opacity to 0
+            // Create arrays to hold all items that need disposal
+            const materialsToDispose = [];
+            const meshesToDispose = [];
+            
+            // Collect all materials and meshes from waving blob
             if (speckleSystem.wavingBlob) {
+                console.log('📊 Collecting waving blob resources...');
                 speckleSystem.wavingBlob.traverse(child => {
                     if (child.material) {
-                        child.material.opacity = 0;
-                        child.material.needsUpdate = true;
+                        if (Array.isArray(child.material)) {
+                            materialsToDispose.push(...child.material);
+                        } else {
+                            materialsToDispose.push(child.material);
+                        }
+                    }
+                    if (child.geometry) {
+                        meshesToDispose.push(child);
                     }
                 });
             }
             
+            // Collect all materials and meshes from dot groups
             if (speckleSystem.dotGroups) {
+                console.log('📊 Collecting dot group resources...');
                 speckleSystem.dotGroups.forEach(group => {
                     if (group && group.children) {
                         group.children.forEach(child => {
                             if (child.material) {
-                                child.material.opacity = 0;
-                                child.material.needsUpdate = true;
+                                if (Array.isArray(child.material)) {
+                                    materialsToDispose.push(...child.material);
+                                } else {
+                                    materialsToDispose.push(child.material);
+                                }
+                            }
+                            if (child.geometry) {
+                                meshesToDispose.push(child);
                             }
                         });
                     }
                 });
             }
             
-            // Mark as disposed but keep the system running
-            this.componentStates.speckles.isDisposed = true;
-            this.componentStates.speckles.isVisible = false;
-            
-            // console.log('✅ Speckle system faded out\n');
+            // Use the speckle system's disposal manager for progressive disposal
+            if (speckleSystem.disposalManager) {
+                const allItems = [...materialsToDispose, ...meshesToDispose];
+                console.log(`📦 Queuing ${allItems.length} items for progressive disposal`);
+                
+                speckleSystem.disposalManager.addToQueue(allItems, () => {
+                    // Mark as disposed but keep the system running
+                    this.componentStates.speckles.isDisposed = true;
+                    this.componentStates.speckles.isVisible = false;
+                    console.timeEnd('disposeSpeckles');
+                    console.log('✨ Speckle system disposal complete\n');
+                });
+            } else {
+                // Fallback to immediate disposal if no disposal manager
+                console.warn('⚠️ No disposal manager found, falling back to immediate disposal');
+                materialsToDispose.forEach(material => material.dispose());
+                meshesToDispose.forEach(mesh => {
+                    if (mesh.geometry) mesh.geometry.dispose();
+                    if (mesh.dispose) mesh.dispose();
+                });
+                
+                this.componentStates.speckles.isDisposed = true;
+                this.componentStates.speckles.isVisible = false;
+                console.timeEnd('disposeSpeckles');
+                console.log('✨ Speckle system disposal complete\n');
+            }
         } catch (error) {
-            console.error('❌ Error fading out speckle system:', error);
+            console.error('❌ Error during speckle system disposal:', error);
+            console.timeEnd('disposeSpeckles');
             this.componentStates.speckles.isDisposed = true;
         }
     },
@@ -302,29 +344,38 @@ export const cleanupManager = {
     reinstateSpeckles(speckleSystem) {
         if (!speckleSystem || !this.componentStates.speckles.isDisposed) return;
         
-        // console.log('\n✨ Fading in speckle system');
+        console.time('reinstateSpeckles');
+        console.log('\n🔄 Starting speckle system reinstatement');
         
         try {
-            
             if (speckleSystem.dotGroups) {
+                console.log('📊 Processing dot groups for reinstatement...');
+                let processedGroups = 0;
+                let processedMaterials = 0;
+                
                 speckleSystem.dotGroups.forEach(group => {
                     if (group && group.children) {
+                        processedGroups++;
                         group.children.forEach(child => {
                             if (child.material) {
                                 child.material.opacity = 1;
                                 child.material.needsUpdate = true;
+                                processedMaterials++;
                             }
                         });
                     }
                 });
+                console.log(`✅ Reinstated ${processedMaterials} materials across ${processedGroups} groups`);
             }
             
             this.componentStates.speckles.isDisposed = false;
             this.componentStates.speckles.isVisible = true;
             
-            // console.log('✅ Speckle system faded in\n');
+            console.timeEnd('reinstateSpeckles');
+            console.log('✨ Speckle system reinstatement complete\n');
         } catch (error) {
-            console.error('❌ Error fading in speckle system:', error);
+            console.error('❌ Error during speckle system reinstatement:', error);
+            console.timeEnd('reinstateSpeckles');
         }
     },
 

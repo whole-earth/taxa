@@ -9,7 +9,7 @@ const DEVICE = {
 export const starfieldParams = {
     geometry: {
         start: {
-            z: -20,      // Starting depth position
+            z: -10,      // Starting depth position
             diameter: 50 // Starting diameter of the starfield circle
         },
         end: {
@@ -31,19 +31,8 @@ export const starfieldParams = {
     },
     performance: {
         updateFrequency: DEVICE.isMobile ? 2 : 1, // Update every N frames
-        progressThreshold: 0.001 // Minimum progress change to trigger update
+        progressThreshold: 1 // Minimum progress change to trigger update
     }
-};
-
-
-const generateColorPattern = () => {
-    const { count, basePattern } = starfieldParams.lines;
-    const pattern = [];
-    for (let i = 0; i < count; i++) {
-        pattern.push(basePattern[i % basePattern.length]);
-    }
-
-    return pattern;
 };
 
 const SHADERS = {
@@ -136,7 +125,6 @@ export class StarField extends THREE.Group {
 
     _generateUniformPoints(count) {
         const points = [];
-        // Generate points in clockwise order
         for (let i = 0; i < count; i++) {
             const angle = (i / count) * Math.PI * 2;
             points.push(new THREE.Vector2(
@@ -153,10 +141,9 @@ export class StarField extends THREE.Group {
     }
 
     async _createStarField(MeshLine, MeshLineMaterial) {
-        const { lines, geometry } = this.config;
+        const { lines } = this.config;
         const points = this._generateUniformPoints(lines.count);
 
-        // Create base geometry
         const lineGeometry = new THREE.BufferGeometry();
         const positions = new Float32Array([
             -0.5, 0, 0, 0.5, 0, 0, -0.5, 1, 0, 0.5, 1, 0
@@ -165,13 +152,10 @@ export class StarField extends THREE.Group {
         lineGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
         lineGeometry.setIndex(new THREE.BufferAttribute(indices, 1));
 
-        // Setup instance attributes
         this._setupInstanceAttributes(lineGeometry, points);
 
-        // Create shader material
         const material = this._createShaderMaterial();
 
-        // Create and add instanced mesh
         this.linesMesh = new THREE.InstancedMesh(lineGeometry, material, lines.count);
         this.linesMesh.frustumCulled = false;
         this.linesMesh.renderOrder = 1;
@@ -189,7 +173,6 @@ export class StarField extends THREE.Group {
             const startRadius = geo.start.diameter / 2;
             const endRadius = geo.end.diameter / 2;
 
-            // Set positions
             const idx = i * 3;
             startPositions[idx] = points[i].x * startRadius;
             startPositions[idx + 1] = points[i].y * startRadius;
@@ -199,7 +182,6 @@ export class StarField extends THREE.Group {
             endPositions[idx + 1] = points[i].y * endRadius;
             endPositions[idx + 2] = geo.end.z;
 
-            // Set color based on clockwise position
             const color = new THREE.Color(this.config.colors[this._getColorForIndex(i)]);
             colors[idx] = color.r;
             colors[idx + 1] = color.g;

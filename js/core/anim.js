@@ -142,7 +142,7 @@ export class App {
         // Initialize speckle system if inner blob is available
         if (this.blobInner && this.blobInner.getBoundingBox()) {
             const dotBounds = this.blobInner.getBoundingBox().max.z * 0.85;
-            this.speckleSystem = new SpeckleSystem(this.sceneManager.scene, dotBounds);
+            this.speckleSystem = new SpeckleSystem(this.sceneManager.scene, dotBounds, this.cellObject);
         }
     }
 
