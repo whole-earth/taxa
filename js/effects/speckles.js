@@ -6,13 +6,10 @@ const isMobile = window.innerWidth < 768;
 
 const MOBILE_CONFIG = {
     count: 140,
-    sizeMultiplier: 1.2,
-    sizes: [0.14, 0.18, 0.22],
+    sizeMultiplier: 1.0,
+    size: 0.18,
     colors: {
         default: 0xffbb65
-    },
-    groups: {
-        count: 3
     },
     animation: {
         fadeInDuration: 400,
@@ -22,7 +19,7 @@ const MOBILE_CONFIG = {
 };
 
 const DESKTOP_CONFIG = {
-    count: 200,
+    count: 600,
     sizeMultiplier: 1,
     sizes: [0.12, 0.14, 0.16, 0.18, 0.22],
     colors: {
@@ -37,6 +34,15 @@ const DESKTOP_CONFIG = {
         fadeOutDuration: 180,
         baseVelocity: 0.014
     }
+};
+
+const PERFORMANCE_CONFIG = {
+    frameSkip: isMobile ? 2 : 1,  // Update every N frames
+    batchSize: isMobile ? 16 : 32, // Smaller batches for mobile
+    cullingDistance: 100,  // Distance for frustum culling
+    poolSize: isMobile ? 
+        MOBILE_CONFIG.count : 
+        DESKTOP_CONFIG.count * DESKTOP_CONFIG.sizes.length
 };
 
 const SPECKLE_CONFIG = isMobile ? MOBILE_CONFIG : DESKTOP_CONFIG;
@@ -195,83 +201,170 @@ export class SpeckleSystem {
         this.scene = scene;
         this.dotBounds = dotBounds;
         this.isMobile = window.innerWidth < 768;
+        
+        // Pre-calculate values used frequently
+        this.boxSizeHalf = (this.isMobile ? MOBILE_CONFIG.boxSize : this.dotBounds) * 0.5;
+        
         this.wavingBlob = this.createWavingBlob();
         
         if (cellObject) {
             cellObject.add(this.wavingBlob);
         }
         
-        // Create a simpler geometry for instances - just 4x4 segments is enough for dots
-        this.sharedGeometry = new THREE.SphereGeometry(1, 4, 4);
+        // Use simpler geometry for mobile
+        this.sharedGeometry = this.isMobile ? 
+            new THREE.OctahedronGeometry(1) :  // Simpler geometry for mobile
+            new THREE.SphereGeometry(1, 4, 4);
         
-        // Create materials for each group
-        this.materials = SPECKLE_CONFIG.sizes.map(() => new THREE.MeshBasicMaterial({ 
-            color: SPECKLE_CONFIG.colors.default, 
-            opacity: 0, 
-            transparent: true, 
-            depthWrite: true,
+        // Cache frequently used values
+        this.dotBoundsSquared = this.dotBounds * this.dotBounds;
+        this.boundsBuffer = Math.sqrt(this.dotBoundsSquared) * 0.98;
+        
+        // Optimize material creation
+        const materialConfig = {
+            color: SPECKLE_CONFIG.colors.default,
+            opacity: 0,
+            transparent: true,
+            depthWrite: false,
             depthTest: true,
-            precision: this.isMobile ? 'lowp' : 'mediump'
-        }));
+            precision: 'lowp',
+            fog: false,
+            flatShading: true,
+            // Add side: THREE.FrontSide for better performance
+            side: THREE.FrontSide
+        };
 
-        // Create instanced meshes for each size group
-        this.instancedMeshes = [];
-        this.instanceMatrices = []; // Store matrices for updates
-        this.velocities = []; // Store velocities for desktop
+        // Create materials - single material for mobile, multiple for desktop
+        if (this.isMobile) {
+            this.materials = [new THREE.MeshBasicMaterial(materialConfig)];
+        } else {
+            this.materials = DESKTOP_CONFIG.sizes.map(() => new THREE.MeshBasicMaterial(materialConfig));
+        }
+
+        // Add frame counter for update throttling
+        this.frameCount = 0;
         
-        const countPerSize = Math.ceil(SPECKLE_CONFIG.count / SPECKLE_CONFIG.sizes.length);
+        // Add frustum culling support
+        this.frustum = new THREE.Frustum();
+        this.projScreenMatrix = new THREE.Matrix4();
+        this.boundingSphere = new THREE.Sphere(new THREE.Vector3(), PERFORMANCE_CONFIG.cullingDistance);
         
-        SPECKLE_CONFIG.sizes.forEach((size, sizeIndex) => {
-            const instancedMesh = new THREE.InstancedMesh(
-                this.sharedGeometry,
-                this.materials[sizeIndex],  // Use group-specific material
-                countPerSize
-            );
-            instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-            instancedMesh.renderOrder = 2; // Set to render after blobs (which should be 0 and 1) but before ribbons
-            
-            const matrices = new Array(countPerSize);
-            const velocities = !this.isMobile ? new Array(countPerSize) : null;
-            
-            // Initialize positions and matrices
-            for (let i = 0; i < countPerSize; i++) {
-                const matrix = new THREE.Matrix4();
-                const position = this.getRandomPositionWithinBounds();
-                const scale = size * SPECKLE_CONFIG.sizeMultiplier;
-                
-                matrix.makeScale(scale, scale, scale);
-                matrix.setPosition(position);
-                instancedMesh.setMatrixAt(i, matrix);
-                matrices[i] = matrix;
-                
-                if (!this.isMobile) {
-                    const randomDirection = new THREE.Vector3(
-                        Math.random() - 0.5,
-                        Math.random() - 0.5,
-                        Math.random() - 0.5
-                    ).normalize();
-                    velocities[i] = randomDirection.multiplyScalar(
-                        DESKTOP_CONFIG.animation.baseVelocity
-                    );
-                }
-            }
-            
-            this.instancedMeshes.push(instancedMesh);
-            this.instanceMatrices.push(matrices);
-            if (!this.isMobile) this.velocities.push(velocities);
-            
-            this.wavingBlob.add(instancedMesh);
-        });
+        // Pre-allocate more reusable objects
+        this.tempMatrix = new THREE.Matrix4();
+        this.tempPosition = new THREE.Vector3();
+        this.tempQuaternion = new THREE.Quaternion();
+        this.tempScale = new THREE.Vector3();
+        this.tempVector = new THREE.Vector3();
+        this.noRotation = new THREE.Quaternion();
+        this.tempColor = new THREE.Color();
         
-        // Update function for desktop
+        // Initialize instanced meshes
+        if (this.isMobile) {
+            this.initializeMobileInstancedMesh();
+        } else {
+            const countPerSize = Math.ceil(DESKTOP_CONFIG.count / DESKTOP_CONFIG.sizes.length);
+            this.initializeInstancedMeshes(countPerSize);
+        }
+        
+        // Optimize update function
         if (!this.isMobile) {
             this.updatePositions = this.createUpdatePositionsFunction();
         } else {
             this.updatePositions = () => {};
         }
 
+        // Initialize object pool with optimized size
         this.disposalManager = new ProgressiveDisposal();
-        this.pool = new SpecklePool(this.isMobile ? MOBILE_CONFIG.count : DESKTOP_CONFIG.count);
+        this.pool = new SpecklePool(PERFORMANCE_CONFIG.poolSize);
+    }
+
+    initializeMobileInstancedMesh() {
+        this.instancedMeshes = [];
+        this.instanceMatrices = [];
+        
+        const instancedMesh = new THREE.InstancedMesh(
+            this.sharedGeometry,
+            this.materials[0],
+            MOBILE_CONFIG.count
+        );
+        
+        instancedMesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+        instancedMesh.renderOrder = 2;
+        
+        const matrices = new Array(MOBILE_CONFIG.count);
+        const scale = MOBILE_CONFIG.size * MOBILE_CONFIG.sizeMultiplier;
+        this.tempScale.set(scale, scale, scale);
+        
+        // Batch matrix updates
+        for (let i = 0; i < MOBILE_CONFIG.count; i++) {
+            const matrix = new THREE.Matrix4();
+            this.getRandomPositionWithinBounds();
+            
+            // Use pre-allocated objects
+            matrix.compose(this.tempPosition, this.noRotation, this.tempScale);
+            instancedMesh.setMatrixAt(i, matrix);
+            matrices[i] = matrix;
+        }
+        
+        instancedMesh.instanceMatrix.needsUpdate = true;
+        
+        this.instancedMeshes.push(instancedMesh);
+        this.instanceMatrices.push(matrices);
+        
+        this.wavingBlob.add(instancedMesh);
+    }
+
+    initializeInstancedMeshes(countPerSize) {
+        this.instancedMeshes = [];
+        this.instanceMatrices = [];
+        this.velocities = !this.isMobile ? [] : null;
+        
+        SPECKLE_CONFIG.sizes.forEach((size, sizeIndex) => {
+            const instancedMesh = new THREE.InstancedMesh(
+                this.sharedGeometry,
+                this.materials[sizeIndex],
+                countPerSize
+            );
+            
+            instancedMesh.instanceMatrix.setUsage(this.isMobile ? THREE.StaticDrawUsage : THREE.DynamicDrawUsage);
+            instancedMesh.renderOrder = 2;
+            
+            const matrices = new Array(countPerSize);
+            const velocities = !this.isMobile ? new Array(countPerSize) : null;
+            const scale = size * SPECKLE_CONFIG.sizeMultiplier;
+            
+            // Batch matrix updates
+            for (let i = 0; i < countPerSize; i++) {
+                const matrix = new THREE.Matrix4();
+                const position = this.getRandomPositionWithinBounds();
+                
+                matrix.makeScale(scale, scale, scale);
+                matrix.setPosition(position);
+                instancedMesh.setMatrixAt(i, matrix);
+                matrices[i] = matrix;
+                
+                // Initialize velocities for desktop only
+                if (!this.isMobile && velocities) {
+                    const randomDirection = new THREE.Vector3(
+                        Math.random() - 0.5,
+                        Math.random() - 0.5,
+                        Math.random() - 0.5
+                    ).normalize();
+                    velocities[i] = randomDirection.multiplyScalar(DESKTOP_CONFIG.animation.baseVelocity);
+                }
+            }
+            
+            // Single update after all matrices are set
+            instancedMesh.instanceMatrix.needsUpdate = true;
+            
+            this.instancedMeshes.push(instancedMesh);
+            this.instanceMatrices.push(matrices);
+            if (!this.isMobile && velocities) {
+                this.velocities.push(velocities);
+            }
+            
+            this.wavingBlob.add(instancedMesh);
+        });
     }
 
     createWavingBlob() {
@@ -282,52 +375,81 @@ export class SpeckleSystem {
 
     getRandomPositionWithinBounds() {
         if (this.isMobile) {
-            return new THREE.Vector3(
-                (Math.random() - 0.5) * MOBILE_CONFIG.boxSize,
-                (Math.random() - 0.5) * MOBILE_CONFIG.boxSize,
-                (Math.random() - 0.5) * MOBILE_CONFIG.boxSize
+            return this.tempPosition.set(
+                (Math.random() - 0.5) * this.boxSizeHalf * 2,
+                (Math.random() - 0.5) * this.boxSizeHalf * 2,
+                (Math.random() - 0.5) * this.boxSizeHalf * 2
             );
         }
         
-        const scale = 0.65;
-        return new THREE.Vector3(
-            (Math.random() * 2 - 1) * (this.dotBounds * scale),
-            (Math.random() * 2 - 1) * (this.dotBounds * scale),
-            (Math.random() * 2 - 1) * (this.dotBounds * scale)
+        const scaledBounds = this.dotBounds * 0.65;
+        return this.tempPosition.set(
+            (Math.random() * 2 - 1) * scaledBounds,
+            (Math.random() * 2 - 1) * scaledBounds,
+            (Math.random() * 2 - 1) * scaledBounds
         );
     }
 
     createUpdatePositionsFunction() {
-        const tempMatrix = new THREE.Matrix4();
-        const tempPosition = new THREE.Vector3();
-        const tempQuaternion = new THREE.Quaternion();  // Add quaternion for decompose
-        const tempScale = new THREE.Vector3();
-        
-        return function() {
-            if (!this.wavingBlob.visible) return;
+        return function(camera) {
+            // Skip frames based on config
+            if (this.frameCount++ % PERFORMANCE_CONFIG.frameSkip !== 0) return;
+            
+            // Early exit conditions
+            if (!this.wavingBlob?.visible || !this.velocities?.length) return;
+            
+            // Only do frustum culling if camera is provided
+            let isVisible = true;
+            if (camera?.projectionMatrix) {
+                // Update frustum culling
+                this.projScreenMatrix.multiplyMatrices(
+                    camera.projectionMatrix,
+                    camera.matrixWorldInverse
+                );
+                this.frustum.setFromProjectionMatrix(this.projScreenMatrix);
+                
+                // Update bounding sphere position to match wavingBlob
+                this.boundingSphere.center.copy(this.wavingBlob.position);
+                
+                // Check visibility
+                isVisible = this.frustum.intersectsSphere(this.boundingSphere);
+            }
+            
+            // Skip updates if not visible
+            if (!isVisible) return;
             
             this.instancedMeshes.forEach((instancedMesh, meshIndex) => {
-                if (!instancedMesh.visible) return;
+                if (!instancedMesh?.visible) return;
                 
-                const matrices = this.instanceMatrices[meshIndex];
-                const velocities = this.velocities[meshIndex];
-                const dotBoundsSquared = this.dotBounds * this.dotBounds;
+                const matrices = this.instanceMatrices?.[meshIndex];
+                const velocities = this.velocities?.[meshIndex];
+                if (!matrices?.length || !velocities?.length) return;
+                
                 let needsUpdate = false;
+                const count = matrices.length;
                 
-                for (let i = 0; i < matrices.length; i++) {
-                    const matrix = matrices[i];
-                    matrix.decompose(tempPosition, tempQuaternion, tempScale);
+                // Process in optimized batches
+                const batchSize = PERFORMANCE_CONFIG.batchSize;
+                for (let batch = 0; batch < count; batch += batchSize) {
+                    const end = Math.min(batch + batchSize, count);
                     
-                    tempPosition.add(velocities[i]);
-                    
-                    if (tempPosition.lengthSq() > dotBoundsSquared) {
-                        velocities[i].negate();
+                    for (let i = batch; i < end; i++) {
+                        const matrix = matrices[i];
+                        const velocity = velocities[i];
+                        if (!matrix || !velocity) continue;
+                        
+                        matrix.decompose(this.tempPosition, this.tempQuaternion, this.tempScale);
+                        this.tempPosition.add(velocity);
+                        
+                        if (this.tempPosition.lengthSq() > this.dotBoundsSquared) {
+                            velocity.negate();
+                            this.tempPosition.normalize().multiplyScalar(this.boundsBuffer);
+                        }
+                        
+                        this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
+                        instancedMesh.setMatrixAt(i, this.tempMatrix);
+                        needsUpdate = true;
                     }
-                    
-                    // Optimize by composing directly without recreating scale matrix
-                    tempMatrix.compose(tempPosition, tempQuaternion, tempScale);
-                    instancedMesh.setMatrixAt(i, tempMatrix);
-                    needsUpdate = true;
                 }
                 
                 if (needsUpdate) {
@@ -338,14 +460,45 @@ export class SpeckleSystem {
     }
 
     tweenExplosion(duration, startingGroupIndex = 0) {
-        const DELAY_BETWEEN_GROUPS = 400; // 0.4 seconds delay between groups
+        if (this.isMobile) {
+            // Single explosion for all dots on mobile - ignore startingGroupIndex
+            const material = this.materials[0];
+            const mesh = this.instancedMeshes[0];
+            
+            if (!material || !mesh) return;
+            
+            // Ensure any previous explosion is cleaned up
+            state.blobTweenGroup.removeAll();
+            
+            const tweenState = { scale: 1, opacity: material.opacity };
+            
+            const explosionTween = new Tween(tweenState)
+                .to({ scale: 1.5, opacity: 0 }, duration * 0.6)
+                .easing(Easing.Quadratic.Out)
+                .onUpdate(() => {
+                    mesh.scale.setScalar(tweenState.scale);
+                    material.opacity = Math.max(0, tweenState.opacity);
+                    material.needsUpdate = true;
+                })
+                .onComplete(() => {
+                    state.blobTweenGroup.remove(explosionTween);
+                    // Ensure mesh is hidden after explosion
+                    mesh.visible = false;
+                });
+
+            state.blobTweenGroup.add(explosionTween);
+            explosionTween.start();
+            return;
+        }
+
+        // Existing desktop implementation
+        const DELAY_BETWEEN_GROUPS = 400;
         
         const startExplosionForGroup = (groupIndex) => {
             const instancedMesh = this.instancedMeshes[groupIndex];
             if (!instancedMesh) return;
             
             const material = this.materials[groupIndex];
-            const isMobile = window.innerWidth < 768;
             
             // Create a group to handle scaling
             const group = new THREE.Group();
@@ -358,7 +511,7 @@ export class SpeckleSystem {
                 .to({ 
                     scale: 1.8,
                     opacity: 0 
-                }, isMobile ? duration * 0.8 : duration)
+                }, duration)
                 .easing(Easing.Quadratic.InOut)
                 .onUpdate(() => {
                     // Update group scale
@@ -374,6 +527,7 @@ export class SpeckleSystem {
                     this.wavingBlob.add(instancedMesh);
                     this.wavingBlob.remove(group);
                     group.remove(instancedMesh);
+                    instancedMesh.visible = false;
                     
                     // Start next group if there is one
                     const nextGroupIndex = groupIndex + 1;
@@ -393,6 +547,25 @@ export class SpeckleSystem {
     }
 
     tweenOpacity(targetOpacity, duration) {
+        if (this.isMobile) {
+            // Single tween for the only material on mobile
+            const material = this.materials[0];
+            const tweenState = { opacity: material.opacity };
+            
+            const tween = new Tween(tweenState)
+                .to({ opacity: targetOpacity }, duration)
+                .easing(Easing.Quadratic.InOut)
+                .onUpdate(() => {
+                    material.opacity = tweenState.opacity;
+                    material.needsUpdate = true;
+                });
+            
+            state.dotTweenGroup.add(tween);
+            tween.start();
+            return;
+        }
+
+        // Existing desktop implementation
         const tweens = this.materials.map((material, index) => {
             const tweenState = { opacity: material.opacity };
             
@@ -415,65 +588,140 @@ export class SpeckleSystem {
     }
 
     reset() {
-        // Make sure wavingBlob is visible first
+        // Clear any ongoing tweens first
+        state.blobTweenGroup.removeAll();
+        state.dotTweenGroup.removeAll();
+        
         this.wavingBlob.visible = true;
         
-        // Reset visibility and opacity
-        this.instancedMeshes.forEach((instancedMesh, meshIndex) => {
-            instancedMesh.visible = true;
-            this.materials[meshIndex].opacity = 0;
-            this.materials[meshIndex].needsUpdate = true;
+        if (this.isMobile) {
+            // Reinitialize mobile mesh with original configuration
+            const instancedMesh = this.instancedMeshes[0];
+            const material = this.materials[0];
             
-            // Ensure mesh is directly under wavingBlob
+            if (!instancedMesh || !material) return;
+            
+            // Force visibility and reset material
+            instancedMesh.visible = true;
+            material.opacity = 0;
+            material.transparent = true;
+            material.needsUpdate = true;
+            
             if (instancedMesh.parent !== this.wavingBlob) {
                 this.wavingBlob.add(instancedMesh);
             }
             
-            // Reset scale
+            // Reset scale to original configuration
             instancedMesh.scale.setScalar(1);
+            this.wavingBlob.scale.setScalar(1);
             
-            // Reset positions and scales
-            const matrices = this.instanceMatrices[meshIndex];
-            const velocities = this.velocities[meshIndex];
-            const size = SPECKLE_CONFIG.sizes[meshIndex];
+            // Use original mobile configuration
+            const scale = MOBILE_CONFIG.size * MOBILE_CONFIG.sizeMultiplier;
             
-            const tempMatrix = new THREE.Matrix4();
-            
-            for (let i = 0; i < matrices.length; i++) {
-                const matrix = matrices[i];
-                const position = this.getRandomPositionWithinBounds();
-                const scale = size * SPECKLE_CONFIG.sizeMultiplier;
+            // Reset all instances using original count
+            for (let i = 0; i < MOBILE_CONFIG.count; i++) {
+                this.getRandomPositionWithinBounds();
+                this.tempScale.set(scale, scale, scale);
+                this.tempMatrix.compose(this.tempPosition, this.noRotation, this.tempScale);
                 
-                // Reset matrix with original scale and new position
-                tempMatrix.makeScale(scale, scale, scale);
-                tempMatrix.setPosition(position);
-                
-                instancedMesh.setMatrixAt(i, tempMatrix);
-                matrix.copy(tempMatrix);
-                
-                // Reset velocity for desktop
-                if (!this.isMobile && velocities) {
-                    const randomDirection = new THREE.Vector3(
-                        Math.random() - 0.5,
-                        Math.random() - 0.5,
-                        Math.random() - 0.5
-                    ).normalize();
-                    velocities[i] = randomDirection.multiplyScalar(DESKTOP_CONFIG.animation.baseVelocity);
+                instancedMesh.setMatrixAt(i, this.tempMatrix);
+                if (this.instanceMatrices[0][i]) {
+                    this.instanceMatrices[0][i].copy(this.tempMatrix);
                 }
             }
             
             instancedMesh.instanceMatrix.needsUpdate = true;
+            console.log(`🔄 Reset ${MOBILE_CONFIG.count} mobile speckles`);
+            return;
+        }
+
+        // Desktop implementation
+        const countPerSize = Math.ceil(DESKTOP_CONFIG.count / DESKTOP_CONFIG.sizes.length);
+        let totalSpeckles = 0;
+        
+        this.instancedMeshes.forEach((instancedMesh, meshIndex) => {
+            // Force visibility and reset material
+            instancedMesh.visible = true;
+            const material = this.materials[meshIndex];
+            material.opacity = 0;
+            material.transparent = true;
+            material.needsUpdate = true;
+            
+            // Ensure proper parent-child relationship
+            if (instancedMesh.parent !== this.wavingBlob) {
+                this.wavingBlob.add(instancedMesh);
+            }
+            
+            // Reset scales to original configuration
+            instancedMesh.scale.setScalar(1);
+            this.wavingBlob.scale.setScalar(1);
+            
+            // Use original desktop configuration
+            const size = DESKTOP_CONFIG.sizes[meshIndex];
+            const scale = size * DESKTOP_CONFIG.sizeMultiplier;
+            
+            // Reset all instances using original count per size
+            for (let i = 0; i < countPerSize; i++) {
+                this.getRandomPositionWithinBounds();
+                this.tempScale.set(scale, scale, scale);
+                this.tempMatrix.compose(this.tempPosition, this.noRotation, this.tempScale);
+                
+                instancedMesh.setMatrixAt(i, this.tempMatrix);
+                if (this.instanceMatrices[meshIndex][i]) {
+                    this.instanceMatrices[meshIndex][i].copy(this.tempMatrix);
+                }
+                
+                // Reset velocity for desktop
+                if (this.velocities?.[meshIndex]?.[i]) {
+                    this.tempVector.set(
+                        Math.random() - 0.5,
+                        Math.random() - 0.5,
+                        Math.random() - 0.5
+                    ).normalize().multiplyScalar(DESKTOP_CONFIG.animation.baseVelocity);
+                    this.velocities[meshIndex][i].copy(this.tempVector);
+                }
+            }
+            
+            totalSpeckles += countPerSize;
+            instancedMesh.instanceMatrix.needsUpdate = true;
         });
+        
+        console.log(`🔄 Reset ${totalSpeckles} desktop speckles in ${this.instancedMeshes.length} groups (${countPerSize} per group)`);
     }
 
     updateColors(color) {
-        this.materials.forEach((material, index) => {
-            material.color = new THREE.Color(color);
+        // Reuse temp color object
+        this.tempColor.set(color);
+        this.materials.forEach(material => {
+            material.color.copy(this.tempColor);
             material.needsUpdate = true;
         });
     }
 
     randomizePositions() {
+        if (this.isMobile) {
+            const instancedMesh = this.instancedMeshes[0];
+            const matrices = this.instanceMatrices[0];
+            
+            if (!instancedMesh || !matrices) return;
+            
+            const noRotation = new THREE.Quaternion();
+            const scale = MOBILE_CONFIG.size * MOBILE_CONFIG.sizeMultiplier;
+            const scaleVec = new THREE.Vector3(scale, scale, scale);
+            
+            for (let i = 0; i < matrices.length; i++) {
+                this.getRandomPositionWithinBounds();
+                this.tempMatrix.compose(this.tempPosition, noRotation, scaleVec);
+                
+                instancedMesh.setMatrixAt(i, this.tempMatrix);
+                matrices[i].copy(this.tempMatrix);
+            }
+            
+            instancedMesh.instanceMatrix.needsUpdate = true;
+            return;
+        }
+
+        // Existing desktop implementation
         this.instancedMeshes.forEach((instancedMesh, meshIndex) => {
             const matrices = this.instanceMatrices[meshIndex];
             const velocities = this.velocities[meshIndex];
@@ -509,11 +757,23 @@ export class SpeckleSystem {
         console.time('SpeckleSystem.dispose');
         console.log('🔥 Starting SpeckleSystem progressive disposal');
 
+        // Cancel any ongoing tweens
+        state.blobTweenGroup.removeAll();
+        state.dotTweenGroup.removeAll();
+
         // First dispose shared geometry
         if (this.sharedGeometry) {
             this.sharedGeometry.dispose();
             console.log('✅ Disposed shared geometry');
         }
+
+        // Clear all temporary objects
+        this.tempPosition.set(0, 0, 0);
+        this.tempQuaternion.set(0, 0, 0, 1);
+        this.tempScale.set(1, 1, 1);
+        this.tempVector.set(0, 0, 0);
+        this.tempMatrix.identity();
+        this.tempColor.set(0xffffff);
 
         // Queue materials and meshes for progressive disposal
         const itemsToDispose = [

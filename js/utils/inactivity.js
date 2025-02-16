@@ -1,15 +1,10 @@
-/**
- * Inactivity Manager
- * Shows overlay and pauses animation after inactivity threshold
- */
-
 class InactivityManager {
     constructor() {
-        // Increase thresholds for better performance
-        this.INACTIVITY_THRESHOLD = 40000; // 40 seconds
-        this.CHECK_INTERVAL = 3000; // Check every 3 seconds
-        this.THROTTLE_DELAY = 250; // More aggressive throttling
-        this.BOTTOM_THRESHOLD = 40; // Bottom page threshold
+
+        this.INACTIVITY_THRESHOLD = 40000;
+        this.CHECK_INTERVAL = 3000;
+        this.THROTTLE_DELAY = 250;
+        this.BOTTOM_THRESHOLD = 40;
         
         this.app = null;
         this.isActive = true;
@@ -29,12 +24,9 @@ class InactivityManager {
         this.boundCheckInactivity = this.checkInactivity.bind(this);
         this.boundResumeAnimation = this.resumeAnimation.bind(this);
         this.boundHandleResize = this.debounce(this.handleResize.bind(this), 250);
-
-        // Add styles to document
         this.addStyles();
     }
 
-    // Throttle helper function
     throttle(func, limit) {
         let inThrottle;
         return function(...args) {
@@ -46,7 +38,6 @@ class InactivityManager {
         }
     }
 
-    // Debounce helper for resize events
     debounce(func, wait) {
         let timeout;
         return function executedFunction(...args) {
@@ -119,6 +110,15 @@ class InactivityManager {
                 opacity: 0;
                 transition: opacity 400ms ease-out, transform 400ms ease-out;
                 transition-delay: 100ms;
+                width: 80px;
+                height: 80px;
+            }
+
+            @media (max-width: 768px) {
+                .inactivity-play-button {
+                    width: 50px;
+                    height: 50px;
+                }
             }
 
             .inactivity-overlay.active .inactivity-play-button {
@@ -135,7 +135,6 @@ class InactivityManager {
         this.setupEventListeners();
         this.checkIntervalId = setInterval(this.boundCheckInactivity, this.CHECK_INTERVAL);
         
-        // Listen for resize events to update document height
         window.addEventListener('resize', this.boundHandleResize, { passive: true });
     }
 
@@ -146,13 +145,13 @@ class InactivityManager {
 
         // Create play button
         this.playButton = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-        this.playButton.setAttribute("viewBox", "0 0 24 24");
-        this.playButton.setAttribute("width", "120");
-        this.playButton.setAttribute("height", "120");
+        this.playButton.setAttribute("viewBox", "0 0 330 330");
+        this.playButton.setAttribute("width", "80");
+        this.playButton.setAttribute("height", "80");
         this.playButton.setAttribute("class", "inactivity-play-button");
 
         const playPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        playPath.setAttribute("d", "M8.5 5.5c-.2 0-.5.1-.7.3-.3.2-.3.5-.3.7v11c0 .2 0 .5.3.7.4.3.9.3 1.2 0l9-5.5c.3-.2.5-.5.5-.7s-.2-.5-.5-.7l-9-5.5c-.1-.2-.3-.3-.5-.3z");
+        playPath.setAttribute("d", "M37.728 328.12c2.266 1.256 4.77 1.88 7.272 1.88 2.763 0 5.522-.763 7.95-2.28l240-149.999c4.386-2.741 7.05-7.548 7.05-12.72s-2.664-9.979-7.05-12.72L52.95 2.28c-4.625-2.891-10.453-3.043-15.222-.4C32.959 4.524 30 9.547 30 15v300c0 5.453 2.959 10.476 7.728 13.12z");
         playPath.setAttribute("fill", "#849ed0");
 
         this.playButton.appendChild(playPath);
@@ -253,10 +252,8 @@ class InactivityManager {
     }
 }
 
-// Create singleton instance
 const inactivityManager = new InactivityManager();
 
-// Export initialization function
 export function initInactivityManager(app) {
     inactivityManager.init(app);
 } 

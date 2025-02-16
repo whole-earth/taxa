@@ -76,8 +76,6 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
     else if (zoomBool) {
         if (!zoomCurrent) {
-            speckleSystem.tweenOpacity(1, fadeInDuration);
-
             if (splashCurrent) {
                 ribbonTweenOpacity(ribbons, 1, 0);
                 splashCurrent = false;
@@ -94,6 +92,8 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                 if (isBlobMobilized) {
                     const duration = window.innerWidth < 768 ? 500 : 800;
                     blobTweenMobilized(blobInner, blobOuter, false, duration);
+                    cleanupManager.reinstateSpeckles(speckleSystem);
+                    speckleSystem.tweenOpacity(1, duration);
                 }
 
                 cellSheenTween(blobInner);
@@ -102,15 +102,12 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     cellObject.visible = true;
                 }
 
-                if (product) {
-                    if (!cleanupManager.disposedProduct) {
-                        //cleanupManager.disposeProduct(product);
-                    }
-                }
                 if (state.starField) state.starField.visible = false;
 
                 pitchCurrent = false;
                 pitchTextActivated = false;
+            } else {
+                speckleSystem.tweenOpacity(1, fadeInDuration);
             }
 
             zoomCurrent = true;
@@ -207,15 +204,36 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     // Trigger blob color change with same duration
                     blobTweenMobilized(blobInner, blobOuter, true, explosionDuration * 0.7);
 
-                    // Schedule explosions based on time thresholds
-                    EXPLOSION_PHASES.forEach(phase => {
+                    // Handle explosion differently for mobile and desktop
+                    if (window.innerWidth < 768) {
+                        // Single explosion for mobile
+                        speckleSystem.tweenExplosion(explosionDuration, 0);
+                        // Dispose dots after explosion
                         setTimeout(() => {
-                            if (zoomThirdCurrent && !explodedGroups.has(phase.index)) {
-                                speckleSystem.tweenExplosion(explosionDuration * (1 - phase.threshold), phase.index);
-                                explodedGroups.add(phase.index);
+                            if (pitchCurrent) {
+                                cleanupManager.disposeSpeckles(speckleSystem);
                             }
-                        }, explosionDuration * phase.threshold);
-                    });
+                        }, explosionDuration);
+                    } else {
+                        // Multiple phased explosions for desktop
+                        EXPLOSION_PHASES.forEach(phase => {
+                            setTimeout(() => {
+                                if (zoomThirdCurrent && !explodedGroups.has(phase.index)) {
+                                    speckleSystem.tweenExplosion(explosionDuration * (1 - phase.threshold), phase.index);
+                                    explodedGroups.add(phase.index);
+                                    
+                                    // Dispose dots after last explosion phase
+                                    if (phase.index === EXPLOSION_PHASES[EXPLOSION_PHASES.length - 1].index) {
+                                        setTimeout(() => {
+                                            if (pitchCurrent) {
+                                                cleanupManager.disposeSpeckles(speckleSystem);
+                                            }
+                                        }, explosionDuration * (1 - phase.threshold));
+                                    }
+                                }
+                            }, explosionDuration * phase.threshold);
+                        });
+                    }
 
                     // delay text activation, synced to dot explosion
                     setTimeout(() => {
@@ -351,13 +369,10 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
         productProgress = scrollProgress__LastElem(productArea);
 
-        if (productProgress > 0.5 && !cleanupManager.disposedCellAndStarfield) {
-            //console.log('🔄 Product progress > 0.5, disposing cell and starfield');
+        if (productProgress > 0.6 && !cleanupManager.disposedCellAndStarfield) {
             cleanupManager.disposeCellAndStarfield(cellObject, state.starField);
-        } else if (productProgress <= 0.5 && cleanupManager.disposedCellAndStarfield) {
-            //console.log('🔄 Product progress <= 0.5, reinstating cell and starfield');
+        } else if (productProgress <= 0.6 && cleanupManager.disposedCellAndStarfield) {
             cleanupManager.reinstateCellAndStarfield(cellObject, state.starField);
-            // Ensure cell is visible when reinstated
             if (cellObject) {
                 cellObject.visible = true;
             }
@@ -365,12 +380,12 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
         if (product && product.children) {
             // ===== PHASE 1: Initial Transition (0 to 0.75) =====
-            if (productProgress <= 0.75) {
+            if (productProgress <= 0.6) {
 
-                if (productProgress > 0.3 && !navClearFlag && navElement) {
+                if (productProgress > 0.22 && !navClearFlag && navElement) {
                     navElement.classList.add('clear');
                     navClearFlag = true;
-                } else if (productProgress <= 0.3 && navClearFlag && navElement) {
+                } else if (productProgress <= 0.22 && navClearFlag && navElement) {
                     navElement.classList.remove('clear');
                     navClearFlag = false;
                 }
@@ -427,15 +442,15 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
                 if (state.starField) {
                     state.starField.visible = true;
-                    state.starField.updateProgress(productProgress * 1.33, productBool && productProgress <= 0.75);
+                    state.starField.updateProgress(productProgress * 1.66, productBool && productProgress <= 0.6);
                 }
 
-                const cellScale = smoothLerp(1.6, 0.016, productProgress / 0.75);
+                const cellScale = smoothLerp(1.6, 0.016, productProgress / 0.6);
                 cellObject.scale.setScalar(cellScale);
 
 
                 // hide text
-                if (productProgress > 0.375) {
+                if (productProgress > 0.45) {
                     if (!productPhase1aActive) {
                         textChildren.forEach(child => {
                             if (child.classList.contains('active')) {
@@ -470,7 +485,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                         lightingTransitionComplete = false;
                     }
 
-                    const fadeProgress = (productProgress - 0.375) / 0.375;
+                    const fadeProgress = (productProgress - 0.45) / 0.15;
 
                     // Fade in specific product elements
                     if (product && fadeProgress > 0.5) {
@@ -500,8 +515,8 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     }
                 }
             }
-            // ===== PHASE 2: Product Rotation (0.75 to 0.93) =====
-            else if (0.75 <= productProgress && productProgress <= 0.93) {
+            // ===== PHASE 2: Product Rotation (0.6 to 0.9) =====
+            else if (0.6 <= productProgress && productProgress <= 0.9) {
                 // Hide cell object and starfield after transition
                 if (!productPhase2Active) {
                     cellObject.visible = false;
@@ -559,15 +574,15 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     productPhase3Active = false;
                 }
 
-                const rotationProgress = (productProgress - 0.75) / 0.18;
+                const rotationProgress = (productProgress - 0.6) / 0.3;
 
                 renderer.toneMappingExposure = smoothLerp(0.6, 0.36, rotationProgress);
 
                 // Handle product movement
                 if (isMobile) {
                     // MOBILE 2a+b
-                    if (productProgress >= 0.75) {
-                        const rotationProgress = (productProgress - 0.75) / 0.18;
+                    if (productProgress >= 0.6) {
+                        const rotationProgress = (productProgress - 0.6) / 0.3;
 
                         product.rotation.x = smoothLerp(Math.PI / 2, Math.PI / 7, rotationProgress);
                         product.rotation.y = smoothLerp(0, Math.PI / 5, rotationProgress);
@@ -600,7 +615,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                 if (state.sceneManager?.directionalLight) {
                     const { directionalLight } = state.sceneManager;
                     const lightProgress = isMobile
-                        ? (productProgress >= 0.87 ? (productProgress - 0.87) / 0.06 : 0)
+                        ? (productProgress >= 0.85 ? (productProgress - 0.85) / 0.05 : 0)
                         : (rotationProgress > 0.5 ? (rotationProgress - 0.5) / 0.5 : 0);
 
                     directionalLight.intensity = smoothLerp(0, 8, lightProgress);
@@ -608,8 +623,8 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                 }
             }
 
-            // ===== PHASE 3: Applicator Animation (0.93 to 1.0) =====
-            else if (productProgress >= 0.93) {
+            // ===== PHASE 3: Applicator Animation (0.9 to 1.0) =====
+            else if (productProgress >= 0.9) {
                 if (!productPhase3Active) {
                     renderer.toneMappingExposure = 0.36;
                     ambientLight.intensity = 3.2;
@@ -634,24 +649,24 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                 }
 
                 if (state.applicatorObject) {
-                    // 3a. Applicator Position (0.93 to 0.97)
-                    if (productProgress <= 0.97) {
-                        const positionProgress = (productProgress - 0.93) / 0.04;
+                    // 3a. Applicator Position (0.9 to 0.95)
+                    if (productProgress <= 0.95) {
+                        const positionProgress = (productProgress - 0.9) / 0.05;
                         state.applicatorObject.position.y = smoothLerp(1, 0, positionProgress);
                     }
-                    // 3b. Applicator Rotation (0.97 to 1.0)
+                    // 3b. Applicator Rotation (0.95 to 1.0)
                     else {
                         if (!productTextActivated) {
                             activateText(productArea);
                             productTextActivated = true;
                         }
-                        const rotationProgress = (productProgress - 0.97) / 0.03;
+                        const rotationProgress = (productProgress - 0.95) / 0.05;
                         state.applicatorObject.rotation.y = smoothLerp(0, Math.PI * 0.26, rotationProgress);
                     }
                 }
 
-                // Handle text activation when progress is past 0.97
-                if (productProgress > 0.97 && !productTextActivated) {
+                // Handle text activation when progress is past 0.95
+                if (productProgress > 0.95 && !productTextActivated) {
                     activateText(productArea, false);
                     productTextActivated = true;
                 }

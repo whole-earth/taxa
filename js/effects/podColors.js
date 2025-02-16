@@ -12,7 +12,7 @@ export const PRODUCT_COLORS = {
 const PRODUCT_TYPES = {
     [PRODUCT_COLORS.orange]: 'deodorant',
     [PRODUCT_COLORS.yellow]: 'relief',
-    [PRODUCT_COLORS.green]: 'repellent'
+    [PRODUCT_COLORS.green]: 'anti-attractant'
 };
 
 // Keep track of current color
@@ -60,6 +60,7 @@ export class ColorChangeAnimationSequence {
         const showingLabel = document.getElementById('showingLabel');
         const productType = document.getElementById('productType');
         const productTypeSubtitle = document.getElementById('productTypeSubtitle');
+        const waitlistLabel = document.getElementById('waitlistLabel');
 
         if (showingLabel) {
             showingLabel.style.opacity = '0';
@@ -71,6 +72,10 @@ export class ColorChangeAnimationSequence {
         if (productTypeSubtitle) {
             productTypeSubtitle.style.transition = 'opacity 0.3s ease-out';
             productTypeSubtitle.style.opacity = '0';
+        }
+        if (waitlistLabel) {
+            waitlistLabel.style.transition = 'opacity 0.3s ease-out';
+            waitlistLabel.style.opacity = '0';
         }
 
         // Remove current class from all pods first
@@ -133,7 +138,7 @@ export class ColorChangeAnimationSequence {
                     if (selectedPod) {
                         selectedPod.classList.add('current');
                     }
-                }, 200);
+                }, 100);
 
                 // Re-enable pod buttons after animation
                 ['podOrange', 'podGreen', 'podYellow'].forEach(podId => {
@@ -178,10 +183,10 @@ export class ColorChangeAnimationSequence {
         // Get the current color from the actual material of the first mesh
         const firstMesh = innerCapMeshes[0];
         const startColor = firstMesh?.material?.color || new THREE.Color(currentColorState);
-        
+
         // Create our tween object with the current RGB values
         const currentColor = { r: startColor.r, g: startColor.g, b: startColor.b };
-        
+
         // Convert target hex color to RGB
         const targetThreeColor = new THREE.Color(this.targetColor);
         const targetColor = { r: targetThreeColor.r, g: targetThreeColor.g, b: targetThreeColor.b };
@@ -193,18 +198,75 @@ export class ColorChangeAnimationSequence {
             .to(targetColor, 700)
             .easing(Easing.Cubic.InOut)
             .onStart(() => {
+
                 // Update product type text after fade out
                 const productType = document.getElementById('productType');
                 const productTypeSubtitle = document.getElementById('productTypeSubtitle');
                 const showingLabel = document.getElementById('showingLabel');
+                const waitlistLabel = document.getElementById('waitlistLabel');
                 const productText = PRODUCT_TYPES[this.targetColor];
-                
+
                 setTimeout(() => {
+                    // NEW =============================================
+                    // Add new color class to ingredient icons
+                    const newColorName = getColorName(this.targetColor);
+                    if (newColorName) {
+                        const ingredientIcons = document.querySelectorAll('.ingredient-icon:not(.taxa)');
+                        ingredientIcons.forEach(icon => {
+                            icon.classList.add(newColorName);
+                        });
+                    }
+                    // ================================================
+
                     // Update all text content while still invisible
                     if (productType && productText) {
                         productType.textContent = productText;
                     }
-                    
+
+                    if (waitlistLabel && productText) {
+                        // Create a temporary span to measure new text width for waitlistLabel
+                        const tempSpanWaitlist = document.createElement('span');
+                        tempSpanWaitlist.style.visibility = 'hidden';
+                        tempSpanWaitlist.style.position = 'absolute';
+                        tempSpanWaitlist.style.whiteSpace = 'nowrap';
+                        tempSpanWaitlist.style.fontSize = window.getComputedStyle(waitlistLabel).fontSize;
+                        tempSpanWaitlist.textContent = productText;
+                        document.body.appendChild(tempSpanWaitlist);
+
+                        const newWaitlistWidth = tempSpanWaitlist.offsetWidth;
+                        document.body.removeChild(tempSpanWaitlist);
+
+                        // Capture current width before any changes
+                        const currentWaitlistWidth = waitlistLabel.offsetWidth;
+
+                        // Set up initial styles
+                        waitlistLabel.style.display = 'inline-block';
+                        waitlistLabel.style.width = currentWaitlistWidth + 'px';
+                        waitlistLabel.style.whiteSpace = 'nowrap';
+                        waitlistLabel.style.overflow = 'hidden';
+                        waitlistLabel.style.verticalAlign = 'top';
+
+                        // Update the text content
+                        waitlistLabel.textContent = productText;
+
+                        // Start the width transition
+                        requestAnimationFrame(() => {
+                            waitlistLabel.style.transition = 'width 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
+                            waitlistLabel.style.width = newWaitlistWidth + 'px';
+
+                            waitlistLabel.addEventListener('transitionend', function widthChange(e) {
+                                if (e.propertyName === 'width') {
+                                    waitlistLabel.removeEventListener('transitionend', widthChange);
+
+                                    // Reset styles after width animation
+                                    waitlistLabel.style.display = 'inline';
+                                    waitlistLabel.style.width = 'auto';
+                                    waitlistLabel.style.verticalAlign = '';
+                                }
+                            });
+                        });
+                    }
+
                     if (productTypeSubtitle && productText) {
                         // Create a temporary span to measure new text width
                         const tempSpan = document.createElement('span');
@@ -214,39 +276,39 @@ export class ColorChangeAnimationSequence {
                         tempSpan.style.fontSize = window.getComputedStyle(productTypeSubtitle).fontSize;
                         tempSpan.textContent = productText;
                         document.body.appendChild(tempSpan);
-                        
+
                         const newWidth = tempSpan.offsetWidth;
                         document.body.removeChild(tempSpan);
 
                         // Capture current width before any changes
                         const currentWidth = productTypeSubtitle.offsetWidth;
-                        
+
                         // Set up initial styles
                         productTypeSubtitle.style.display = 'inline-block';
                         productTypeSubtitle.style.width = currentWidth + 'px';
                         productTypeSubtitle.style.whiteSpace = 'nowrap';
                         productTypeSubtitle.style.overflow = 'hidden';
                         productTypeSubtitle.style.verticalAlign = 'top';
-                        
+
                         // Update the text content
                         productTypeSubtitle.textContent = productText;
-                        
+
                         // Start the width transition
                         requestAnimationFrame(() => {
                             productTypeSubtitle.style.transition = 'width 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
                             productTypeSubtitle.style.width = newWidth + 'px';
-                            
+
                             productTypeSubtitle.addEventListener('transitionend', function widthChange(e) {
                                 if (e.propertyName === 'width') {
                                     productTypeSubtitle.removeEventListener('transitionend', widthChange);
-                                    
+
                                     // Reset styles after width animation
                                     productTypeSubtitle.style.display = 'inline';
                                     productTypeSubtitle.style.width = 'auto';
                                     productTypeSubtitle.style.verticalAlign = '';
-                                    
+
                                     // Fade in all elements
-                                    const elements = [productType, productTypeSubtitle, showingLabel];
+                                    const elements = [productType, productTypeSubtitle, showingLabel, waitlistLabel];
                                     elements.forEach(el => {
                                         if (el) {
                                             el.style.transition = 'opacity 0.3s ease-out';
@@ -265,7 +327,7 @@ export class ColorChangeAnimationSequence {
                             [PRODUCT_COLORS.yellow]: 'Eczema',
                             [PRODUCT_COLORS.green]: 'Mosquito'
                         }[this.targetColor];
-                        
+
                         if (labelText) {
                             showingLabel.textContent = labelText;
                         }
@@ -284,6 +346,18 @@ export class ColorChangeAnimationSequence {
                         productCard.classList.add(newColorName);
                     }
                 }
+
+                // NEW =============================================
+                const ingredientIcons = document.querySelectorAll('.ingredient-icon:not(.taxa)');
+                ingredientIcons.forEach(icon => {
+                    const classes = Array.from(icon.classList);
+                    classes.forEach(cls => {
+                        if (cls !== 'ingredient-icon') {
+                            icon.classList.remove(cls);
+                        }
+                    });
+                });
+                // ================================================
 
                 // Remove 'current' class from all pods
                 const allPodButtons = ['podOrange', 'podGreen', 'podYellow'];
