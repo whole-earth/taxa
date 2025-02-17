@@ -199,7 +199,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
             if (zoomThirdCurrent) {
                 if (!isBlobMobilized) {
                     explodedGroups.clear();
-                    const explosionDuration = isMobile ? 1100 : 1600; // Total duration in ms
+                    const explosionDuration = 1600; // Total duration in ms
 
                     // Trigger blob color change with same duration
                     blobTweenMobilized(blobInner, blobOuter, true, explosionDuration * 0.7);
@@ -207,13 +207,13 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     // Handle explosion differently for mobile and desktop
                     if (window.innerWidth < 768) {
                         // Single explosion for mobile
-                        speckleSystem.tweenExplosion(explosionDuration, 0);
+                        speckleSystem.tweenExplosion(explosionDuration * 2.2, 0);
                         // Dispose dots after explosion
                         setTimeout(() => {
                             if (pitchCurrent) {
                                 cleanupManager.disposeSpeckles(speckleSystem);
                             }
-                        }, explosionDuration);
+                        }, explosionDuration * 2.21);
                     } else {
                         // Multiple phased explosions for desktop
                         EXPLOSION_PHASES.forEach(phase => {
@@ -374,9 +374,14 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                 if (productProgress > 0.22 && !navClearFlag && navElement) {
                     navElement.classList.add('clear');
                     navClearFlag = true;
+                    controls.autoRotate = false;
+                    controls.enableRotate = false;
                 } else if (productProgress <= 0.22 && navClearFlag && navElement) {
                     navElement.classList.remove('clear');
                     navClearFlag = false;
+                    controls.autoRotate = true;
+                    controls.enableRotate = true;
+                    controls.autoRotateSpeed = 0.4;
                 }
 
                 if (!productPhase1Active) {
@@ -394,9 +399,9 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                         ambientLight.intensity = 4.6;
                         lightingTransitionComplete = true;
 
-                        controls.autoRotate = true;
-                        controls.enableRotate = true;
-                        controls.autoRotateSpeed = 0.4;
+                        //controls.autoRotate = true;
+                        //controls.enableRotate = true;
+                        //controls.autoRotateSpeed = 0.4;
                     }
 
                     // Restore blob color when scrolling back up
@@ -838,7 +843,7 @@ export function animatePage(controls, camera, cellObject, blobInner, blobOuter, 
 
     scrollRAF = requestAnimationFrame(resetSpeed);
 
-    const throttleDuration = isMobile ? 100 : 100;
+    const throttleDuration = isMobile ? 200 : 100;
     throttle(() => scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight), throttleDuration)();
 
     camera.updateProjectionMatrix();
