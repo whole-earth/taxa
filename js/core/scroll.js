@@ -24,6 +24,25 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
     const speckleSystem = state.app?.speckleSystem;
     if (!speckleSystem) return;
 
+    // Add explicit product visibility check at the start
+    if (product && !productBool) {
+        // If we're not in the product section, ensure product is hidden
+        product.visible = false;
+        product.traverse(child => {
+            if (child.material) {
+                child.visible = false;
+            }
+        });
+        if (state.applicatorObject) {
+            state.applicatorObject.visible = false;
+            state.applicatorObject.traverse(child => {
+                if (child.material) {
+                    child.visible = false;
+                }
+            });
+        }
+    }
+
     // Determine previous section from boolean flags
     const previousSection =
         splashCurrent ? 'splash' :
@@ -100,6 +119,26 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
                 if (!cellObject.visible) {
                     cellObject.visible = true;
+                }
+
+                // Enhanced product cleanup when entering zoom section
+                if (product) {
+                    product.visible = false;
+                    product.traverse(child => {
+                        if (child.material) {
+                            child.visible = false;
+                        }
+                    });
+                    // Reset product transforms
+                    product.position.set(0, 0, 0);
+                    product.rotation.set(Math.PI / 2, 0, 0);
+                    product.scale.setScalar(isMobile ? MOBILE_PRODUCT_SCALES.initial : DESKTOP_PRODUCT_SCALES.initial);
+                    
+                    // Reset cached transform state
+                    cachedProductTransform.lastScale = 0;
+                    cachedProductTransform.position.set(0, 0, 0);
+                    cachedProductTransform.rotation.set(Math.PI / 2, 0, 0);
+                    cachedProductTransform.scale.set(1, 1, 1);
                 }
 
                 if (state.starField) state.starField.visible = false;
@@ -278,67 +317,22 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                 // Keep cell visible during product loading
                 state.app.loadProductOnDemand().then(loadedProduct => {
                     product = loadedProduct;
-
-                    // Setup initial state before making visible
-                    if (product) {
-                        product.rotation.x = Math.PI / 2;
-                        product.rotation.z = 0;
-                        const productScale = isMobile ? 14 : 20;
-                        product.scale.set(productScale, productScale, productScale);
-
-                        if (state.applicatorObject) {
-                            state.applicatorObject.position.y = 1;
-                            state.applicatorObject.rotation.y = 0;
-                        }
-
-                        // Now that everything is set up, make product visible and reset visibility
-                        product.visible = true;
-                        resetProductVisibility(product, state.applicatorObject);
-                        //cleanupManager.disposedProduct = false;  // Allow product to be shown
-
-                        // Only hide cell object after product is ready
-                        cellObject.visible = false;
-                        if (wavingBlob && wavingBlob.children) {
-                            wavingBlob.children.forEach(group => {
-                                if (group && group.isGroup) {
-                                    group.visible = false;
+                    if (productBool) { // Only show if still in product section
+                        setupProductForSection(product, state.applicatorObject);
+                    } else {
+                        // If we've scrolled away, ensure product is hidden
+                        if (product) {
+                            product.visible = false;
+                            product.traverse(child => {
+                                if (child.material) {
+                                    child.visible = false;
                                 }
                             });
-                            state.blobTweenGroup.removeAll();
-                            state.dotTweenGroup.removeAll();
-                            restoreDotScale(wavingBlob);
                         }
                     }
                 });
             } else {
-                resetProductVisibility(product, state.applicatorObject);
-                //cleanupManager.disposedProduct = false;  // Allow product to be shown
-
-                // Reset product rotation and position
-                if (product) {
-                    product.rotation.x = Math.PI / 2;
-                    product.rotation.z = 0;
-                    const productScale = isMobile ? 14 : 20;
-                    product.scale.set(productScale, productScale, productScale);
-                }
-
-                if (state.applicatorObject) {
-                    state.applicatorObject.position.y = 1;
-                    state.applicatorObject.rotation.y = 0;
-                }
-
-                // Hide cell object only when product is ready
-                cellObject.visible = false;
-                if (wavingBlob && wavingBlob.children) {
-                    wavingBlob.children.forEach(group => {
-                        if (group && group.isGroup) {
-                            group.visible = false;
-                        }
-                    });
-                    state.blobTweenGroup.removeAll();
-                    state.dotTweenGroup.removeAll();
-                    restoreDotScale(wavingBlob);
-                }
+                setupProductForSection(product, state.applicatorObject);
             }
 
             if (state.starField) {
@@ -462,8 +456,6 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                                 child.visible = true;
                             });
 
-                            console.log(state.applicatorObject);
-
                             state.applicatorObject.rotation.y = 0;
                             state.applicatorObject.position.y = 1;
 
@@ -583,14 +575,50 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                 if (isMobile) {
                     // MOBILE 2a+b
                     if (productProgress >= 0.6) {
-                        const rotationProgress = (productProgress - 0.6) / 0.3;
+                        const currentTime = performance.now();
+                        if (currentTime - lastProductRotationUpdate >= PRODUCT_ROTATION_THROTTLE) {
+                            if (lastProductAnimationFrame) {
+                                cancelAnimationFrame(lastProductAnimationFrame);
+                            }
 
-                        product.rotation.x = smoothLerp(Math.PI / 2, Math.PI / 7, rotationProgress);
-                        product.rotation.y = smoothLerp(0, Math.PI / 5, rotationProgress);
-                        product.rotation.z = smoothLerp(0, -Math.PI / 6, rotationProgress);
+                            lastProductAnimationFrame = requestAnimationFrame(() => {
+                                const rotationProgress = (productProgress - 0.6) / 0.3;
+                                
+                                // Cache all transform calculations
+                                cachedProductTransform.rotation.set(
+                                    smoothLerp(Math.PI / 2, Math.PI / 7, rotationProgress),
+                                    smoothLerp(0, Math.PI / 5, rotationProgress),
+                                    smoothLerp(0, -Math.PI / 6, rotationProgress)
+                                );
+                                
+                                cachedProductTransform.position.set(
+                                    smoothLerp(0, -3, rotationProgress),
+                                    smoothLerp(0, 5.4, rotationProgress),
+                                    0
+                                );
 
-                        product.position.x = smoothLerp(0, -3, rotationProgress);
-                        product.position.y = smoothLerp(0, 5.4, rotationProgress);
+                                // Calculate target scale with damping
+                                const targetScale = smoothLerp(MOBILE_PRODUCT_SCALES.transition, MOBILE_PRODUCT_SCALES.final, rotationProgress);
+                                const currentScale = cachedProductTransform.lastScale || MOBILE_PRODUCT_SCALES.transition;
+                                const dampedScale = currentScale + (targetScale - currentScale) * 0.3;
+                                
+                                // Clamp scale to prevent extreme values
+                                const clampedScale = Math.max(
+                                    Math.min(dampedScale, MOBILE_PRODUCT_SCALES.final * 1.1),
+                                    MOBILE_PRODUCT_SCALES.transition * 0.9
+                                );
+                                
+                                cachedProductTransform.lastScale = clampedScale;
+                                cachedProductTransform.scale.setScalar(clampedScale);
+                                
+                                // Batch transform updates
+                                product.rotation.copy(cachedProductTransform.rotation);
+                                product.position.copy(cachedProductTransform.position);
+                                product.scale.copy(cachedProductTransform.scale);
+                                
+                                lastProductRotationUpdate = currentTime;
+                            });
+                        }
                     }
                 } else {
                     // DESKTOP 2a
@@ -686,9 +714,8 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
     // Only handle cleanup during actual section transitions
     if (previousSection !== newSection) {
-        console.log(`🔄 Section changed from ${previousSection} to ${newSection}`);
+        //console.log(`🔄 Section changed from ${previousSection} to ${newSection}`);
 
-        // Use the new centralized disposal logic
         cleanupManager.handleVisibilityAndDisposal({
             cellObject,
             starField: state.starField,
@@ -794,6 +821,30 @@ const EXPLOSION_PHASES = [
     { threshold: 0.7, index: 3 },
     { threshold: 0.9, index: 4 }
 ];
+
+// Add these variables at the top with other state variables
+let lastProductAnimationFrame;
+let lastProductRotationUpdate = 0;
+const PRODUCT_ROTATION_THROTTLE = 16.67; // ~60fps
+let cachedProductTransform = {
+    rotation: new THREE.Euler(),
+    position: new THREE.Vector3(),
+    scale: new THREE.Vector3(),
+    lastScale: 0
+};
+
+// Cache scale values
+const MOBILE_PRODUCT_SCALES = {
+    initial: 14,
+    transition: 4.8,
+    final: 5.2
+};
+
+const DESKTOP_PRODUCT_SCALES = {
+    initial: 20,
+    transition: 4,
+    final: 5.5
+};
 
 export function animatePage(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight) {
     let scrollY = window.scrollY;
@@ -987,6 +1038,9 @@ export function cleanup() {
     }
     if (activeTextTimeout) {
         cancelAnimationFrame(activeTextTimeout);
+    }
+    if (lastProductAnimationFrame) {
+        cancelAnimationFrame(lastProductAnimationFrame);
     }
 
     cleanupManager.cleanup();
@@ -1404,3 +1458,28 @@ if (zoomArea) {
 let lastZoomUpdate = 0;
 let cachedZoomSection = -1;
 const ZOOM_UPDATE_INTERVAL = isMobile ? 100 : 30; // ms between updates
+
+function setupProductForSection(product, applicatorObject) {
+    if (!product) return;
+
+    // Setup initial state before making visible
+    product.rotation.x = Math.PI / 2;
+    product.rotation.z = 0;
+    const productScale = isMobile ? MOBILE_PRODUCT_SCALES.initial : DESKTOP_PRODUCT_SCALES.initial;
+    product.scale.set(productScale, productScale, productScale);
+
+    if (applicatorObject) {
+        applicatorObject.position.y = 1;
+        applicatorObject.rotation.y = 0;
+    }
+
+    // Reset cached transform state
+    cachedProductTransform.lastScale = productScale;
+    cachedProductTransform.position.set(0, 0, 0);
+    cachedProductTransform.rotation.set(Math.PI / 2, 0, 0);
+    cachedProductTransform.scale.set(productScale, productScale, productScale);
+
+    // Now that everything is set up, make product visible
+    product.visible = true;
+    resetProductVisibility(product, applicatorObject);
+}

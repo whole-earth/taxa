@@ -225,7 +225,6 @@ export class SpeckleSystem {
             depthTest: true,
             precision: 'lowp',
             fog: false,
-            flatShading: true,
             side: THREE.FrontSide
         };
 
