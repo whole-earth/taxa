@@ -57,7 +57,7 @@ class ProgressiveDisposal {
     }
 
     addToQueue(items, onComplete) {
-        console.log(`🔄 Adding ${items.length} items to disposal queue`);
+        // console.log(`🔄 Adding ${items.length} items to disposal queue`);
         this.queue = Array.isArray(items) ? items : [items];
         this.currentIndex = 0;
         this.isProcessing = true;
@@ -82,7 +82,7 @@ class ProgressiveDisposal {
             return;
         }
 
-        console.log(`📦 Processing disposal chunk ${this.currentIndex / this.chunkSize + 1}, items ${this.currentIndex} to ${this.currentIndex + chunk.length}`);
+        // console.log(`📦 Processing disposal chunk ${this.currentIndex / this.chunkSize + 1}, items ${this.currentIndex} to ${this.currentIndex + chunk.length}`);
         
         // Process each item in the chunk
         chunk.forEach(item => {
@@ -118,8 +118,8 @@ class ProgressiveDisposal {
 
     complete() {
         const duration = performance.now() - this.startTime;
-        console.log(`✨ Progressive disposal complete in ${duration.toFixed(2)}ms`);
-        console.log(`📊 Disposed ${this.disposed.size} unique resources`);
+        // console.log(`✨ Progressive disposal complete in ${duration.toFixed(2)}ms`);
+        // console.log(`📊 Disposed ${this.disposed.size} unique resources`);
         
         this.isProcessing = false;
         if (this.onComplete) {
@@ -128,7 +128,7 @@ class ProgressiveDisposal {
     }
 
     cancel() {
-        console.log('🛑 Cancelling progressive disposal');
+        // console.log('🛑 Cancelling progressive disposal');
         this.isProcessing = false;
         this.queue = [];
         this.currentIndex = 0;
@@ -138,7 +138,7 @@ class ProgressiveDisposal {
 
 class SpecklePool {
     constructor(size) {
-        console.log(`🏊 Initializing SpecklePool with size ${size}`);
+        // console.log(`🏊 Initializing SpecklePool with size ${size}`);
         this.size = size;
         this.matrices = new Array(size);
         this.vectors = new Array(size);
@@ -626,7 +626,7 @@ export class SpeckleSystem {
             }
             
             instancedMesh.instanceMatrix.needsUpdate = true;
-            console.log(`🔄 Reset ${MOBILE_CONFIG.count} mobile speckles`);
+            // console.log(`🔄 Reset ${MOBILE_CONFIG.count} mobile speckles`);
             return;
         }
 
@@ -681,7 +681,7 @@ export class SpeckleSystem {
             instancedMesh.instanceMatrix.needsUpdate = true;
         });
         
-        console.log(`🔄 Reset ${totalSpeckles} desktop speckles in ${this.instancedMeshes.length} groups (${countPerSize} per group)`);
+        // console.log(`🔄 Reset ${totalSpeckles} desktop speckles in ${this.instancedMeshes.length} groups (${countPerSize} per group)`);
     }
 
     updateColors(color) {
@@ -750,7 +750,7 @@ export class SpeckleSystem {
 
     dispose() {
         console.time('SpeckleSystem.dispose');
-        console.log('🔥 Starting SpeckleSystem progressive disposal');
+        // console.log('🔥 Starting SpeckleSystem progressive disposal');
 
         // Cancel any ongoing tweens
         state.blobTweenGroup.removeAll();
@@ -759,7 +759,7 @@ export class SpeckleSystem {
         // First dispose shared geometry
         if (this.sharedGeometry) {
             this.sharedGeometry.dispose();
-            console.log('✅ Disposed shared geometry');
+            // console.log('✅ Disposed shared geometry');
         }
 
         // Clear all temporary objects
@@ -778,11 +778,11 @@ export class SpeckleSystem {
 
         this.disposalManager.addToQueue(itemsToDispose, () => {
             console.timeEnd('SpeckleSystem.dispose');
-            console.log('✨ SpeckleSystem disposal complete');
+            // console.log('✨ SpeckleSystem disposal complete');
             
             // Clear the object pool
             this.pool.clear();
-            console.log('🏊 Object pool cleared');
+            // console.log('🏊 Object pool cleared');
         });
     }
 } 

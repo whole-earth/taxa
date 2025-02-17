@@ -199,7 +199,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
             if (zoomThirdCurrent) {
                 if (!isBlobMobilized) {
                     explodedGroups.clear();
-                    const explosionDuration = 1600; // Total duration in ms
+                    const explosionDuration = isMobile ? 1100 : 1600; // Total duration in ms
 
                     // Trigger blob color change with same duration
                     blobTweenMobilized(blobInner, blobOuter, true, explosionDuration * 0.7);
@@ -248,9 +248,6 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                 productCurrent = false;
             }
             else if (productCurrent) {
-                //controls.autoRotate = true;
-                //controls.enableRotate = true;
-                //controls.autoRotateSpeed = 0.2;
 
                 if (product) {
                     product.traverse(child => {
@@ -286,7 +283,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     if (product) {
                         product.rotation.x = Math.PI / 2;
                         product.rotation.z = 0;
-                        const productScale = isMobile ? 16 : 20;
+                        const productScale = isMobile ? 14 : 20;
                         product.scale.set(productScale, productScale, productScale);
 
                         if (state.applicatorObject) {
@@ -321,7 +318,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                 if (product) {
                     product.rotation.x = Math.PI / 2;
                     product.rotation.z = 0;
-                    const productScale = isMobile ? 16 : 20;
+                    const productScale = isMobile ? 14 : 20;
                     product.scale.set(productScale, productScale, productScale);
                 }
 
@@ -390,7 +387,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     if (productPhase2Active) {
                         product.rotation.set(Math.PI / 2, 0, 0);
                         product.position.set(0, 0, 0);
-                        const productScale = isMobile ? 16 : 20;
+                        const productScale = isMobile ? 14 : 20;
                         product.scale.set(productScale, productScale, productScale);
 
                         renderer.toneMappingExposure = 1.0;
@@ -399,7 +396,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
                         controls.autoRotate = true;
                         controls.enableRotate = true;
-                        controls.autoRotateSpeed = 0.2;
+                        controls.autoRotateSpeed = 0.4;
                     }
 
                     // Restore blob color when scrolling back up
@@ -441,7 +438,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     state.starField.updateProgress(productProgress * 1.66, productBool && productProgress <= 0.6);
                 }
 
-                const cellScale = smoothLerp(1.6, 0.016, productProgress / 0.6);
+                const cellScale = smoothLerp(1.6, productSection__cellEndScale, productProgress / 0.6);
                 cellObject.scale.setScalar(cellScale);
 
 
@@ -502,7 +499,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     renderer.toneMappingExposure = smoothLerp(1, 0.6, fadeProgress);
 
                     const productScale = isMobile
-                        ? smoothLerp(16, 4.8, fadeProgress)  // Mobile
+                        ? smoothLerp(14, 4.8, fadeProgress)  // Mobile
                         : smoothLerp(20, 4, fadeProgress);  // Desktop
                     product.scale.setScalar(productScale);
 
@@ -633,8 +630,9 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                         productPhase2Active = false;
                         productPhase1aActive = false;
 
+                        // Only hide scroll indicator if not coming from click navigation
                         const scrollIndicator = document.querySelector('.scroll-indicator');
-                        if (scrollIndicator && !scrollIndicator.classList.contains('hidden')) {
+                        if (scrollIndicator && !scrollIndicator.classList.contains('hidden') && !isClickScroll) {
                             scrollIndicator.classList.add('hidden');
                         }
                     }
@@ -743,6 +741,7 @@ const zoomElements = [zoomFirst, zoomSecond, zoomThird];
 
 const fadeInDuration = 400;
 const fadeOutDuration = 180;
+const productSection__cellEndScale = isMobile ? 0.2 : 0.016;
 
 let splashBool, zoomBool, pitchBool, productBool;
 let splashProgress, zoomProgress, pitchProgress, productProgress;
@@ -801,11 +800,11 @@ export function animatePage(controls, camera, cellObject, blobInner, blobOuter, 
 
     /*
     if (isMobile) {
-        const multiplier = Math.floor(scrollDiff / 30);
+        const multiplier = Math.floor(scrollDiff / 10);
         // Scroll down: faster rotation, scroll up: slower reverse rotation
         controls.autoRotateSpeed = delta > 0
-            ? Math.min(0.5 + (multiplier * 3), 10)  // Normal speed for downward
-            : -Math.min(0.5 + (multiplier * 1.2), 6);  // Damped speed for upward
+            ? Math.min(0.5 + (multiplier * 12), 20)  // Normal speed for downward
+            : -Math.min(0.5 + (multiplier * 6), 12);  // Damped speed for upward
     } else {
         // Desktop logic
         const multiplier = Math.floor(scrollDiff / 20);
@@ -814,6 +813,7 @@ export function animatePage(controls, camera, cellObject, blobInner, blobOuter, 
             : -Math.min(0.5 + (multiplier * 4), 12);  // More damped speed for upward
     }
     */
+    
     const multiplier = Math.floor(scrollDiff / 20);
     controls.autoRotateSpeed = delta > 0
         ? Math.min(0.5 + (multiplier * 8), 20)  // Normal speed for downward
@@ -830,24 +830,13 @@ export function animatePage(controls, camera, cellObject, blobInner, blobOuter, 
         if (elapsed < 100) {
             scrollRAF = requestAnimationFrame(resetSpeed);
         } else {
-            //controls.autoRotateSpeed = isMobile ? 0.2 : 0.5;
-            controls.autoRotateSpeed = 0.5;
+            controls.autoRotateSpeed = 0.4;
 
             state.lastResetTime = null;
         }
     };
 
     scrollRAF = requestAnimationFrame(resetSpeed);
-
-    /*
-    if (productBool && productCurrent) {
-        controls.autoRotate = false;
-        controls.enableRotate = false;
-    } else {
-        controls.autoRotate = true;
-        controls.enableRotate = true;
-    }
-    */
 
     const throttleDuration = isMobile ? 100 : 100;
     throttle(() => scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight), throttleDuration)();
@@ -918,14 +907,14 @@ function smoothScrollTo(targetPosition) {
         if (targetSection === 'product' && currentIndex < targetIndex) {
             // Scrolling to product section - adjust duration based on distance
             duration = isMobile ? 
-                Math.min(6.5, 2.2 + (scrollDistance / viewportHeight) * 1.8) :
+                Math.min(4.0, 2.2 + (scrollDistance / viewportHeight) * 1.8) :
                 Math.min(5.0, 1.2 + (scrollDistance / viewportHeight) * 1.2);
         } else {
             // Normal section transitions
             duration = (
-                numberOfSections === 1 ? (isMobile ? 1.8 : 1.2) :
-                numberOfSections === 2 ? (isMobile ? 3.2 : 2.8) :
-                numberOfSections >= 3 ? (isMobile ? 4.2 : 3.6) : 0
+                numberOfSections === 1 ? (isMobile ? 1.0 : 1.2) :
+                numberOfSections === 2 ? (isMobile ? 2.2 : 2.8) :
+                numberOfSections >= 3 ? (isMobile ? 3.2 : 3.6) : 0
             );
         }
 
@@ -941,6 +930,13 @@ function smoothScrollTo(targetPosition) {
                 setTimeout(() => {
                     document.body.style.pointerEvents = '';
                     isClickScroll = false;
+                    // If we're in the product section and came from click, keep indicator visible
+                    if (productBool) {
+                        const scrollIndicator = document.querySelector('.scroll-indicator');
+                        if (scrollIndicator && scrollIndicator.classList.contains('hidden')) {
+                            scrollIndicator.classList.remove('hidden');
+                        }
+                    }
                 }, 100);
             }
         });
@@ -957,6 +953,13 @@ function smoothScrollTo(targetPosition) {
         setTimeout(() => {
             document.body.style.pointerEvents = '';
             isClickScroll = false;
+            // If we're in the product section and came from click, keep indicator visible
+            if (productBool) {
+                const scrollIndicator = document.querySelector('.scroll-indicator');
+                if (scrollIndicator && scrollIndicator.classList.contains('hidden')) {
+                    scrollIndicator.classList.remove('hidden');
+                }
+            }
         }, 1000); // Fallback duration for regular smooth scroll
     }
 }

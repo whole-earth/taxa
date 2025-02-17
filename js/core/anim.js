@@ -34,7 +34,7 @@ const CONFIG = {
     },
     controls: {
         dampingFactor: 0.03,
-        autoRotateSpeed: 0.2
+        autoRotateSpeed: 0.4
     },
     assets: {
         meshLine: "https://unpkg.com/three.meshline@1.4.0/src/THREE.MeshLine.js",
@@ -98,12 +98,14 @@ export class App {
             }
 
             state.lenis = new window.Lenis({
-                duration: isMobile ? 4.0 : 1.2,
+                duration: isMobile ? 1.2 : 1.2,
                 overscroll: false,
                 wheelMultiplier: 0.55,
                 smoothTouch: true,
-                lerp: isMobile ? 1.4 : 1.0,
-                friction: isMobile ? 0.04 : 0.1
+                lerp: isMobile ? 0.075 : 1.0,
+                friction: isMobile ? 0.01 : 0.1,
+                touchMultiplier: isMobile ? 2.2 : 1,
+                touchInertiaMultiplier: isMobile ? 35 : 1
             });
 
             this.startAnimationLoop();
