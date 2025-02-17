@@ -6,8 +6,7 @@ const isMobile = window.innerWidth < 768;
 
 const MOBILE_CONFIG = {
     count: 140,
-    sizeMultiplier: 1.0,
-    size: 0.18,
+    size: 0.3,
     colors: {
         default: 0xffbb65
     },
@@ -15,12 +14,11 @@ const MOBILE_CONFIG = {
         fadeInDuration: 400,
         fadeOutDuration: 150
     },
-    boxSize: 40
+    boxSize: 24
 };
 
 const DESKTOP_CONFIG = {
     count: 600,
-    sizeMultiplier: 1,
     sizes: [0.12, 0.14, 0.16, 0.18, 0.22],
     colors: {
         default: 0xffbb65
@@ -212,9 +210,7 @@ export class SpeckleSystem {
         }
         
         // Use simpler geometry for mobile
-        this.sharedGeometry = this.isMobile ? 
-            new THREE.OctahedronGeometry(1) :  // Simpler geometry for mobile
-            new THREE.SphereGeometry(1, 4, 4);
+        this.sharedGeometry = new THREE.SphereGeometry(1, 4, 4);
         
         // Cache frequently used values
         this.dotBoundsSquared = this.dotBounds * this.dotBounds;
@@ -230,7 +226,6 @@ export class SpeckleSystem {
             precision: 'lowp',
             fog: false,
             flatShading: true,
-            // Add side: THREE.FrontSide for better performance
             side: THREE.FrontSide
         };
 
@@ -292,7 +287,7 @@ export class SpeckleSystem {
         instancedMesh.renderOrder = 2;
         
         const matrices = new Array(MOBILE_CONFIG.count);
-        const scale = MOBILE_CONFIG.size * MOBILE_CONFIG.sizeMultiplier;
+        const scale = MOBILE_CONFIG.size;
         this.tempScale.set(scale, scale, scale);
         
         // Batch matrix updates
@@ -331,7 +326,7 @@ export class SpeckleSystem {
             
             const matrices = new Array(countPerSize);
             const velocities = !this.isMobile ? new Array(countPerSize) : null;
-            const scale = size * SPECKLE_CONFIG.sizeMultiplier;
+            const scale = size;
             
             // Batch matrix updates
             for (let i = 0; i < countPerSize; i++) {
@@ -616,7 +611,7 @@ export class SpeckleSystem {
             this.wavingBlob.scale.setScalar(1);
             
             // Use original mobile configuration
-            const scale = MOBILE_CONFIG.size * MOBILE_CONFIG.sizeMultiplier;
+            const scale = MOBILE_CONFIG.size;
             
             // Reset all instances using original count
             for (let i = 0; i < MOBILE_CONFIG.count; i++) {
@@ -658,7 +653,7 @@ export class SpeckleSystem {
             
             // Use original desktop configuration
             const size = DESKTOP_CONFIG.sizes[meshIndex];
-            const scale = size * DESKTOP_CONFIG.sizeMultiplier;
+            const scale = size;
             
             // Reset all instances using original count per size
             for (let i = 0; i < countPerSize; i++) {
@@ -706,7 +701,7 @@ export class SpeckleSystem {
             if (!instancedMesh || !matrices) return;
             
             const noRotation = new THREE.Quaternion();
-            const scale = MOBILE_CONFIG.size * MOBILE_CONFIG.sizeMultiplier;
+            const scale = MOBILE_CONFIG.size;
             const scaleVec = new THREE.Vector3(scale, scale, scale);
             
             for (let i = 0; i < matrices.length; i++) {

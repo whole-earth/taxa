@@ -11,7 +11,7 @@ export const PRODUCT_COLORS = {
 // Product type text mapping
 const PRODUCT_TYPES = {
     [PRODUCT_COLORS.orange]: 'deodorant',
-    [PRODUCT_COLORS.yellow]: 'relief',
+    [PRODUCT_COLORS.yellow]: 'sunscreen',
     [PRODUCT_COLORS.green]: 'anti-attractant'
 };
 
@@ -207,16 +207,6 @@ export class ColorChangeAnimationSequence {
                 const productText = PRODUCT_TYPES[this.targetColor];
 
                 setTimeout(() => {
-                    // NEW =============================================
-                    // Add new color class to ingredient icons
-                    const newColorName = getColorName(this.targetColor);
-                    if (newColorName) {
-                        const ingredientIcons = document.querySelectorAll('.ingredient-icon:not(.taxa)');
-                        ingredientIcons.forEach(icon => {
-                            icon.classList.add(newColorName);
-                        });
-                    }
-                    // ================================================
 
                     // Update all text content while still invisible
                     if (productType && productText) {
@@ -346,18 +336,6 @@ export class ColorChangeAnimationSequence {
                         productCard.classList.add(newColorName);
                     }
                 }
-
-                // NEW =============================================
-                const ingredientIcons = document.querySelectorAll('.ingredient-icon:not(.taxa)');
-                ingredientIcons.forEach(icon => {
-                    const classes = Array.from(icon.classList);
-                    classes.forEach(cls => {
-                        if (cls !== 'ingredient-icon') {
-                            icon.classList.remove(cls);
-                        }
-                    });
-                });
-                // ================================================
 
                 // Remove 'current' class from all pods
                 const allPodButtons = ['podOrange', 'podGreen', 'podYellow'];

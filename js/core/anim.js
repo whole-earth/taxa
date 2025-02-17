@@ -96,23 +96,14 @@ export class App {
             if (isMobile) {
                 console.log('Mobile device detected, initializing smoothScroll to mobile params');
             }
-            /*
-        state.lenis = new window.Lenis({
-            duration: 2.0,
-            smoothWheel: true,
-            wheelMultiplier: 0.55,
-            touchMultiplier: 3.4,
-            infinite: false,
-            smoothTouch: true,
-            touchInertiaMultiplier: 3,
-            syncTouch: true,
-            syncTouchLerp: 1.4, // testing for mobile
-            overscroll: false
-        });
-        */
+
             state.lenis = new window.Lenis({
+                duration: isMobile ? 4.0 : 1.2,
                 overscroll: false,
                 wheelMultiplier: 0.55,
+                smoothTouch: true,
+                lerp: isMobile ? 1.4 : 1.0,
+                friction: isMobile ? 0.04 : 0.1
             });
 
             this.startAnimationLoop();
