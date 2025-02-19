@@ -314,7 +314,7 @@ export class ColorChangeAnimationSequence {
                     if (showingLabel) {
                         const labelText = {
                             [PRODUCT_COLORS.orange]: 'Body odor',
-                            [PRODUCT_COLORS.yellow]: 'Eczema',
+                            [PRODUCT_COLORS.yellow]: 'Sunscreen',
                             [PRODUCT_COLORS.green]: 'Mosquito'
                         }[this.targetColor];
 

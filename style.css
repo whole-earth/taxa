@@ -78,7 +78,7 @@ main {
 
 .product {
   position: relative;
-  height: 820vh;
+  height: 700vh;
   width: 100%;
   border: 2px solid black;
 }

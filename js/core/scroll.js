@@ -362,8 +362,8 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
         }
 
         if (product && product.children) {
-            // ===== PHASE 1: Initial Transition (0 to 0.75) =====
-            if (productProgress <= 0.6) {
+            // ===== PHASE 1: Initial Transition (0 to 0.7) =====
+            if (productProgress <= 0.7) {
 
                 if (productProgress > 0.22 && !navClearFlag && navElement) {
                     navElement.classList.add('clear');
@@ -434,15 +434,15 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
                 if (state.starField) {
                     state.starField.visible = true;
-                    state.starField.updateProgress(productProgress * 1.66, productBool && productProgress <= 0.6);
+                    state.starField.updateProgress(productProgress * 1.66, productBool && productProgress <= 0.7);
                 }
 
-                const cellScale = smoothLerp(1.6, productSection__cellEndScale, productProgress / 0.6);
+                const cellScale = smoothLerp(1.6, productSection__cellEndScale, productProgress / 0.7);
                 cellObject.scale.setScalar(cellScale);
 
 
                 // hide text
-                if (productProgress > 0.45) {
+                if (productProgress > 0.4) {
                     if (!productPhase1aActive) {
                         textChildren.forEach(child => {
                             if (child.classList.contains('active')) {
@@ -475,7 +475,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                         lightingTransitionComplete = false;
                     }
 
-                    const fadeProgress = (productProgress - 0.45) / 0.15;
+                    const fadeProgress = (productProgress - 0.3) / 0.4;
 
                     // Fade in specific product elements
                     if (product && fadeProgress > 0.5) {
@@ -505,8 +505,8 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     }
                 }
             }
-            // ===== PHASE 2: Product Rotation (0.6 to 0.9) =====
-            else if (0.6 <= productProgress && productProgress <= 0.9) {
+            // ===== PHASE 2: Product Rotation (0.7 to 0.9) =====
+            else if (0.7 <= productProgress && productProgress <= 0.9) {
                 // Hide cell object and starfield after transition
                 if (!productPhase2Active) {
                     cellObject.visible = false;
@@ -567,14 +567,14 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     productPhase3Active = false;
                 }
 
-                const rotationProgress = (productProgress - 0.6) / 0.3;
+                const rotationProgress = (productProgress - 0.7) / 0.2;
 
                 renderer.toneMappingExposure = smoothLerp(0.6, 0.36, rotationProgress);
 
                 // Handle product movement
                 if (isMobile) {
                     // MOBILE 2a+b
-                    if (productProgress >= 0.6) {
+                    if (productProgress >= 0.7) {
                         const currentTime = performance.now();
                         if (currentTime - lastProductRotationUpdate >= PRODUCT_ROTATION_THROTTLE) {
                             if (lastProductAnimationFrame) {
@@ -582,7 +582,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                             }
 
                             lastProductAnimationFrame = requestAnimationFrame(() => {
-                                const rotationProgress = (productProgress - 0.6) / 0.3;
+                                const rotationProgress = (productProgress - 0.7) / 0.2;
                                 
                                 // Cache all transform calculations
                                 cachedProductTransform.rotation.set(

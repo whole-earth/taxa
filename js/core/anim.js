@@ -142,7 +142,7 @@ export class App {
     async loadProductOnDemand() {
         if (!this.product) {
             try {
-                const product = await new ProductComponent(this.sceneManager.scene, "wednesday.glb", 200);
+                const product = await new ProductComponent(this.sceneManager.scene, "product.glb", 200);
                 this.product = product;
 
                 // Add reflectivity to outer-cap
