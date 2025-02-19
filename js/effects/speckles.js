@@ -19,7 +19,7 @@ const MOBILE_CONFIG = {
 
 const DESKTOP_CONFIG = {
     count: 600,
-    sizes: [0.08, 0.12, 0.16, 0.2, 0.26],
+    sizes: [0.06, 0.10, 0.14, 0.18, 0.2],
     colors: {
         default: 0xffbb65
     },
@@ -154,7 +154,6 @@ class SpecklePool {
 
     acquireMatrix() {
         if (this.available.size === 0) {
-            console.warn('⚠️ SpecklePool: No available matrices');
             return new THREE.Matrix4();
         }
         
@@ -166,7 +165,6 @@ class SpecklePool {
 
     acquireVector() {
         if (this.available.size === 0) {
-            console.warn('⚠️ SpecklePool: No available vectors');
             return new THREE.Vector3();
         }
         
@@ -198,7 +196,6 @@ export class SpeckleSystem {
         this.scene = scene;
         this.isMobile = window.innerWidth < 768;
         
-        // Use provided radius or default from config
         this.radius = radius || (this.isMobile ? MOBILE_CONFIG.radius : DESKTOP_CONFIG.radius);
         
         this.wavingBlob = this.createWavingBlob();
@@ -207,8 +204,8 @@ export class SpeckleSystem {
             cellObject.add(this.wavingBlob);
         }
         
-        // Use simpler geometry for mobile
-        this.sharedGeometry = new THREE.SphereGeometry(1, 4, 4);
+        const segmentCount = this.isMobile ? 6 : 8;
+        this.sharedGeometry = new THREE.SphereGeometry(1, segmentCount, segmentCount);
         
         // Optimize material creation
         const materialConfig = {

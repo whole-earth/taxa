@@ -776,7 +776,7 @@ const fadeOutDuration = 180;
 const productSection__cellEndScale = isMobile ? 0.05 : 0.016;
 
 let splashBool, zoomBool, pitchBool, productBool;
-let splashProgress, zoomProgress, pitchProgress, productProgress;
+let splashProgress, zoomProgress, productProgress;
 
 let activeTextTimeout;
 
