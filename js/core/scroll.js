@@ -133,7 +133,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     product.position.set(0, 0, 0);
                     product.rotation.set(Math.PI / 2, 0, 0);
                     product.scale.setScalar(isMobile ? MOBILE_PRODUCT_SCALES.initial : DESKTOP_PRODUCT_SCALES.initial);
-                    
+
                     // Reset cached transform state
                     cachedProductTransform.lastScale = 0;
                     cachedProductTransform.position.set(0, 0, 0);
@@ -260,7 +260,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                                 if (zoomThirdCurrent && !explodedGroups.has(phase.index)) {
                                     speckleSystem.tweenExplosion(explosionDuration * (1 - phase.threshold), phase.index);
                                     explodedGroups.add(phase.index);
-                                    
+
                                     // Dispose dots after last explosion phase
                                     if (phase.index === EXPLOSION_PHASES[EXPLOSION_PHASES.length - 1].index) {
                                         setTimeout(() => {
@@ -583,14 +583,14 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
                             lastProductAnimationFrame = requestAnimationFrame(() => {
                                 const rotationProgress = (productProgress - 0.7) / 0.2;
-                                
+
                                 // Cache all transform calculations
                                 cachedProductTransform.rotation.set(
                                     smoothLerp(Math.PI / 2, Math.PI / 7, rotationProgress),
                                     smoothLerp(0, Math.PI / 5, rotationProgress),
                                     smoothLerp(0, -Math.PI / 6, rotationProgress)
                                 );
-                                
+
                                 cachedProductTransform.position.set(
                                     smoothLerp(0, -3, rotationProgress),
                                     smoothLerp(0, 5.4, rotationProgress),
@@ -601,21 +601,21 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                                 const targetScale = smoothLerp(MOBILE_PRODUCT_SCALES.transition, MOBILE_PRODUCT_SCALES.final, rotationProgress);
                                 const currentScale = cachedProductTransform.lastScale || MOBILE_PRODUCT_SCALES.transition;
                                 const dampedScale = currentScale + (targetScale - currentScale) * 0.3;
-                                
+
                                 // Clamp scale to prevent extreme values
                                 const clampedScale = Math.max(
-                                    Math.min(dampedScale, MOBILE_PRODUCT_SCALES.final * 1.1),
-                                    MOBILE_PRODUCT_SCALES.transition * 0.9
+                                    Math.min(dampedScale, MOBILE_PRODUCT_SCALES.final),
+                                    MOBILE_PRODUCT_SCALES.transition
                                 );
-                                
+
                                 cachedProductTransform.lastScale = clampedScale;
                                 cachedProductTransform.scale.setScalar(clampedScale);
-                                
+
                                 // Batch transform updates
                                 product.rotation.copy(cachedProductTransform.rotation);
                                 product.position.copy(cachedProductTransform.position);
                                 product.scale.copy(cachedProductTransform.scale);
-                                
+
                                 lastProductRotationUpdate = currentTime;
                             });
                         }
@@ -773,7 +773,7 @@ const zoomElements = [zoomFirst, zoomSecond, zoomThird];
 
 const fadeInDuration = 400;
 const fadeOutDuration = 180;
-const productSection__cellEndScale = isMobile ? 0.2 : 0.016;
+const productSection__cellEndScale = isMobile ? 0.05 : 0.016;
 
 let splashBool, zoomBool, pitchBool, productBool;
 let splashProgress, zoomProgress, pitchProgress, productProgress;
@@ -835,7 +835,7 @@ let cachedProductTransform = {
 
 // Cache scale values
 const MOBILE_PRODUCT_SCALES = {
-    initial: 14,
+    initial: 26,
     transition: 4.8,
     final: 5.2
 };
@@ -846,53 +846,111 @@ const DESKTOP_PRODUCT_SCALES = {
     final: 5.5
 };
 
+// Single source of truth for rotation state
+const RotationManager = {
+    baseRotationSpeed: 0.4,
+    currentMultiplier: 0,
+    isDecelerating: false,
+    rafId: null,
+    
+    config: {
+        mobile: {
+            duration: 800,
+            smoothing: 0.95,
+            upScrollMultiplier: 0.06,    
+            downScrollMultiplier: 0.1,  
+            upDecayRate: 4,
+            downDecayRate: 2,
+        },
+        desktop: {
+            duration: 100,
+            smoothing: 0.8,
+            upScrollMultiplier: 0.12,    
+            downScrollMultiplier: 0.2,  
+            upDecayRate: 4,
+            downDecayRate: 2,
+        }
+    },
+
+    updateFromScroll(scrollDiff, delta) {
+        if (this.rafId) {
+            cancelAnimationFrame(this.rafId);
+            this.rafId = null;
+        }
+
+        const isMobile = window.innerWidth < 768;
+        const config = isMobile ? this.config.mobile : this.config.desktop;
+        
+        // Choose multiplier based on scroll direction
+        const multiplier = delta > 0 
+            ? config.downScrollMultiplier  // Scrolling down
+            : config.upScrollMultiplier;   // Scrolling up
+        
+        // Calculate additive multiplier from scroll
+        const scrollMultiplier = (delta / Math.abs(delta)) * (scrollDiff * multiplier);
+        
+        // Smooth the transition of the multiplier
+        this.currentMultiplier += (scrollMultiplier - this.currentMultiplier) * (1 - config.smoothing);
+        
+        this.isDecelerating = false;
+        
+        // Return base rotation plus the current multiplier
+        return this.baseRotationSpeed + this.currentMultiplier;
+    },
+
+    startDeceleration(controls) {
+        if (this.isDecelerating) return;
+        
+        this.isDecelerating = true;
+        const isMobile = window.innerWidth < 768;
+        const config = isMobile ? this.config.mobile : this.config.desktop;
+        const startMultiplier = this.currentMultiplier;
+        const startTime = performance.now();
+
+        // Choose decay rate based on whether we're decelerating from a positive or negative multiplier
+        const decayRate = startMultiplier > 0 ? config.downDecayRate : config.upDecayRate;
+
+        const decelerate = () => {
+            const now = performance.now();
+            const elapsed = now - startTime;
+            const progress = Math.min(elapsed / config.duration, 1);
+
+            // Use the direction-specific decay rate
+            const decay = Math.exp(-decayRate * progress);
+            this.currentMultiplier = startMultiplier * decay;
+            
+            controls.autoRotateSpeed = this.baseRotationSpeed + this.currentMultiplier;
+
+            if (Math.abs(this.currentMultiplier) > 0.01) {
+                this.rafId = requestAnimationFrame(() => decelerate());
+            } else {
+                this.isDecelerating = false;
+                this.currentMultiplier = 0;
+                controls.autoRotateSpeed = this.baseRotationSpeed;
+                this.rafId = null;
+            }
+        };
+
+        this.rafId = requestAnimationFrame(decelerate);
+    }
+};
+
+// Modify animatePage to use the manager
 export function animatePage(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight) {
     let scrollY = window.scrollY;
     let delta = scrollY - state.lastScrollY;
     let scrollDiff = Math.abs(delta);
 
-    // Enable auto-rotation by default
+    // Enable auto-rotation
     controls.autoRotate = true;
 
-    /*
-    if (isMobile) {
-        const multiplier = Math.floor(scrollDiff / 10);
-        // Scroll down: faster rotation, scroll up: slower reverse rotation
-        controls.autoRotateSpeed = delta > 0
-            ? Math.min(0.5 + (multiplier * 12), 20)  // Normal speed for downward
-            : -Math.min(0.5 + (multiplier * 6), 12);  // Damped speed for upward
-    } else {
-        // Desktop logic
-        const multiplier = Math.floor(scrollDiff / 20);
-        controls.autoRotateSpeed = delta > 0
-            ? Math.min(0.5 + (multiplier * 8), 20)  // Normal speed for downward
-            : -Math.min(0.5 + (multiplier * 4), 12);  // More damped speed for upward
+    if (scrollDiff > 0) {
+        // Active scrolling - update speed
+        controls.autoRotateSpeed = RotationManager.updateFromScroll(scrollDiff, delta);
+    } else if (!RotationManager.isDecelerating) {
+        // Start deceleration when scrolling stops
+        RotationManager.startDeceleration(controls);
     }
-    */
-    
-    const multiplier = Math.floor(scrollDiff / 20);
-    controls.autoRotateSpeed = delta > 0
-        ? Math.min(0.5 + (multiplier * 8), 20)  // Normal speed for downward
-        : -Math.min(0.5 + (multiplier * 4), 12);  // More damped speed for upward
-
-    if (scrollRAF) {
-        cancelAnimationFrame(scrollRAF);
-    }
-
-    const resetSpeed = (timestamp) => {
-        if (!state.lastResetTime) state.lastResetTime = timestamp;
-        const elapsed = timestamp - state.lastResetTime;
-
-        if (elapsed < 100) {
-            scrollRAF = requestAnimationFrame(resetSpeed);
-        } else {
-            controls.autoRotateSpeed = 0.4;
-
-            state.lastResetTime = null;
-        }
-    };
-
-    scrollRAF = requestAnimationFrame(resetSpeed);
 
     const throttleDuration = isMobile ? 200 : 100;
     throttle(() => scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight), throttleDuration)();
@@ -957,20 +1015,20 @@ function smoothScrollTo(targetPosition) {
         const currentPosition = window.scrollY;
         const scrollDistance = Math.abs(targetPosition - currentPosition);
         const viewportHeight = window.innerHeight;
-        
+
         // Base duration on scroll distance for longer sections
         let duration;
         if (targetSection === 'product' && currentIndex < targetIndex) {
             // Scrolling to product section - adjust duration based on distance
-            duration = isMobile ? 
+            duration = isMobile ?
                 Math.min(4.0, 2.2 + (scrollDistance / viewportHeight) * 1.8) :
                 Math.min(5.0, 1.2 + (scrollDistance / viewportHeight) * 1.2);
         } else {
             // Normal section transitions
             duration = (
                 numberOfSections === 1 ? (isMobile ? 1.0 : 1.2) :
-                numberOfSections === 2 ? (isMobile ? 2.2 : 2.8) :
-                numberOfSections >= 3 ? (isMobile ? 3.2 : 3.6) : 0
+                    numberOfSections === 2 ? (isMobile ? 2.2 : 2.8) :
+                        numberOfSections >= 3 ? (isMobile ? 3.2 : 3.6) : 0
             );
         }
 

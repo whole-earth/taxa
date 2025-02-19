@@ -98,14 +98,14 @@ export class App {
             }
 
             state.lenis = new window.Lenis({
-                duration: isMobile ? 1.2 : 1.2,
+                duration: isMobile ? 2.0 : 1.2,
                 overscroll: false,
                 wheelMultiplier: 0.55,
                 smoothTouch: true,
-                lerp: isMobile ? 0.075 : 1.0,
-                friction: isMobile ? 0.01 : 0.1,
-                touchMultiplier: isMobile ? 2.2 : 1,
-                touchInertiaMultiplier: isMobile ? 35 : 1
+                lerp: isMobile ? 8.0 : 1.0,
+                friction: 0.1,
+                touchMultiplier: isMobile ? 6.2 : 1,
+                touchInertiaMultiplier: isMobile ? 2 : 1,
             });
 
             this.startAnimationLoop();
@@ -134,8 +134,15 @@ export class App {
 
         // Initialize speckle system if inner blob is available
         if (this.blobInner && this.blobInner.getBoundingBox()) {
-            const dotBounds = this.blobInner.getBoundingBox().max.z * 0.85;
-            this.speckleSystem = new SpeckleSystem(this.sceneManager.scene, dotBounds, this.cellObject);
+            // Calculate radius based on blobInner's bounding box
+            const boundingBox = this.blobInner.getBoundingBox();
+            const radius = Math.max(
+                boundingBox.max.x - boundingBox.min.x,
+                boundingBox.max.y - boundingBox.min.y,
+                boundingBox.max.z - boundingBox.min.z
+            ) * 0.48;
+
+            this.speckleSystem = new SpeckleSystem(this.sceneManager.scene, radius, this.cellObject);
         }
     }
 

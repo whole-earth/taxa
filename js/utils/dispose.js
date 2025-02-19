@@ -684,8 +684,6 @@ export const cleanupManager = {
         // Batch all visibility checks first
         const visibilityStates = {
             cell: splashBool || zoomBool || pitchBool || (productBool && productProgress <= 0.5),
-            //product: productBool && productProgress > 0.5,
-            // CHANGED 12:34 on 2/13 due to occasional product not being visible
             product: productBool && productProgress > 0,
             starfield: productBool && productProgress >= 0 && productProgress <= 0.5,
             speckles: zoomBool || pitchBool,

@@ -5,7 +5,7 @@ import { state } from '../core/anim.js';
 const isMobile = window.innerWidth < 768;
 
 const MOBILE_CONFIG = {
-    count: 140,
+    count: 200,
     size: 0.3,
     colors: {
         default: 0xffbb65
@@ -14,24 +14,30 @@ const MOBILE_CONFIG = {
         fadeInDuration: 400,
         fadeOutDuration: 150
     },
-    boxSize: 24
+    radius: 12
 };
 
 const DESKTOP_CONFIG = {
     count: 600,
-    sizes: [0.12, 0.14, 0.16, 0.18, 0.22],
+    sizes: [0.08, 0.12, 0.16, 0.2, 0.26],
     colors: {
         default: 0xffbb65
     },
     groups: {
         count: 5,
-        velocityMultipliers: [0.8, 0.9, 1.0, 1.1, 1.2]
+        rotations: [
+            { angle: -1, speed: 0.08 },           // Horizontal rotation
+            { angle: -Math.PI / 2, speed: 0.06 }, // Vertical rotation
+            { angle: Math.PI / 12, speed: 0.05 },  // 45 degrees rotation
+            { angle: -Math.PI / 4, speed: 0.06 },// -45 degrees rotation
+            { angle: Math.PI / 3, speed: 0.06 }  // 60 degrees rotation
+        ]
     },
     animation: {
         fadeInDuration: 500,
-        fadeOutDuration: 180,
-        baseVelocity: 0.014
-    }
+        fadeOutDuration: 180
+    },
+    radius: 15
 };
 
 const PERFORMANCE_CONFIG = {
@@ -57,7 +63,6 @@ class ProgressiveDisposal {
     }
 
     addToQueue(items, onComplete) {
-        // console.log(`🔄 Adding ${items.length} items to disposal queue`);
         this.queue = Array.isArray(items) ? items : [items];
         this.currentIndex = 0;
         this.isProcessing = true;
@@ -82,8 +87,6 @@ class ProgressiveDisposal {
             return;
         }
 
-        // console.log(`📦 Processing disposal chunk ${this.currentIndex / this.chunkSize + 1}, items ${this.currentIndex} to ${this.currentIndex + chunk.length}`);
-        
         // Process each item in the chunk
         chunk.forEach(item => {
             if (item.material) {
@@ -118,9 +121,7 @@ class ProgressiveDisposal {
 
     complete() {
         const duration = performance.now() - this.startTime;
-        // console.log(`✨ Progressive disposal complete in ${duration.toFixed(2)}ms`);
-        // console.log(`📊 Disposed ${this.disposed.size} unique resources`);
-        
+        this.isProcessing = false;
         this.isProcessing = false;
         if (this.onComplete) {
             this.onComplete();
@@ -128,7 +129,6 @@ class ProgressiveDisposal {
     }
 
     cancel() {
-        // console.log('🛑 Cancelling progressive disposal');
         this.isProcessing = false;
         this.queue = [];
         this.currentIndex = 0;
@@ -138,7 +138,6 @@ class ProgressiveDisposal {
 
 class SpecklePool {
     constructor(size) {
-        // console.log(`🏊 Initializing SpecklePool with size ${size}`);
         this.size = size;
         this.matrices = new Array(size);
         this.vectors = new Array(size);
@@ -195,13 +194,12 @@ class SpecklePool {
 }
 
 export class SpeckleSystem {
-    constructor(scene, dotBounds, cellObject) {
+    constructor(scene, radius = null, cellObject) {
         this.scene = scene;
-        this.dotBounds = dotBounds;
         this.isMobile = window.innerWidth < 768;
         
-        // Pre-calculate values used frequently
-        this.boxSizeHalf = (this.isMobile ? MOBILE_CONFIG.boxSize : this.dotBounds) * 0.5;
+        // Use provided radius or default from config
+        this.radius = radius || (this.isMobile ? MOBILE_CONFIG.radius : DESKTOP_CONFIG.radius);
         
         this.wavingBlob = this.createWavingBlob();
         
@@ -211,10 +209,6 @@ export class SpeckleSystem {
         
         // Use simpler geometry for mobile
         this.sharedGeometry = new THREE.SphereGeometry(1, 4, 4);
-        
-        // Cache frequently used values
-        this.dotBoundsSquared = this.dotBounds * this.dotBounds;
-        this.boundsBuffer = Math.sqrt(this.dotBoundsSquared) * 0.98;
         
         // Optimize material creation
         const materialConfig = {
@@ -241,9 +235,9 @@ export class SpeckleSystem {
         // Add frustum culling support
         this.frustum = new THREE.Frustum();
         this.projScreenMatrix = new THREE.Matrix4();
-        this.boundingSphere = new THREE.Sphere(new THREE.Vector3(), PERFORMANCE_CONFIG.cullingDistance);
+        this.boundingSphere = new THREE.Sphere(new THREE.Vector3(), this.radius);
         
-        // Pre-allocate more reusable objects
+        // Pre-allocate reusable objects
         this.tempMatrix = new THREE.Matrix4();
         this.tempPosition = new THREE.Vector3();
         this.tempQuaternion = new THREE.Quaternion();
@@ -344,7 +338,7 @@ export class SpeckleSystem {
                         Math.random() - 0.5,
                         Math.random() - 0.5
                     ).normalize();
-                    velocities[i] = randomDirection.multiplyScalar(DESKTOP_CONFIG.animation.baseVelocity);
+                    velocities[i] = randomDirection.multiplyScalar(DESKTOP_CONFIG.animation.baseRotationSpeed);
                 }
             }
             
@@ -368,19 +362,15 @@ export class SpeckleSystem {
     }
 
     getRandomPositionWithinBounds() {
-        if (this.isMobile) {
-            return this.tempPosition.set(
-                (Math.random() - 0.5) * this.boxSizeHalf * 2,
-                (Math.random() - 0.5) * this.boxSizeHalf * 2,
-                (Math.random() - 0.5) * this.boxSizeHalf * 2
-            );
-        }
+        // Simplified position generation using radius
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        const r = Math.cbrt(Math.random()) * this.radius; // Cube root for more uniform distribution
         
-        const scaledBounds = this.dotBounds * 0.65;
         return this.tempPosition.set(
-            (Math.random() * 2 - 1) * scaledBounds,
-            (Math.random() * 2 - 1) * scaledBounds,
-            (Math.random() * 2 - 1) * scaledBounds
+            r * Math.sin(phi) * Math.cos(theta),
+            r * Math.sin(phi) * Math.sin(theta),
+            r * Math.cos(phi)
         );
     }
 
@@ -389,8 +379,8 @@ export class SpeckleSystem {
             // Skip frames based on config
             if (this.frameCount++ % PERFORMANCE_CONFIG.frameSkip !== 0) return;
             
-            // Early exit conditions
-            if (!this.wavingBlob?.visible || !this.velocities?.length) return;
+            // Early exit conditions - removed velocities check
+            if (!this.wavingBlob?.visible) return;
             
             // Only do frustum culling if camera is provided
             let isVisible = true;
@@ -411,13 +401,20 @@ export class SpeckleSystem {
             
             // Skip updates if not visible
             if (!isVisible) return;
-            
+
+            // Debug - track time for smooth rotation
+            const time = performance.now() * 0.001; // Convert to seconds
+
             this.instancedMeshes.forEach((instancedMesh, meshIndex) => {
                 if (!instancedMesh?.visible) return;
                 
                 const matrices = this.instanceMatrices?.[meshIndex];
-                const velocities = this.velocities?.[meshIndex];
-                if (!matrices?.length || !velocities?.length) return;
+                if (!matrices?.length) return;
+                
+                // Get rotation parameters for this group
+                const groupRotation = DESKTOP_CONFIG.groups.rotations[meshIndex];
+                const rotationAngle = groupRotation.angle;
+                const rotationSpeed = groupRotation.speed;
                 
                 let needsUpdate = false;
                 const count = matrices.length;
@@ -429,16 +426,26 @@ export class SpeckleSystem {
                     
                     for (let i = batch; i < end; i++) {
                         const matrix = matrices[i];
-                        const velocity = velocities[i];
-                        if (!matrix || !velocity) continue;
+                        if (!matrix) continue;
                         
                         matrix.decompose(this.tempPosition, this.tempQuaternion, this.tempScale);
-                        this.tempPosition.add(velocity);
                         
-                        if (this.tempPosition.lengthSq() > this.dotBoundsSquared) {
-                            velocity.negate();
-                            this.tempPosition.normalize().multiplyScalar(this.boundsBuffer);
-                        }
+                        // Calculate rotation around tilted axis
+                        const radius = this.tempPosition.length();
+                        
+                        // Create rotation axis (tilted by rotationAngle)
+                        this.tempVector.set(
+                            Math.sin(rotationAngle),
+                            Math.cos(rotationAngle),
+                            0
+                        ).normalize();
+
+                        // Apply time-based rotation
+                        const currentRotation = time * rotationSpeed;
+                        this.tempPosition.applyAxisAngle(this.tempVector, currentRotation);
+                        
+                        // Maintain radius
+                        this.tempPosition.normalize().multiplyScalar(radius);
                         
                         this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
                         instancedMesh.setMatrixAt(i, this.tempMatrix);
@@ -625,7 +632,6 @@ export class SpeckleSystem {
             }
             
             instancedMesh.instanceMatrix.needsUpdate = true;
-            // console.log(`🔄 Reset ${MOBILE_CONFIG.count} mobile speckles`);
             return;
         }
 
@@ -671,7 +677,7 @@ export class SpeckleSystem {
                         Math.random() - 0.5,
                         Math.random() - 0.5,
                         Math.random() - 0.5
-                    ).normalize().multiplyScalar(DESKTOP_CONFIG.animation.baseVelocity);
+                    ).normalize().multiplyScalar(DESKTOP_CONFIG.animation.baseRotationSpeed);
                     this.velocities[meshIndex][i].copy(this.tempVector);
                 }
             }
@@ -680,7 +686,6 @@ export class SpeckleSystem {
             instancedMesh.instanceMatrix.needsUpdate = true;
         });
         
-        // console.log(`🔄 Reset ${totalSpeckles} desktop speckles in ${this.instancedMeshes.length} groups (${countPerSize} per group)`);
     }
 
     updateColors(color) {
@@ -740,7 +745,7 @@ export class SpeckleSystem {
                         Math.random() - 0.5,
                         Math.random() - 0.5
                     ).normalize();
-                    velocities[i] = randomDirection.multiplyScalar(DESKTOP_CONFIG.animation.baseVelocity);
+                    velocities[i] = randomDirection.multiplyScalar(DESKTOP_CONFIG.animation.baseRotationSpeed);
                 }
             }
             instancedMesh.instanceMatrix.needsUpdate = true;
@@ -749,7 +754,6 @@ export class SpeckleSystem {
 
     dispose() {
         console.time('SpeckleSystem.dispose');
-        // console.log('🔥 Starting SpeckleSystem progressive disposal');
 
         // Cancel any ongoing tweens
         state.blobTweenGroup.removeAll();
@@ -758,7 +762,6 @@ export class SpeckleSystem {
         // First dispose shared geometry
         if (this.sharedGeometry) {
             this.sharedGeometry.dispose();
-            // console.log('✅ Disposed shared geometry');
         }
 
         // Clear all temporary objects
@@ -777,11 +780,8 @@ export class SpeckleSystem {
 
         this.disposalManager.addToQueue(itemsToDispose, () => {
             console.timeEnd('SpeckleSystem.dispose');
-            // console.log('✨ SpeckleSystem disposal complete');
-            
-            // Clear the object pool
             this.pool.clear();
-            // console.log('🏊 Object pool cleared');
         });
     }
+
 } 
