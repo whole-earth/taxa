@@ -386,16 +386,16 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     if (productPhase2Active) {
                         product.rotation.set(Math.PI / 2, 0, 0);
                         product.position.set(0, 0, 0);
-                        const productScale = isMobile ? 14 : 20;
+                        const productScale = isMobile ? 18 : 20;
                         product.scale.set(productScale, productScale, productScale);
 
                         renderer.toneMappingExposure = 1.0;
                         ambientLight.intensity = 4.6;
                         lightingTransitionComplete = true;
 
-                        //controls.autoRotate = true;
-                        //controls.enableRotate = true;
-                        //controls.autoRotateSpeed = 0.4;
+                        controls.autoRotate = true;
+                        controls.enableRotate = true;
+                        controls.autoRotateSpeed = 0.4;
                     }
 
                     // Restore blob color when scrolling back up
@@ -428,7 +428,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
                     productPhase2Active = false;
                     productPhase3Active = false;
-                    productPhase1aActive = false; // overwritten if (productProgress > 0.375) is met
+                    productPhase1aActive = false;
                     productPhase1Active = true;
                 }
 
@@ -496,7 +496,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     renderer.toneMappingExposure = smoothLerp(1, 0.6, fadeProgress);
 
                     const productScale = isMobile
-                        ? smoothLerp(14, 4.8, fadeProgress)  // Mobile
+                        ? smoothLerp(18, 4.8, fadeProgress)  // Mobile
                         : smoothLerp(20, 4, fadeProgress);  // Desktop
                     product.scale.setScalar(productScale);
 
@@ -556,7 +556,6 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                         }
                     });
 
-                    // Initialize directional light when entering product phase
                     if (state.sceneManager?.directionalLight) {
                         const { directionalLight } = state.sceneManager;
                         directionalLight.visible = true;
@@ -574,51 +573,40 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                 // Handle product movement
                 if (isMobile) {
                     // MOBILE 2a+b
-                    if (productProgress >= 0.7) {
-                        const currentTime = performance.now();
-                        if (currentTime - lastProductRotationUpdate >= PRODUCT_ROTATION_THROTTLE) {
-                            if (lastProductAnimationFrame) {
-                                cancelAnimationFrame(lastProductAnimationFrame);
-                            }
-
-                            lastProductAnimationFrame = requestAnimationFrame(() => {
-                                const rotationProgress = (productProgress - 0.7) / 0.2;
-
-                                // Cache all transform calculations
-                                cachedProductTransform.rotation.set(
-                                    smoothLerp(Math.PI / 2, Math.PI / 7, rotationProgress),
-                                    smoothLerp(0, Math.PI / 5, rotationProgress),
-                                    smoothLerp(0, -Math.PI / 6, rotationProgress)
-                                );
-
-                                cachedProductTransform.position.set(
-                                    smoothLerp(0, -3, rotationProgress),
-                                    smoothLerp(0, 5.4, rotationProgress),
-                                    0
-                                );
-
-                                // Calculate target scale with damping
-                                const targetScale = smoothLerp(MOBILE_PRODUCT_SCALES.transition, MOBILE_PRODUCT_SCALES.final, rotationProgress);
-                                const currentScale = cachedProductTransform.lastScale || MOBILE_PRODUCT_SCALES.transition;
-                                const dampedScale = currentScale + (targetScale - currentScale) * 0.3;
-
-                                // Clamp scale to prevent extreme values
-                                const clampedScale = Math.max(
-                                    Math.min(dampedScale, MOBILE_PRODUCT_SCALES.final),
-                                    MOBILE_PRODUCT_SCALES.transition
-                                );
-
-                                cachedProductTransform.lastScale = clampedScale;
-                                cachedProductTransform.scale.setScalar(clampedScale);
-
-                                // Batch transform updates
-                                product.rotation.copy(cachedProductTransform.rotation);
-                                product.position.copy(cachedProductTransform.position);
-                                product.scale.copy(cachedProductTransform.scale);
-
-                                lastProductRotationUpdate = currentTime;
-                            });
+                    const currentTime = performance.now();
+                    if (currentTime - lastProductRotationUpdate >= PRODUCT_ROTATION_THROTTLE) {
+                        if (lastProductAnimationFrame) {
+                            cancelAnimationFrame(lastProductAnimationFrame);
                         }
+
+                        lastProductAnimationFrame = requestAnimationFrame(() => {
+                            const rotationProgress = (productProgress - 0.7) / 0.2;
+
+                            // Cache all transform calculations
+                            cachedProductTransform.rotation.set(
+                                smoothLerp(Math.PI / 2, Math.PI / 7, rotationProgress),
+                                smoothLerp(0, Math.PI / 5, rotationProgress),
+                                smoothLerp(0, -Math.PI / 6, rotationProgress)
+                            );
+
+                            cachedProductTransform.position.set(
+                                smoothLerp(0, -3, rotationProgress),
+                                smoothLerp(0, 5.4, rotationProgress),
+                                0
+                            );
+
+                            // Calculate target scale without damping
+                            const targetScale = smoothLerp(MOBILE_PRODUCT_SCALES.transition, MOBILE_PRODUCT_SCALES.final, rotationProgress);
+                            cachedProductTransform.scale.setScalar(targetScale);
+
+                            // Batch transform updates
+                            product.rotation.copy(cachedProductTransform.rotation);
+                            product.position.copy(cachedProductTransform.position);
+                            product.scale.copy(cachedProductTransform.scale);
+
+                            lastProductRotationUpdate = currentTime;
+                        });
+
                     }
                 } else {
                     // DESKTOP 2a
@@ -822,17 +810,6 @@ const EXPLOSION_PHASES = [
     { threshold: 0.9, index: 4 }
 ];
 
-// Add these variables at the top with other state variables
-let lastProductAnimationFrame;
-let lastProductRotationUpdate = 0;
-const PRODUCT_ROTATION_THROTTLE = 16.67; // ~60fps
-let cachedProductTransform = {
-    rotation: new THREE.Euler(),
-    position: new THREE.Vector3(),
-    scale: new THREE.Vector3(),
-    lastScale: 0
-};
-
 // Cache scale values
 const MOBILE_PRODUCT_SCALES = {
     initial: 26,
@@ -846,27 +823,38 @@ const DESKTOP_PRODUCT_SCALES = {
     final: 5.5
 };
 
+// Add these variables at the top with other state variables
+let lastProductAnimationFrame;
+let lastProductRotationUpdate = 0;
+const PRODUCT_ROTATION_THROTTLE = 16.67; // ~60fps
+let cachedProductTransform = {
+    rotation: new THREE.Euler(),
+    position: new THREE.Vector3(),
+    scale: new THREE.Vector3(),
+    lastScale: MOBILE_PRODUCT_SCALES.transition // Initialize with transition scale
+};
+
 // Single source of truth for rotation state
 const RotationManager = {
     baseRotationSpeed: 0.4,
     currentMultiplier: 0,
     isDecelerating: false,
     rafId: null,
-    
+
     config: {
         mobile: {
             duration: 800,
             smoothing: 0.95,
-            upScrollMultiplier: 0.06,    
-            downScrollMultiplier: 0.1,  
+            upScrollMultiplier: 0.06,
+            downScrollMultiplier: 0.1,
             upDecayRate: 4,
             downDecayRate: 2,
         },
         desktop: {
             duration: 100,
             smoothing: 0.8,
-            upScrollMultiplier: 0.12,    
-            downScrollMultiplier: 0.2,  
+            upScrollMultiplier: 0.12,
+            downScrollMultiplier: 0.2,
             upDecayRate: 4,
             downDecayRate: 2,
         }
@@ -880,27 +868,27 @@ const RotationManager = {
 
         const isMobile = window.innerWidth < 768;
         const config = isMobile ? this.config.mobile : this.config.desktop;
-        
+
         // Choose multiplier based on scroll direction
-        const multiplier = delta > 0 
+        const multiplier = delta > 0
             ? config.downScrollMultiplier  // Scrolling down
             : config.upScrollMultiplier;   // Scrolling up
-        
+
         // Calculate additive multiplier from scroll
         const scrollMultiplier = (delta / Math.abs(delta)) * (scrollDiff * multiplier);
-        
+
         // Smooth the transition of the multiplier
         this.currentMultiplier += (scrollMultiplier - this.currentMultiplier) * (1 - config.smoothing);
-        
+
         this.isDecelerating = false;
-        
+
         // Return base rotation plus the current multiplier
         return this.baseRotationSpeed + this.currentMultiplier;
     },
 
     startDeceleration(controls) {
         if (this.isDecelerating) return;
-        
+
         this.isDecelerating = true;
         const isMobile = window.innerWidth < 768;
         const config = isMobile ? this.config.mobile : this.config.desktop;
@@ -918,7 +906,7 @@ const RotationManager = {
             // Use the direction-specific decay rate
             const decay = Math.exp(-decayRate * progress);
             this.currentMultiplier = startMultiplier * decay;
-            
+
             controls.autoRotateSpeed = this.baseRotationSpeed + this.currentMultiplier;
 
             if (Math.abs(this.currentMultiplier) > 0.01) {
