@@ -11,7 +11,7 @@ html {
 }
 
 body {
-  background-color: #fffbf4;
+  background-color: #ffffff;
   width: 100%;
 }
 
@@ -53,21 +53,18 @@ main {
   position: relative;
   height: 200vh;
   width: 100%;
-  border: 2px solid #00ff7b;
 }
 
 .zoom {
   position: relative;
   height: 200vh; /* 400 in webflow */
   width: 100%;
-  border: 2px solid #d1d1d1;
 }
 
 .zoom-out {
   position: relative;
   height: 60vh;
   width: 100%;
-  border: 2px solid #ff2929;
 }
 
 .pitch {

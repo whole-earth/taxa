@@ -100,7 +100,7 @@ export class App {
             state.lenis = new window.Lenis({
                 duration: isMobile ? 2.0 : 1.2,
                 overscroll: false,
-                wheelMultiplier: 0.36,
+                wheelMultiplier: 0.45,
                 smoothTouch: true,
                 lerp: isMobile ? 8.0 : 1.0,
                 friction: 0.2,
