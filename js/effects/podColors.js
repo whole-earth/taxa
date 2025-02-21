@@ -69,7 +69,7 @@ export class ColorChangeAnimationSequence {
             productType.style.transition = 'opacity 0.3s ease-out';
             productType.style.opacity = '0';
         }
-        if (productTypeSubtitle) {
+        if (productTypeSubtitle && window.innerWidth > 480) {
             productTypeSubtitle.style.transition = 'opacity 0.3s ease-out';
             productTypeSubtitle.style.opacity = '0';
         }
@@ -257,7 +257,8 @@ export class ColorChangeAnimationSequence {
                         });
                     }
 
-                    if (productTypeSubtitle && productText) {
+                    // Existing code for updating #productTypeSubtitle
+                    if (productTypeSubtitle && productText && window.innerWidth > 480) {
                         // Create a temporary span to measure new text width
                         const tempSpan = document.createElement('span');
                         tempSpan.style.visibility = 'hidden';
@@ -296,19 +297,21 @@ export class ColorChangeAnimationSequence {
                                     productTypeSubtitle.style.display = 'inline';
                                     productTypeSubtitle.style.width = 'auto';
                                     productTypeSubtitle.style.verticalAlign = '';
-
-                                    // Fade in all elements
-                                    const elements = [productType, productTypeSubtitle, showingLabel, waitlistLabel];
-                                    elements.forEach(el => {
-                                        if (el) {
-                                            el.style.transition = 'opacity 0.3s ease-out';
-                                            el.style.opacity = '1';
-                                        }
-                                    });
                                 }
                             });
                         });
                     }
+
+                    setTimeout(() => {
+                    // Fade in all elements
+                    const elements = [productType, productTypeSubtitle, showingLabel, waitlistLabel];
+                    elements.forEach(el => {
+                        if (el) {
+                            el.style.transition = 'opacity 0.3s ease-out';
+                            el.style.opacity = '1';
+                            }
+                        });
+                    }, 500);
 
                     // Update showing label text while still invisible
                     if (showingLabel) {
