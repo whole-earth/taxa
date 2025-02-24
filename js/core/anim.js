@@ -87,6 +87,7 @@ export class App {
 
     async init() {
         try {
+            window.scrollTo(0, 0);
             this.ambientLight = this.sceneManager.initLights();
             await this.loadAllComponents();
             await this.initializeStarfield();
