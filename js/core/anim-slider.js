@@ -350,10 +350,11 @@ export class App {
         sliderContainer.style.padding = '10px';
         sliderContainer.style.borderRadius = '5px';
         sliderContainer.style.boxShadow = '0 0 10px rgba(0, 0, 0, 0.1)';
+        sliderContainer.style.width = '240px';
 
         // Create the wheelMultiplier slider
         const wheelMultiplierLabel = document.createElement('label');
-        wheelMultiplierLabel.textContent = 'Wheel Multiplier';
+        wheelMultiplierLabel.textContent = 'Wheel Multiplier ';
         sliderContainer.appendChild(wheelMultiplierLabel);
 
         const wheelMultiplierSlider = document.createElement('input');
@@ -366,9 +367,14 @@ export class App {
         wheelMultiplierSlider.style.marginBottom = '10px';
         sliderContainer.appendChild(wheelMultiplierSlider);
 
+        const wheelMultiplierValue = document.createElement('span');
+        wheelMultiplierValue.textContent = `(${wheelMultiplierSlider.value})`;
+        wheelMultiplierValue.style.color = 'gray';
+        wheelMultiplierLabel.appendChild(wheelMultiplierValue);
+
         // Create the friction slider
         const frictionLabel = document.createElement('label');
-        frictionLabel.textContent = 'Friction';
+        frictionLabel.textContent = 'Friction ';
         sliderContainer.appendChild(frictionLabel);
 
         const frictionSlider = document.createElement('input');
@@ -381,12 +387,18 @@ export class App {
         frictionSlider.style.marginBottom = '10px';
         sliderContainer.appendChild(frictionSlider);
 
+        const frictionValue = document.createElement('span');
+        frictionValue.textContent = `(${frictionSlider.value})`;
+        frictionValue.style.color = 'gray';
+        frictionLabel.appendChild(frictionValue);
+
         // Append the slider container to the body
         document.body.appendChild(sliderContainer);
 
-        // Add event listeners to update lenis properties
+        // Add event listeners to update lenis properties and display values
         wheelMultiplierSlider.addEventListener('input', function(event) {
             const wheelMultiplier = parseFloat(event.target.value);
+            wheelMultiplierValue.textContent = `(${wheelMultiplier.toFixed(2)})`;
             console.log('Wheel Multiplier:', wheelMultiplier);
             if (state.lenis) {
                 state.lenis.wheelMultiplier = wheelMultiplier;
@@ -395,6 +407,7 @@ export class App {
 
         frictionSlider.addEventListener('input', function(event) {
             const friction = parseFloat(event.target.value);
+            frictionValue.textContent = `(${friction.toFixed(2)})`;
             console.log('Friction:', friction);
             if (state.lenis) {
                 state.lenis.friction = friction;
