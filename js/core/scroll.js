@@ -10,6 +10,9 @@ const green = new THREE.Color('#92cb86');
 const orange = new THREE.Color('#ffbb65');
 const yellow = new THREE.Color('#f1ff00');
 
+// Declare 'product' at the top level
+let product = null;
+
 // =====================================================================================
 
 function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight) {
@@ -123,12 +126,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
                 // Enhanced product cleanup when entering zoom section
                 if (product) {
-                    product.visible = false;
-                    product.traverse(child => {
-                        if (child.material) {
-                            child.visible = false;
-                        }
-                    });
+                    batchUpdateVisibility(product, false);
                     // Reset product transforms
                     product.position.set(0, 0, 0);
                     product.rotation.set(Math.PI / 2, 0, 0);
@@ -313,27 +311,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
     else if (productBool) {
         if (!productCurrent) {
             // Load product on demand when entering product section
-            if (!product) {
-                // Keep cell visible during product loading
-                state.app.loadProductOnDemand().then(loadedProduct => {
-                    product = loadedProduct;
-                    if (productBool) { // Only show if still in product section
-                        setupProductForSection(product, state.applicatorObject);
-                    } else {
-                        // If we've scrolled away, ensure product is hidden
-                        if (product) {
-                            product.visible = false;
-                            product.traverse(child => {
-                                if (child.material) {
-                                    child.visible = false;
-                                }
-                            });
-                        }
-                    }
-                });
-            } else {
-                setupProductForSection(product, state.applicatorObject);
-            }
+            handleProductLoading();
 
             if (state.starField) {
                 state.starField.visible = true;
@@ -393,9 +371,6 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                         ambientLight.intensity = 4.6;
                         lightingTransitionComplete = true;
 
-                        controls.autoRotate = true;
-                        controls.enableRotate = true;
-                        controls.autoRotateSpeed = 0.4;
                     }
 
                     // Restore blob color when scrolling back up
@@ -404,20 +379,32 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     }
 
                     // go thru product and set all materials to transparent
+                    const materialsToUpdate = [];
                     product.traverse(child => {
                         if (child.material) {
-                            child.material.transparent = true;
-                            child.material.depthWrite = true;
-                            child.material.depthTest = true;
-                            child.material.needsUpdate = true;
+                            const materials = Array.isArray(child.material) ? child.material : [child.material];
+                            materials.forEach(mat => {
+                                mat.transparent = true;
+                                mat.depthWrite = true;
+                                mat.depthTest = true;
+                                materialsToUpdate.push(mat);
+                            });
                         }
 
                         if (child.name === 'outer-cap' && child.material) {
-                            if (child.material.ior != 200) {
-                                child.material.ior = 200;
-                                child.material.needsUpdate = true;
-                            }
+                            const materials = Array.isArray(child.material) ? child.material : [child.material];
+                            materials.forEach(mat => {
+                                if (mat.ior != 200) {
+                                    mat.ior = 200;
+                                    materialsToUpdate.push(mat);
+                                }
+                            });
                         }
+                    });
+
+                    // Batch update needsUpdate
+                    materialsToUpdate.forEach(mat => {
+                        mat.needsUpdate = true;
                     });
 
                     if (state.sceneManager?.directionalLight) {
@@ -459,6 +446,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                             state.applicatorObject.rotation.y = 0;
                             state.applicatorObject.position.y = 1;
 
+                            const applicatorMaterialsToUpdate = [];
                             state.applicatorObject.traverse(child => {
                                 child.visible = true;
                                 if (child.material) {
@@ -466,9 +454,14 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                                     materials.forEach(mat => {
                                         mat.visible = true;
                                         mat.opacity = 1;
-                                        mat.needsUpdate = true;
+                                        applicatorMaterialsToUpdate.push(mat);
                                     });
                                 }
+                            });
+
+                            // Batch update needsUpdate for applicator materials
+                            applicatorMaterialsToUpdate.forEach(mat => {
+                                mat.needsUpdate = true;
                             });
                         }
                         productPhase1aActive = true;
@@ -478,20 +471,24 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     const fadeProgress = (productProgress - 0.3) / 0.4;
 
                     // Fade in specific product elements
-                    if (product && fadeProgress > 0.5) {
-                        product.traverse(child => {
-                            if (child.name === 'peel' || child.parent?.name === 'peel' ||
-                                child.name === 'inner-cap' || child.parent?.name === 'inner-cap') {
-                                if (child.material) {
-                                    const materials = Array.isArray(child.material) ? child.material : [child.material];
-                                    materials.forEach(mat => {
-                                        mat.opacity = smoothLerp(0, 1, (fadeProgress - 0.5) * 2);
-                                        mat.needsUpdate = true;
-                                    });
-                                }
+                    const productMaterialsToUpdate = [];
+                    product.traverse(child => {
+                        if (child.name === 'peel' || child.parent?.name === 'peel' ||
+                            child.name === 'inner-cap' || child.parent?.name === 'inner-cap') {
+                            if (child.material) {
+                                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                                materials.forEach(mat => {
+                                    mat.opacity = smoothLerp(0, 1, (fadeProgress - 0.5) * 2);
+                                    productMaterialsToUpdate.push(mat);
+                                });
                             }
-                        });
-                    }
+                        }
+                    });
+
+                    // Batch update needsUpdate for product materials
+                    productMaterialsToUpdate.forEach(mat => {
+                        mat.needsUpdate = true;
+                    });
 
                     renderer.toneMappingExposure = smoothLerp(1, 0.6, fadeProgress);
 
@@ -521,7 +518,6 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
             }
             // ===== PHASE 2: Product Rotation (0.7 to 0.9) =====
             else if (0.7 <= productProgress && productProgress <= 0.9) {
-                // Hide cell object and starfield after transition
                 if (!productPhase2Active) {
                     cellObject.visible = false;
                     if (state.starField) state.starField.visible = false;
@@ -534,10 +530,12 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                         scrollIndicator.classList.remove('hidden');
                     }
 
-                    if (!isMobile) {
+                    // Set initial scale based on whether we're coming from Phase 3 or Phase 1
+                    if (isMobile) {
+                        const targetScale = productPhase3Active ? MOBILE_PRODUCT_SCALES.final : MOBILE_PRODUCT_SCALES.transition;
+                        product.scale.setScalar(targetScale);
+                    } else if (!isMobile) {
                         product.scale.setScalar(4);
-                    } else if (isMobile) {
-                        product.scale.setScalar(4.8);
                     }
 
                     if (state.applicatorObject) {
@@ -545,6 +543,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                         state.applicatorObject.rotation.y = 0;
                     }
 
+                    const overflowMaterialsToUpdate = [];
                     product.traverse(child => {
                         if (child.name === 'overflowMask') {
                             child.visible = false;
@@ -559,15 +558,23 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                                 mat.depthWrite = true;
                                 mat.depthTest = true;
                                 mat.opacity = 1;
-                                mat.needsUpdate = true;
+                                overflowMaterialsToUpdate.push(mat);
                             });
                         }
                         if (child.name === 'outer-cap' && child.material) {
-                            if (child.material.ior != 1.5) {
-                                child.material.ior = 1.5;
-                                child.material.needsUpdate = true;
-                            }
+                            const materials = Array.isArray(child.material) ? child.material : [child.material];
+                            materials.forEach(mat => {
+                                if (mat.ior != 1.5) {
+                                    mat.ior = 1.5;
+                                    overflowMaterialsToUpdate.push(mat);
+                                }
+                            });
                         }
+                    });
+
+                    // Batch update needsUpdate for overflow materials
+                    overflowMaterialsToUpdate.forEach(mat => {
+                        mat.needsUpdate = true;
                     });
 
                     if (state.sceneManager?.directionalLight) {
@@ -671,6 +678,12 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                             scrollIndicator.classList.add('hidden');
                         }
                     }
+
+                    // Ensure we maintain the correct scale when entering phase 3
+                    if (isMobile) {
+                        product.scale.setScalar(MOBILE_PRODUCT_SCALES.final);
+                    }
+
                     productPhase3Active = true;
                     productTextActivated = false;
                 }
@@ -685,6 +698,12 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                     if (productProgress <= 0.95) {
                         const positionProgress = (productProgress - 0.9) / 0.05;
                         state.applicatorObject.position.y = smoothLerp(1, 0, positionProgress);
+
+                        // Ensure smooth scale transition when scrolling up
+                        if (isMobile) {
+                            const scaleProgress = 1 - ((0.95 - productProgress) / 0.05);
+                            product.scale.setScalar(smoothLerp(MOBILE_PRODUCT_SCALES.final, MOBILE_PRODUCT_SCALES.final, scaleProgress));
+                        }
                     }
                     // 3b. Applicator Rotation (0.95 to 1.0)
                     else {
@@ -694,6 +713,11 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                         }
                         const rotationProgress = (productProgress - 0.95) / 0.05;
                         state.applicatorObject.rotation.y = smoothLerp(0, Math.PI * 0.26, rotationProgress);
+
+                        // Maintain final scale through the rotation
+                        if (isMobile) {
+                            product.scale.setScalar(MOBILE_PRODUCT_SCALES.final);
+                        }
                     }
                 }
 
@@ -1519,6 +1543,21 @@ let lastZoomUpdate = 0;
 let cachedZoomSection = -1;
 const ZOOM_UPDATE_INTERVAL = isMobile ? 100 : 30; // ms between updates
 
+// Preload product assets to reduce initial load time
+function preloadProductAssets() {
+    if (!state.productAssetsPreloaded) {
+        state.app.loadProductOnDemand().then(loadedProduct => {
+            // Cache the loaded product for later use
+            state.preloadedProduct = loadedProduct;
+            state.productAssetsPreloaded = true;
+        });
+    }
+}
+
+// Call preloadProductAssets when the page loads or when the user is in a section just before the product section
+window.addEventListener('load', preloadProductAssets);
+
+// Use progressive rendering for the product
 function setupProductForSection(product, applicatorObject) {
     if (!product) return;
 
@@ -1539,7 +1578,67 @@ function setupProductForSection(product, applicatorObject) {
     cachedProductTransform.rotation.set(Math.PI / 2, 0, 0);
     cachedProductTransform.scale.set(productScale, productScale, productScale);
 
+    // Start with a low-resolution version
+    product.traverse(child => {
+        if (child.material) {
+            child.material.wireframe = true; // Start with wireframe for faster rendering
+        }
+    });
+
     // Now that everything is set up, make product visible
     product.visible = true;
     resetProductVisibility(product, applicatorObject);
+
+    // Gradually enhance the product rendering
+    setTimeout(() => {
+        product.traverse(child => {
+            if (child.material) {
+                child.material.wireframe = false; // Switch to full rendering
+                child.material.needsUpdate = true;
+            }
+        });
+    }, 500); // Adjust the delay as needed
 }
+
+// Modify the product loading logic to use preloaded product if available
+function handleProductLoading() {
+    if (!product) {
+        if (state.preloadedProduct) {
+            product = state.preloadedProduct;
+            setupProductForSection(product, state.applicatorObject);
+        } else {
+            state.app.loadProductOnDemand().then(loadedProduct => {
+                product = loadedProduct;
+                if (productBool) { // Only show if still in product section
+                    setupProductForSection(product, state.applicatorObject);
+                } else {
+                    batchUpdateVisibility(product, false);
+                }
+            });
+        }
+    } else {
+        setupProductForSection(product, state.applicatorObject);
+    }
+}
+
+// Debounce visibility changes to reduce computational load
+const debounceVisibilityChange = (product, visible) => {
+    if (product.visibilityTimeout) {
+        clearTimeout(product.visibilityTimeout);
+    }
+    product.visibilityTimeout = setTimeout(() => {
+        product.visible = visible;
+        product.traverse(child => {
+            if (child.material) {
+                child.visible = visible;
+            }
+        });
+    }, 50); // Adjust the delay as needed
+};
+
+// Use requestAnimationFrame to batch updates
+const batchUpdateVisibility = (product, visible) => {
+    requestAnimationFrame(() => {
+        debounceVisibilityChange(product, visible);
+    });
+};

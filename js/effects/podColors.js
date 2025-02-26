@@ -1,5 +1,6 @@
 import { Group, Tween, Easing } from 'tween';
 import * as THREE from 'three';
+import { state } from '../core/anim.js';
 
 // Define product colors as a single source of truth
 export const PRODUCT_COLORS = {
@@ -47,6 +48,11 @@ export class ColorChangeAnimationSequence {
         }
 
         this.isAnimating = true;  // Set flag when animation starts
+
+        // Disable scrolling with Lenis
+        if (state && state.lenis) {
+            state.lenis.stop();
+        }
 
         // Disable pod buttons during animation
         ['podOrange', 'podGreen', 'podYellow'].forEach(podId => {
@@ -147,6 +153,11 @@ export class ColorChangeAnimationSequence {
                         pod.style.pointerEvents = 'auto';
                     }
                 });
+
+                // Re-enable scrolling with Lenis
+                if (state && state.lenis) {
+                    state.lenis.start();
+                }
 
                 this.isAnimating = false;
             });
