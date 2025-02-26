@@ -495,10 +495,24 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
                     renderer.toneMappingExposure = smoothLerp(1, 0.6, fadeProgress);
 
+                    // Use a consistent easing function for smooth transitions
+                    const easingFunction = Easing.Cubic.InOut;
+
+                    // Update product scale with consistent easing
                     const productScale = isMobile
-                        ? smoothLerp(18, 4.8, fadeProgress)  // Mobile
-                        : smoothLerp(20, 4, fadeProgress);  // Desktop
+                        ? smoothLerp(18, 4.8, fadeProgress, easingFunction)  // Mobile
+                        : smoothLerp(20, 4, fadeProgress, easingFunction);  // Desktop
                     product.scale.setScalar(productScale);
+
+                    // Ensure smooth transition between phases with consistent easing
+                    if (productProgress > 0.7 && productProgress <= 0.9) {
+                        const rotationProgress = (productProgress - 0.7) / 0.2;
+                        const scaleTransition = smoothLerp(productScale, 5.5, rotationProgress, easingFunction);
+                        product.scale.setScalar(scaleTransition);
+                    } else if (productProgress > 0.9) {
+                        const finalScale = isMobile ? 5.2 : 5.5;
+                        product.scale.setScalar(finalScale);
+                    }
 
                     if (fadeProgress >= 1) {
                         lightingTransitionComplete = true;
