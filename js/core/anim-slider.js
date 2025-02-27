@@ -350,7 +350,7 @@ export class App {
         sliderContainer.style.padding = '10px';
         sliderContainer.style.borderRadius = '5px';
         sliderContainer.style.boxShadow = '0 0 10px rgba(0, 0, 0, 0.1)';
-        sliderContainer.style.width = '240px';
+        sliderContainer.style.width = '340px';
 
         // Create the wheelMultiplier slider
         const wheelMultiplierLabel = document.createElement('label');
@@ -360,8 +360,8 @@ export class App {
         const wheelMultiplierSlider = document.createElement('input');
         wheelMultiplierSlider.type = 'range';
         wheelMultiplierSlider.min = '0';
-        wheelMultiplierSlider.max = '1.2';
-        wheelMultiplierSlider.step = '0.01';
+        wheelMultiplierSlider.max = '12';
+        wheelMultiplierSlider.step = '0.05';
         wheelMultiplierSlider.value = '0.6';
         wheelMultiplierSlider.style.width = '100%';
         wheelMultiplierSlider.style.marginBottom = '10px';
@@ -380,8 +380,8 @@ export class App {
         const frictionSlider = document.createElement('input');
         frictionSlider.type = 'range';
         frictionSlider.min = '0';
-        frictionSlider.max = '1';
-        frictionSlider.step = '0.01';
+        frictionSlider.max = '10';
+        frictionSlider.step = '0.05';
         frictionSlider.value = '0.5';
         frictionSlider.style.width = '100%';
         frictionSlider.style.marginBottom = '10px';
