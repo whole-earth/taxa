@@ -360,9 +360,9 @@ export class App {
         const wheelMultiplierSlider = document.createElement('input');
         wheelMultiplierSlider.type = 'range';
         wheelMultiplierSlider.min = '0';
-        wheelMultiplierSlider.max = '12';
-        wheelMultiplierSlider.step = '0.05';
-        wheelMultiplierSlider.value = '0.6';
+        wheelMultiplierSlider.max = '0.8';
+        wheelMultiplierSlider.step = '0.01';
+        wheelMultiplierSlider.value = state.lenis ? state.lenis.wheelMultiplier : '0.6';
         wheelMultiplierSlider.style.width = '100%';
         wheelMultiplierSlider.style.marginBottom = '10px';
         sliderContainer.appendChild(wheelMultiplierSlider);
@@ -380,9 +380,9 @@ export class App {
         const frictionSlider = document.createElement('input');
         frictionSlider.type = 'range';
         frictionSlider.min = '0';
-        frictionSlider.max = '10';
+        frictionSlider.max = '2';
         frictionSlider.step = '0.05';
-        frictionSlider.value = '0.5';
+        frictionSlider.value = state.lenis ? state.lenis.friction : '0.5';
         frictionSlider.style.width = '100%';
         frictionSlider.style.marginBottom = '10px';
         sliderContainer.appendChild(frictionSlider);
@@ -392,27 +392,101 @@ export class App {
         frictionValue.style.color = 'gray';
         frictionLabel.appendChild(frictionValue);
 
+        // Function to sync UI with Lenis values
+        const syncUIWithLenis = () => {
+            if (state.lenis) {
+                wheelMultiplierSlider.value = state.lenis.wheelMultiplier;
+                wheelMultiplierValue.textContent = `(${state.lenis.wheelMultiplier.toFixed(2)})`;
+                frictionSlider.value = state.lenis.friction;
+                frictionValue.textContent = `(${state.lenis.friction.toFixed(2)})`;
+            }
+        };
+
+        // Add event listeners to update lenis properties and display values
+        const updateWheelMultiplier = (event) => {
+            if (state.lenis) {
+                const wheelMultiplier = parseFloat(event.target.value);
+                const currentConfig = {
+                    duration: state.lenis.options.duration,
+                    smoothTouch: state.lenis.options.smoothTouch,
+                    lerp: state.lenis.options.lerp,
+                    friction: state.lenis.options.friction,
+                    wheelMultiplier: wheelMultiplier,
+                    touchMultiplier: state.lenis.options.touchMultiplier,
+                    touchInertiaMultiplier: state.lenis.options.touchInertiaMultiplier,
+                };
+                
+                // Destroy existing instance
+                state.lenis.destroy();
+                
+                // Create new instance with updated config
+                state.lenis = new window.Lenis(currentConfig);
+                
+                wheelMultiplierValue.textContent = `(${wheelMultiplier.toFixed(2)})`;
+                console.log('Lenis reinitialized - Wheel Multiplier:', state.lenis.options.wheelMultiplier);
+            }
+        };
+
+        const updateFriction = (event) => {
+            if (state.lenis) {
+                const friction = parseFloat(event.target.value);
+                const currentConfig = {
+                    duration: state.lenis.options.duration,
+                    smoothTouch: state.lenis.options.smoothTouch,
+                    lerp: state.lenis.options.lerp,
+                    friction: friction,
+                    wheelMultiplier: state.lenis.options.wheelMultiplier,
+                    touchMultiplier: state.lenis.options.touchMultiplier,
+                    touchInertiaMultiplier: state.lenis.options.touchInertiaMultiplier,
+                };
+                
+                // Destroy existing instance
+                state.lenis.destroy();
+                
+                // Create new instance with updated config
+                state.lenis = new window.Lenis(currentConfig);
+                
+                frictionValue.textContent = `(${friction.toFixed(2)})`;
+                console.log('Lenis reinitialized - Friction:', state.lenis.options.friction);
+            }
+        };
+
+        // Throttle the update functions to prevent too many reinitializations
+        const throttle = (func, limit) => {
+            let inThrottle;
+            return function(...args) {
+                if (!inThrottle) {
+                    func.apply(this, args);
+                    inThrottle = true;
+                    setTimeout(() => inThrottle = false, limit);
+                }
+            }
+        };
+
+        wheelMultiplierSlider.addEventListener('input', throttle(updateWheelMultiplier, 100));
+        wheelMultiplierSlider.addEventListener('change', updateWheelMultiplier);
+        frictionSlider.addEventListener('input', throttle(updateFriction, 100));
+        frictionSlider.addEventListener('change', updateFriction);
+
+        // Initial sync with Lenis values
+        syncUIWithLenis();
+
         // Append the slider container to the body
         document.body.appendChild(sliderContainer);
 
-        // Add event listeners to update lenis properties and display values
-        wheelMultiplierSlider.addEventListener('input', function(event) {
-            const wheelMultiplier = parseFloat(event.target.value);
-            wheelMultiplierValue.textContent = `(${wheelMultiplier.toFixed(2)})`;
-            console.log('Wheel Multiplier:', wheelMultiplier);
-            if (state.lenis) {
-                state.lenis.wheelMultiplier = wheelMultiplier;
-            }
-        });
-
-        frictionSlider.addEventListener('input', function(event) {
-            const friction = parseFloat(event.target.value);
-            frictionValue.textContent = `(${friction.toFixed(2)})`;
-            console.log('Friction:', friction);
-            if (state.lenis) {
-                state.lenis.friction = friction;
-            }
-        });
+        // Re-sync UI when Lenis is initialized
+        const originalLenisSet = Object.getOwnPropertyDescriptor(state, 'lenis')?.set;
+        if (originalLenisSet) {
+            Object.defineProperty(state, 'lenis', {
+                set(value) {
+                    originalLenisSet.call(this, value);
+                    syncUIWithLenis();
+                },
+                get() {
+                    return this._lenis;
+                }
+            });
+        }
     }
 
     dispose() {
