@@ -160,6 +160,22 @@ export class ColorChangeAnimationSequence {
                 }
 
                 this.isAnimating = false;
+
+                // Update radio button selection based on pod color
+                const radioMapping = {
+                    [PRODUCT_COLORS.orange]: 'odorRadio',
+                    [PRODUCT_COLORS.green]: 'mosquitoRadio',
+                    [PRODUCT_COLORS.yellow]: 'uvRadio'
+                };
+                
+                const radioId = radioMapping[this.targetColor];
+                if (radioId) {
+                    console.log('clicking', radioId);
+                    const radio = document.getElementById(radioId);
+                    if (radio) {
+                        radio.checked = true;
+                    }
+                }
             });
 
         rotateDownTween.start();

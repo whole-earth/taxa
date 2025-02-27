@@ -71,6 +71,14 @@ document.head.appendChild(meshLineScript);
 
 export class App {
     constructor() {
+        // Select odor radio button by default
+        
+        const odorRadio = document.getElementById('odorRadio');
+        console.log('odorRadio', odorRadio);
+        if (odorRadio) {
+            odorRadio.checked = true;
+        }
+        
         document.body.classList.add('loading');
         this.sceneManager = new SceneManager(CONFIG);
         state.sceneManager = this.sceneManager;
