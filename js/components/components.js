@@ -28,13 +28,14 @@ class BaseComponent {
  * Handles loading and setup of cell-related 3D components
  */
 export class CellComponent extends BaseComponent {
-    constructor(scene, gltf, shader = null, renderOrder = 1) {
+    constructor(scene, gltf, shader = null, renderOrder = 1, onProgress = null) {
         super(scene);
         this.gltfFileName = gltf;
         this.shader = shader;
         this.renderOrder = renderOrder;
         this.boundingBox = new THREE.Box3();
         this.object = null;
+        this.onProgress = onProgress;
         
         // Return a promise that resolves to this instance
         return (async () => {
@@ -63,7 +64,11 @@ export class CellComponent extends BaseComponent {
                     this.boundingBox.setFromObject(this.object);
                     resolve();
                 },
-                undefined,
+                (progress) => {
+                    if (this.onProgress) {
+                        this.onProgress(progress);
+                    }
+                },
                 reject
             );
         });
@@ -93,11 +98,12 @@ export class CellComponent extends BaseComponent {
  * Handles loading and setup of product-related 3D components
  */
 export class ProductComponent extends BaseComponent {
-    constructor(scene, gltf, renderOrder = 1) {
+    constructor(scene, gltf, renderOrder = 1, onProgress) {
         super(scene);
         this.gltfFileName = gltf;
         this.renderOrder = renderOrder;
         this.object = null;
+        this.onProgress = onProgress;
         
         // Return a promise that resolves to this instance
         return (async () => {
@@ -133,7 +139,11 @@ export class ProductComponent extends BaseComponent {
 
                     resolve();
                 },
-                undefined,
+                (progress) => {
+                    if (this.onProgress) {
+                        this.onProgress(progress.loaded / progress.total);
+                    }
+                },
                 reject
             );
         });

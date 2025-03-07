@@ -16,6 +16,13 @@ let product = null;
 // =====================================================================================
 
 function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight) {
+    // Early return if essential objects are missing
+    if (!controls || !camera) return;
+
+    // If we're preventing scroll and trying to enter product area, stop here
+    if (isPreventingScroll && isVisibleBetweenTopAndBottom(productArea)) {
+        return;
+    }
 
     splashBool = isVisibleBetweenTopAndBottom(splashArea);
     zoomBool = isVisibleBetweenTopAndBottom(zoomArea);
@@ -30,19 +37,9 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
     // Add explicit product visibility check at the start
     if (product && !productBool) {
         // If we're not in the product section, ensure product is hidden
-        product.visible = false;
-        product.traverse(child => {
-            if (child.material) {
-                child.visible = false;
-            }
-        });
+        batchUpdateVisibility(product, false);
         if (state.applicatorObject) {
             state.applicatorObject.visible = false;
-            state.applicatorObject.traverse(child => {
-                if (child.material) {
-                    child.visible = false;
-                }
-            });
         }
     }
 
@@ -59,13 +56,13 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
     productBool = isVisibleBetweenTopAndBottom(productArea);
     updateScrollIndicator();
 
-    if (splashBool) {
+    if (splashBool && cellObject?.scale) {
         splashProgress = scrollProgress(splashArea);
         const scale = smoothLerp(1, 1.6, splashProgress);
         cellObject.scale.setScalar(scale);
 
         if (!splashCurrent) {
-            if (!cellObject.visible) {
+            if (cellObject && !cellObject.visible) {
                 cellObject.visible = true;
             }
 
@@ -120,7 +117,7 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
                 cellSheenTween(blobInner);
 
-                if (!cellObject.visible) {
+                if (cellObject && !cellObject.visible) {
                     cellObject.visible = true;
                 }
 
@@ -342,23 +339,26 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
         if (product && product.children) {
             // ===== PHASE 1: Initial Transition (0 to 0.7) =====
             if (productProgress <= 0.7) {
-
                 if (productProgress > 0.22 && !navClearFlag && navElement) {
                     navElement.classList.add('clear');
                     navClearFlag = true;
                     controls.autoRotate = false;
                     controls.enableRotate = false;
+                    RotationManager.scrollMultiplierEnabled = false;
                 } else if (productProgress <= 0.22 && navClearFlag && navElement) {
                     navElement.classList.remove('clear');
                     navClearFlag = false;
                     controls.autoRotate = true;
                     controls.enableRotate = true;
                     controls.autoRotateSpeed = 0.4;
+                    RotationManager.scrollMultiplierEnabled = true;
                 }
 
                 if (!productPhase1Active) {
                     resetProductVisibility(product, state.applicatorObject);
-                    cellObject.visible = true;
+                    if (cellObject) {
+                        cellObject.visible = true;
+                    }
 
                     // Restore product rotation and position when coming from phase 2
                     if (productPhase2Active) {
@@ -370,7 +370,6 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
                         renderer.toneMappingExposure = 1.0;
                         ambientLight.intensity = 4.6;
                         lightingTransitionComplete = true;
-
                     }
 
                     // Restore blob color when scrolling back up
@@ -878,6 +877,9 @@ const RotationManager = {
     currentMultiplier: 0,
     isDecelerating: false,
     rafId: null,
+    scrollMultiplierEnabled: true,
+    lastRotationTime: 0,
+    isTransitioning: false,
 
     config: {
         mobile: {
@@ -887,6 +889,7 @@ const RotationManager = {
             downScrollMultiplier: 0.1,
             upDecayRate: 4,
             downDecayRate: 2,
+            transitionDuration: 500
         },
         desktop: {
             duration: 100,
@@ -895,6 +898,7 @@ const RotationManager = {
             downScrollMultiplier: 0.2,
             upDecayRate: 4,
             downDecayRate: 2,
+            transitionDuration: 300
         }
     },
 
@@ -904,28 +908,39 @@ const RotationManager = {
             this.rafId = null;
         }
 
+        // Don't update rotation during transitions
+        if (this.isTransitioning) return this.baseRotationSpeed;
+
         const isMobile = window.innerWidth < 768;
         const config = isMobile ? this.config.mobile : this.config.desktop;
 
+        // Throttle updates to maintain smooth rotation
+        const now = performance.now();
+        if (now - this.lastRotationTime < 16) { // ~60fps
+            return this.baseRotationSpeed + this.currentMultiplier;
+        }
+        this.lastRotationTime = now;
+
         // Choose multiplier based on scroll direction
         const multiplier = delta > 0
-            ? config.downScrollMultiplier  // Scrolling down
-            : config.upScrollMultiplier;   // Scrolling up
+            ? config.downScrollMultiplier
+            : config.upScrollMultiplier;
 
-        // Calculate additive multiplier from scroll
-        const scrollMultiplier = (delta / Math.abs(delta)) * (scrollDiff * multiplier);
+        // Calculate additive multiplier from scroll with smoother interpolation
+        const scrollMultiplier = this.scrollMultiplierEnabled
+            ? (delta / Math.abs(delta)) * (scrollDiff * multiplier)
+            : 0;
 
         // Smooth the transition of the multiplier
         this.currentMultiplier += (scrollMultiplier - this.currentMultiplier) * (1 - config.smoothing);
 
         this.isDecelerating = false;
 
-        // Return base rotation plus the current multiplier
         return this.baseRotationSpeed + this.currentMultiplier;
     },
 
     startDeceleration(controls) {
-        if (this.isDecelerating) return;
+        if (this.isDecelerating || this.isTransitioning) return;
 
         this.isDecelerating = true;
         const isMobile = window.innerWidth < 768;
@@ -933,22 +948,26 @@ const RotationManager = {
         const startMultiplier = this.currentMultiplier;
         const startTime = performance.now();
 
-        // Choose decay rate based on whether we're decelerating from a positive or negative multiplier
         const decayRate = startMultiplier > 0 ? config.downDecayRate : config.upDecayRate;
 
         const decelerate = () => {
+            if (this.isTransitioning) {
+                this.isDecelerating = false;
+                this.rafId = null;
+                return;
+            }
+
             const now = performance.now();
             const elapsed = now - startTime;
             const progress = Math.min(elapsed / config.duration, 1);
 
-            // Use the direction-specific decay rate
             const decay = Math.exp(-decayRate * progress);
             this.currentMultiplier = startMultiplier * decay;
 
             controls.autoRotateSpeed = this.baseRotationSpeed + this.currentMultiplier;
 
-            if (Math.abs(this.currentMultiplier) > 0.01) {
-                this.rafId = requestAnimationFrame(() => decelerate());
+            if (Math.abs(this.currentMultiplier) > 0.01 && !this.isTransitioning) {
+                this.rafId = requestAnimationFrame(decelerate);
             } else {
                 this.isDecelerating = false;
                 this.currentMultiplier = 0;
@@ -958,11 +977,24 @@ const RotationManager = {
         };
 
         this.rafId = requestAnimationFrame(decelerate);
+    },
+
+    startTransition() {
+        this.isTransitioning = true;
+        const isMobile = window.innerWidth < 768;
+        const config = isMobile ? this.config.mobile : this.config.desktop;
+        
+        setTimeout(() => {
+            this.isTransitioning = false;
+        }, config.transitionDuration);
     }
 };
 
 // Modify animatePage to use the manager
 export function animatePage(controls, camera, cellObject, blobInner, blobOuter, ribbons, spheres, wavingBlob, dotBounds, product, renderer, ambientLight) {
+    // Don't process scroll events while preventing scroll
+    if (isPreventingScroll) return;
+    
     let scrollY = window.scrollY;
     let delta = scrollY - state.lastScrollY;
     let scrollDiff = Math.abs(delta);
@@ -1039,7 +1071,7 @@ function smoothScrollTo(targetPosition) {
 
         // Get current scroll position and calculate actual distance
         const currentPosition = window.scrollY;
-        const scrollDistance = Math.abs(targetPosition - currentPosition);
+        const scrollDistance = Math.max(0, -rect.top);
         const viewportHeight = window.innerHeight;
 
         // Base duration on scroll distance for longer sections
@@ -1600,24 +1632,216 @@ function setupProductForSection(product, applicatorObject) {
     }, 500); // Adjust the delay as needed
 }
 
-// Modify the product loading logic to use preloaded product if available
+// Track if we're currently preventing scroll
+let isPreventingScroll = false;
+
+// Function to update loading progress
+function updateLoadingProgress(progress) {
+    const progressElement = document.querySelector('.product-loading-progress');
+    if (progressElement) {
+        progressElement.textContent = `${Math.round(progress * 100)}%`;
+    }
+}
+
+// Function to show/hide loading overlay with smooth transitions
+function toggleLoadingOverlay(show) {
+    const overlay = document.querySelector('.product-loading-overlay');
+    if (overlay) {
+        if (show) {
+            // Store the current scroll position and animation state
+            const scrollY = window.scrollY;
+            const currentRotationSpeed = RotationManager.currentMultiplier;
+            
+            // Store additional section state
+            overlay.dataset.wasInProduct = productBool;
+            overlay.dataset.productProgress = productProgress;
+            overlay.dataset.lastScrollY = scrollY;
+            
+            // Smoothly transition rotation speed back to base speed
+            const startMultiplier = currentRotationSpeed;
+            const startTime = performance.now();
+            const duration = 400; // Duration in ms for the transition
+            
+            const easeRotation = () => {
+                const now = performance.now();
+                const elapsed = now - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                
+                // Use smooth easing function
+                const easeProgress = progress < 0.5 
+                    ? 2 * progress * progress 
+                    : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+                
+                // Interpolate multiplier back to 0
+                RotationManager.currentMultiplier = startMultiplier * (1 - easeProgress);
+                // Update the actual rotation speed
+                state.sceneManager.controls.autoRotateSpeed = RotationManager.baseRotationSpeed + RotationManager.currentMultiplier;
+                console.log('Rotation speed:', state.sceneManager.controls.autoRotateSpeed.toFixed(4));
+                
+                if (progress < 1) {
+                    requestAnimationFrame(easeRotation);
+                }
+            };
+            
+            requestAnimationFrame(easeRotation);
+            
+            // Show overlay
+            overlay.classList.add('active');
+            document.body.classList.add('scroll-disabled');
+            
+            // Prevent scroll jumping while maintaining position
+            document.body.style.position = 'fixed';
+            document.body.style.top = `-${scrollY}px`;
+            document.body.style.width = '100%';
+            document.body.style.left = '0';
+            
+            // Store states for restoration
+            overlay.dataset.scrollY = scrollY;
+            overlay.dataset.rotationSpeed = currentRotationSpeed;
+            
+            isPreventingScroll = true;
+        } else {
+            // Get the stored animation state
+            const storedRotationSpeed = parseFloat(overlay.dataset.rotationSpeed || '0');
+            const wasInProduct = overlay.dataset.wasInProduct === 'true';
+            
+            // Remove overlay and scroll lock
+            overlay.classList.remove('active');
+            document.body.classList.remove('scroll-disabled');
+            
+            // Important: Reset all body styles that were locking scroll
+            document.body.style.position = '';
+            document.body.style.top = '';
+            document.body.style.width = '';
+            document.body.style.left = '';
+            document.body.style.overflow = '';
+            
+            if (wasInProduct) {
+                const productArea = document.querySelector('.product');
+                if (productArea) {
+                    // Calculate the position where productProgress would be 0
+                    const productTop = productArea.offsetTop;
+                    const viewportHeight = window.innerHeight;
+                    
+                    // Set scroll position to the start of the product section
+                    window.scrollTo(0, productTop);
+                    
+                    // Update state variables
+                    state.lastScrollY = productTop;
+                    splashBool = false;
+                    zoomBool = false;
+                    pitchBool = false;
+                    productBool = true;
+                    splashCurrent = false;
+                    zoomCurrent = false;
+                    pitchCurrent = false;
+                    productCurrent = true;
+                    
+                    // Reset product-specific states
+                    productPhase1Active = false;
+                    productPhase1aActive = false;
+                    productPhase2Active = false;
+                    productPhase3Active = false;
+                    
+                    // Force immediate state update
+                    requestAnimationFrame(() => {
+                        scrollLogic(
+                            state.sceneManager.controls,
+                            state.sceneManager.camera,
+                            state.cellObject,
+                            state.blobInner,
+                            state.blobOuter,
+                            state.ribbons,
+                            state.spheres,
+                            state.wavingBlob,
+                            state.dotBounds,
+                            product,
+                            state.sceneManager.renderer,
+                            state.sceneManager.ambientLight
+                        );
+                        
+                        // Re-enable scroll processing
+                        isPreventingScroll = false;
+                    });
+                }
+            }
+            
+            // Re-enable scroll immediately if not in product section
+            if (!wasInProduct) {
+                isPreventingScroll = false;
+            }
+            
+            // Restore rotation speed
+            if (storedRotationSpeed !== 0) {
+                RotationManager.currentMultiplier = storedRotationSpeed;
+                requestAnimationFrame(() => {
+                    RotationManager.startDeceleration(state.sceneManager.controls);
+                });
+            }
+        }
+    }
+}
+
+// Function to check if we should start loading the product
+function shouldPreloadProduct() {
+    const productArea = document.querySelector('.product');
+    if (!productArea) return false;
+
+    const rect = productArea.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    
+    // Start loading when product area is within 2 viewport heights
+    return rect.top <= viewportHeight * 2;
+}
+
+// Add scroll listener for preloading
+window.addEventListener('scroll', () => {
+    if (!state.productAssetsPreloaded && shouldPreloadProduct()) {
+        preloadProductAssets();
+    }
+}, { passive: true });
+
+// Modify handleProductLoading function
 function handleProductLoading() {
+    // If we're already in a loading state, don't trigger another load
+    if (isPreventingScroll) return;
+
     if (!product) {
         if (state.preloadedProduct) {
+            // Product was preloaded, use it directly without showing overlay
             product = state.preloadedProduct;
-            setupProductForSection(product, state.applicatorObject);
+            requestAnimationFrame(() => {
+                setupProductForSection(product, state.applicatorObject);
+            });
         } else {
+            // Only show loading overlay if we're in the product section and need to load
+            if (productBool) {
+                toggleLoadingOverlay(true);
+            }
+            
             state.app.loadProductOnDemand().then(loadedProduct => {
                 product = loadedProduct;
-                if (productBool) { // Only show if still in product section
-                    setupProductForSection(product, state.applicatorObject);
-                } else {
-                    batchUpdateVisibility(product, false);
-                }
+                
+                requestAnimationFrame(() => {
+                    if (productBool) {
+                        setupProductForSection(product, state.applicatorObject);
+                        setTimeout(() => {
+                            toggleLoadingOverlay(false);
+                        }, 100);
+                    } else {
+                        batchUpdateVisibility(product, false);
+                    }
+                });
+            }).catch(error => {
+                console.error('Failed to load product:', error);
+                toggleLoadingOverlay(false);
             });
         }
     } else {
-        setupProductForSection(product, state.applicatorObject);
+        // Product already exists, just set it up without showing overlay
+        requestAnimationFrame(() => {
+            setupProductForSection(product, state.applicatorObject);
+        });
     }
 }
 
