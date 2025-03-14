@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { PRODUCT_COLORS } from '../effects/podColors.js';
 import { setApplicatorObject } from '../core/anim.js';
+import { materialManager } from '../utils/materialManager.js';
 
 /**
  * Base class for 3D components with common loading functionality
@@ -15,12 +16,41 @@ class BaseComponent {
         dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.4.3/');
         this.loader.setDRACOLoader(dracoLoader);
         this.position = new THREE.Vector3(0, 0, 0);
+        
+        // Pre-allocate reusable objects for matrix operations
+        this._tempVector = new THREE.Vector3();
+        this._tempMatrix = new THREE.Matrix4();
     }
 
     centerObject(object) {
         const box = new THREE.Box3().setFromObject(object);
-        const center = box.getCenter(new THREE.Vector3());
+        const center = box.getCenter(this._tempVector);
         object.position.sub(center);
+    }
+    
+    // Helper method to batch update materials using the global manager
+    batchUpdateMaterials(materials) {
+        if (materials && materials.length > 0) {
+            materialManager.queueMaterialUpdate(materials);
+        }
+    }
+    
+    // Helper method to collect all materials from an object
+    collectMaterials(object) {
+        const materials = [];
+        if (!object) return materials;
+        
+        object.traverse(node => {
+            if (node.isMesh && node.material) {
+                if (Array.isArray(node.material)) {
+                    materials.push(...node.material);
+                } else {
+                    materials.push(node.material);
+                }
+            }
+        });
+        
+        return materials;
     }
 }
 
@@ -76,12 +106,17 @@ export class CellComponent extends BaseComponent {
 
     applyCustomShader(shader) {
         if (!shader) return;
+        const materialsToUpdate = [];
+        
         this.object.traverse((node) => {
             if (node.isMesh) {
                 node.material = shader;
-                node.material.needsUpdate = true;
+                materialsToUpdate.push(node.material);
             }
         });
+        
+        // Batch update all materials at once
+        this.batchUpdateMaterials(materialsToUpdate);
     }
 
     getBoundingBox() {
@@ -155,6 +190,9 @@ export class ProductComponent extends BaseComponent {
 
     initializeMaterials() {
         // Set all meshes invisible initially
+        const materialsToUpdate = [];
+        const innerCapMaterials = [];
+        
         this.object.traverse(child => {
             if (child.isMesh) {
                 child.visible = false;
@@ -163,7 +201,7 @@ export class ProductComponent extends BaseComponent {
                 }
                 child.material.transparent = true;
                 child.material.opacity = 0;
-                child.material.needsUpdate = true;
+                materialsToUpdate.push(child.material);
             }
 
             // Special handling for inner-cap object
@@ -178,15 +216,18 @@ export class ProductComponent extends BaseComponent {
                             metalness: 0.5,
                             roughness: 0.2
                         });
-                        innerChild.material.needsUpdate = true;
+                        innerCapMaterials.push(innerChild.material);
                     }
                 });
             }
         });
+        
+        // Batch update all materials at once
+        this.batchUpdateMaterials(materialsToUpdate);
+        this.batchUpdateMaterials(innerCapMaterials);
     }
 
     setupApplicator(applicator) {
-
         applicator.position.y = 0;
 
         const maskMaterial = new THREE.ShaderMaterial({
@@ -257,13 +298,17 @@ export class ProductComponent extends BaseComponent {
         overflowMaskGroup.add(cylinderMesh);
         applicator.add(overflowMaskGroup);
 
+        const materialsToUpdate = [];
         applicator.traverse(child => {
             if (child.isMesh) {
                 child.visible = false;
                 child.material.transparent = true;
                 child.material.opacity = 0;
-                child.material.needsUpdate = true;
+                materialsToUpdate.push(child.material);
             }
         });
+        
+        // Batch update all materials at once
+        this.batchUpdateMaterials(materialsToUpdate);
     }
 } 

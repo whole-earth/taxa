@@ -1,6 +1,7 @@
 import { Group, Tween, Easing } from 'tween';
 import * as THREE from 'three';
 import { state } from '../core/anim.js';
+import { materialManager } from '../utils/materialManager.js';
 
 // Define product colors as a single source of truth
 export const PRODUCT_COLORS = {
@@ -194,6 +195,13 @@ export class ColorChangeAnimationSequence {
             .easing(Easing.Cubic.InOut)
     }
 
+    // Helper method to batch update materials using the global manager
+    batchUpdateMaterials(materials) {
+        if (materials && materials.length > 0) {
+            materialManager.queueMaterialUpdate(materials);
+        }
+    }
+
     createColorTween() {
         const innerCapObject = this.product.getObjectByName('inner-cap');
         if (!innerCapObject) {
@@ -378,13 +386,18 @@ export class ColorChangeAnimationSequence {
             })
             .onUpdate(() => {
                 const color = new THREE.Color(currentColor.r, currentColor.g, currentColor.b);
+                const materialsToUpdate = [];
+                
                 innerCapMeshes.forEach(mesh => {
                     if (mesh.material) {
                         mesh.material.color.copy(color);
                         mesh.material.emissive.copy(color);
-                        mesh.material.needsUpdate = true;
+                        materialsToUpdate.push(mesh.material);
                     }
                 });
+                
+                // Batch update all materials at once
+                this.batchUpdateMaterials(materialsToUpdate);
             });
     }
 

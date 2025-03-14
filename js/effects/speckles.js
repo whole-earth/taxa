@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Tween, Easing } from 'tween';
 import { state } from '../core/anim.js';
+import { materialManager } from '../utils/materialManager.js';
 
 const isMobile = window.innerWidth < 768;
 
@@ -451,7 +452,7 @@ export class SpeckleSystem {
                 }
                 
                 if (needsUpdate) {
-                    instancedMesh.instanceMatrix.needsUpdate = true;
+                    materialManager.queueInstanceMatrixUpdate(instancedMesh.instanceMatrix);
                 }
             });
         };
@@ -680,9 +681,16 @@ export class SpeckleSystem {
             }
             
             totalSpeckles += countPerSize;
-            instancedMesh.instanceMatrix.needsUpdate = true;
+            materialManager.queueInstanceMatrixUpdate(instancedMesh.instanceMatrix);
         });
         
+    }
+
+    // Helper method to batch update materials using the global manager
+    batchUpdateMaterials(materials) {
+        if (materials && materials.length > 0) {
+            materialManager.queueMaterialUpdate(materials);
+        }
     }
 
     updateColors(color) {
@@ -690,8 +698,10 @@ export class SpeckleSystem {
         this.tempColor.set(color);
         this.materials.forEach(material => {
             material.color.copy(this.tempColor);
-            material.needsUpdate = true;
         });
+        
+        // Batch update all materials at once
+        this.batchUpdateMaterials(this.materials);
     }
 
     randomizePositions() {
@@ -713,7 +723,7 @@ export class SpeckleSystem {
                 matrices[i].copy(this.tempMatrix);
             }
             
-            instancedMesh.instanceMatrix.needsUpdate = true;
+            materialManager.queueInstanceMatrixUpdate(instancedMesh.instanceMatrix);
             return;
         }
 
@@ -745,7 +755,7 @@ export class SpeckleSystem {
                     velocities[i] = randomDirection.multiplyScalar(DESKTOP_CONFIG.animation.baseRotationSpeed);
                 }
             }
-            instancedMesh.instanceMatrix.needsUpdate = true;
+            materialManager.queueInstanceMatrixUpdate(instancedMesh.instanceMatrix);
         });
     }
 

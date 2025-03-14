@@ -1610,26 +1610,9 @@ function setupProductForSection(product, applicatorObject) {
     cachedProductTransform.rotation.set(Math.PI / 2, 0, 0);
     cachedProductTransform.scale.set(productScale, productScale, productScale);
 
-    // Start with a low-resolution version
-    product.traverse(child => {
-        if (child.material) {
-            child.material.wireframe = true; // Start with wireframe for faster rendering
-        }
-    });
-
     // Now that everything is set up, make product visible
     product.visible = true;
     resetProductVisibility(product, applicatorObject);
-
-    // Gradually enhance the product rendering
-    setTimeout(() => {
-        product.traverse(child => {
-            if (child.material) {
-                child.material.wireframe = false; // Switch to full rendering
-                child.material.needsUpdate = true;
-            }
-        });
-    }, 500); // Adjust the delay as needed
 }
 
 // Track if we're currently preventing scroll

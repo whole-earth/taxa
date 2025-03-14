@@ -8,6 +8,7 @@ import { SceneManager } from './sceneManager.js';
 import { CellComponent, ProductComponent } from '../components/components.js';
 import { SpeckleSystem } from '../effects/speckles.js';
 import { initInactivityManager } from '../utils/inactivity.js';
+import { materialManager } from '../utils/materialManager.js';
 
 const CONFIG = {
     lighting: {
@@ -110,13 +111,14 @@ export class App {
                 left: 0;
                 width: 100%;
                 height: 100%;
-                background: rgba(0, 0, 0, 0.85);
+                background-color: rgba(255, 251, 244, 0.3);
+                backdrop-filter: blur(6px);
                 display: none;
                 justify-content: center;
                 align-items: center;
                 z-index: 1000;
                 opacity: 0;
-                transition: opacity 0.3s ease;
+                transition: all 0.3s ease;
             }
             .product-loading-overlay.active {
                 display: flex;
@@ -124,14 +126,14 @@ export class App {
             }
             .product-loading-content {
                 text-align: center;
-                color: white;
+                color: var(--taxa-blue);
                 font-family: sans-serif;
             }
             .product-loading-spinner {
                 width: 50px;
                 height: 50px;
                 border: 3px solid transparent;
-                border-top-color: #fff;
+                border-top-color: var(--taxa-blue);
                 border-radius: 50%;
                 margin: 0 auto 20px;
                 animation: spin 1s linear infinite;
@@ -139,6 +141,7 @@ export class App {
             .product-loading-text {
                 font-size: 24px;
                 margin-bottom: 10px;
+                display: none;
             }
             .product-loading-progress {
                 font-size: 18px;
@@ -146,7 +149,7 @@ export class App {
             }
             .product-loading-status {
                 font-size: 14px;
-                opacity: 0.8;
+                font-weight: 400;
             }
             @keyframes spin {
                 0% { transform: rotate(0deg); }
@@ -177,6 +180,13 @@ export class App {
         }
     }
 
+    // Helper method to batch update materials using the global manager
+    batchUpdateMaterials(materials) {
+        if (materials && materials.length > 0) {
+            materialManager.queueMaterialUpdate(materials);
+        }
+    }
+
     setupProduct(product) {
         if (!this.productAnchor) {
             this.productAnchor = new THREE.Object3D();
@@ -187,6 +197,23 @@ export class App {
         
         if (this.sceneManager.directionalContainer) {
             product.add(this.sceneManager.directionalContainer);
+        }
+        
+        const productObj = product.getObject();
+        if (productObj) {
+            const applicatorGroup = productObj.getObjectByName('applicator');
+            if (applicatorGroup) {
+                const materialsToUpdate = [];
+                applicatorGroup.traverse(child => {
+                    if (child.name === 'outer-cap' && child.material) {
+                        child.material.ior = 200;
+                        materialsToUpdate.push(child.material);
+                    }
+                });
+                
+                // Batch update all materials at once
+                this.batchUpdateMaterials(materialsToUpdate);
+            }
         }
     }
 
@@ -285,27 +312,15 @@ export class App {
 
                 updateLoadingStatus('Setting up product view...');
 
-                // Add reflectivity to outer-cap
-                const productObj = product.getObject();
-                const applicatorGroup = productObj.getObjectByName('applicator');
-                if (applicatorGroup) {
-                    applicatorGroup.traverse(child => {
-                        if (child.name === 'outer-cap' && child.material) {
-                            child.material.ior = 200;
-                            child.material.needsUpdate = true;
-                        }
-                    });
-                }
-
                 this.productAnchor = new THREE.Object3D();
-                this.productAnchor.add(productObj);
+                this.productAnchor.add(product.getObject());
                 this.sceneManager.scene.add(this.productAnchor);
 
                 if (this.sceneManager.directionalContainer) {
-                    productObj.add(this.sceneManager.directionalContainer);
+                    product.getObject().add(this.sceneManager.directionalContainer);
                 }
 
-                return productObj;
+                return product.getObject();
             } catch (error) {
                 console.error('Failed to load product:', error);
                 const statusElement = document.querySelector('.product-loading-status');
@@ -369,6 +384,9 @@ export class App {
     }
 
     animate = (time) => {
+        // Process any pending material updates first
+        materialManager.processUpdates();
+        
         const needsUpdate = this.updateActiveAnimations();
         if (needsUpdate) {
             this.sceneManager.update();
@@ -422,12 +440,37 @@ export class App {
 
             // Track loading progress
             const progress = { total: 0 };
+            const preloadOverlay = document.querySelector('.load-progress');
             const progressElement = document.getElementById('loadProgressCount');
+            
+            // Helper function to calculate average progress
+            const getAverageProgress = () => {
+                const total = Object.values(progress).reduce((sum, val) => sum + val, 0);
+                return total / Object.keys(components).length;
+            };
+            
+            // Set up checks at different time intervals
+            setTimeout(() => {
+                if (preloadOverlay) {
+                    const average = getAverageProgress();
+                    if (average < 20) {
+                        preloadOverlay.classList.remove('hidden');
+                    }
+                }
+            }, 200);
+
+            setTimeout(() => {
+                if (preloadOverlay) {
+                    const average = getAverageProgress();
+                    if (average < 60) {
+                        preloadOverlay.classList.remove('hidden');
+                    }
+                }
+            }, 600);
             
             const updateProgress = (componentName, percent) => {
                 progress[componentName] = percent;
-                const total = Object.values(progress).reduce((sum, val) => sum + val, 0);
-                const average = Math.round(total / Object.keys(components).length);
+                const average = Math.round(getAverageProgress());
                 if (progressElement) progressElement.textContent = `${average}%`;
             };
 
@@ -506,7 +549,7 @@ export class App {
         // Clean up loading overlay
         const loadingOverlay = document.querySelector('.product-loading-overlay');
         if (loadingOverlay) {
-            loadingOverlay.remove();
+            //loadingOverlay.remove();
         }
     }
 
