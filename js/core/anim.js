@@ -289,7 +289,7 @@ export class App {
                     }
                 };
 
-                const product = await new ProductComponent(this.sceneManager.scene, "seventeen.glb", 200, (progress) => {
+                const product = await new ProductComponent(this.sceneManager.scene, "product-compressed.glb", 200, (progress) => {
                     // Update loading progress
                     const progressElement = document.querySelector('.product-loading-progress');
                     if (progressElement) {

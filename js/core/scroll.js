@@ -739,7 +739,6 @@ function scrollLogic(controls, camera, cellObject, blobInner, blobOuter, ribbons
 
     // Only handle cleanup during actual section transitions
     if (previousSection !== newSection) {
-        //console.log(`🔄 Section changed from ${previousSection} to ${newSection}`);
 
         cleanupManager.handleVisibilityAndDisposal({
             cellObject,
@@ -1658,9 +1657,7 @@ function toggleLoadingOverlay(show) {
                 // Interpolate multiplier back to 0
                 RotationManager.currentMultiplier = startMultiplier * (1 - easeProgress);
                 // Update the actual rotation speed
-                state.sceneManager.controls.autoRotateSpeed = RotationManager.baseRotationSpeed + RotationManager.currentMultiplier;
-                console.log('Rotation speed:', state.sceneManager.controls.autoRotateSpeed.toFixed(4));
-                
+                state.sceneManager.controls.autoRotateSpeed = RotationManager.baseRotationSpeed + RotationManager.currentMultiplier;                
                 if (progress < 1) {
                     requestAnimationFrame(easeRotation);
                 }

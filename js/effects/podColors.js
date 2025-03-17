@@ -171,7 +171,6 @@ export class ColorChangeAnimationSequence {
                 
                 const radioId = radioMapping[this.targetColor];
                 if (radioId) {
-                    console.log('clicking', radioId);
                     const radio = document.getElementById(radioId);
                     if (radio) {
                         radio.checked = true;

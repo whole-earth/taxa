@@ -79,7 +79,7 @@ export const cleanupManager = {
             }
 
             if (!this.geometryCache.has(key)) {
-                // // console.log.log(`🔵 Caching geometry for ${key}`);
+                // console.log.log(`🔵 Caching geometry for ${key}`);
                 const clonedGeometry = geometry.clone();
                 this.geometryCache.set(key, clonedGeometry);
                 this.componentStates[componentKey].cachedGeometries.add(geometry.uuid);
@@ -103,7 +103,7 @@ export const cleanupManager = {
             }
 
             if (!this.materialCache.has(key)) {
-                // // console.log.log(`🎨 Caching material for ${key}`);
+                // console.log.log(`🎨 Caching material for ${key}`);
                 const clonedMaterial = material.clone();
 
                 // Cache associated textures
@@ -136,7 +136,7 @@ export const cleanupManager = {
             }
 
             if (!this.textureCache.has(key)) {
-                // // console.log.log(`🖼️ Caching texture for ${key}`);
+                // console.log.log(`🖼️ Caching texture for ${key}`);
                 const clonedTexture = texture.clone();
                 this.textureCache.set(key, clonedTexture);
                 this.componentStates[componentKey].cachedTextures.add(texture.uuid);
@@ -161,7 +161,7 @@ export const cleanupManager = {
         if (!object || this.componentStates[componentKey].isDisposed) return;
 
         const startTime = performance.now();
-        // // console.log.log(`\n🗑️ Starting disposal for ${componentKey}`);
+        // console.log.log(`\n🗑️ Starting disposal for ${componentKey}`);
 
         try {
             object.traverse(node => {
@@ -199,7 +199,7 @@ export const cleanupManager = {
             const disposalTime = performance.now() - startTime;
             this._updateMetrics('disposal', 'time', componentKey, disposalTime);
 
-            // // console.log.log(`✅ Completed disposal for ${componentKey} in ${disposalTime.toFixed(2)}ms\n`);
+            // console.log.log(`✅ Completed disposal for ${componentKey} in ${disposalTime.toFixed(2)}ms\n`);
         } catch (error) {
             // console.log.error(`❌ Error during disposal of ${componentKey}:`, error);
             this._updateMetrics('disposal', 'error', componentKey);
@@ -209,14 +209,14 @@ export const cleanupManager = {
     reinstateWithCache(object, componentKey) {
         if (!object || !this.componentStates[componentKey].isDisposed) return;
 
-        // // console.log.log(`\n🔄 Reinstating ${componentKey}`);
+        // console.log.log(`\n🔄 Reinstating ${componentKey}`);
 
         object.traverse(node => {
             if (node.geometry) {
                 const cachedGeometry = this.getCachedGeometry(`${componentKey}_${node.geometry.uuid}`);
                 if (cachedGeometry) {
                     node.geometry = cachedGeometry;
-                    // // console.log.log(`📐 Restored cached geometry for ${componentKey}`);
+                    // console.log.log(`📐 Restored cached geometry for ${componentKey}`);
                 }
             }
 
@@ -230,7 +230,7 @@ export const cleanupManager = {
                         } else {
                             node.material = cachedMaterial;
                         }
-                        // // console.log.log(`🎨 Restored cached material for ${componentKey}`);
+                        // console.log.log(`🎨 Restored cached material for ${componentKey}`);
                     }
                 });
             }
@@ -239,7 +239,7 @@ export const cleanupManager = {
         object.visible = true;
         this.componentStates[componentKey].isDisposed = false;
         this.componentStates[componentKey].isVisible = true;
-        // // console.log.log(`✅ Completed reinstatement for ${componentKey}\n`);
+        // console.log.log(`✅ Completed reinstatement for ${componentKey}\n`);
     },
 
     // Enhanced section-specific disposal methods
@@ -432,18 +432,18 @@ export const cleanupManager = {
 
     addDisposable(object) {
         this.disposables.add(object);
-        // // console.log.log('📥 Added disposable object:', object.name || 'unnamed object');
+        // console.log.log('📥 Added disposable object:', object.name || 'unnamed object');
     },
 
     disposeNode(node) {
         if (!node) return;
 
-        // // console.log.log(`\n🗑️ Starting node disposal for: ${node.name || 'unnamed node'}`);
+        // console.log.log(`\n🗑️ Starting node disposal for: ${node.name || 'unnamed node'}`);
 
         // Dispose geometries
         if (node.geometry) {
             node.geometry.dispose();
-            // // console.log.log('📐 Disposed geometry');
+            // console.log.log('📐 Disposed geometry');
         }
 
         // Dispose materials
@@ -456,62 +456,62 @@ export const cleanupManager = {
                     // Dispose textures
                     if (material[prop].isTexture) {
                         material[prop].dispose();
-                        // // console.log.log(`🖼️ Disposed texture ${prop}`);
+                        // console.log.log(`🖼️ Disposed texture ${prop}`);
                     }
                     // Dispose render targets
                     if (material[prop].isWebGLRenderTarget) {
                         material[prop].dispose();
-                        // // console.log.log(`🎯 Disposed render target ${prop}`);
+                        // console.log.log(`🎯 Disposed render target ${prop}`);
                     }
                 });
                 material.dispose();
-                // // console.log.log(`🎨 Disposed material ${index + 1}/${materials.length}`);
+                // console.log.log(`🎨 Disposed material ${index + 1}/${materials.length}`);
             });
         }
 
         // Remove from parent
         if (node.parent) {
             node.parent.remove(node);
-            // // console.log.log('👋 Removed from parent');
+            // console.log.log('👋 Removed from parent');
         }
 
         // Clear any references
         node.clear();
-        // // console.log.log('🧹 Cleared all references\n');
+        // console.log.log('🧹 Cleared all references\n');
     },
 
     disposeHierarchy(object) {
         if (!object) return;
-        // // console.log.log(`\n📦 Starting hierarchy disposal for: ${object.name || 'unnamed object'}`);
+        // console.log.log(`\n📦 Starting hierarchy disposal for: ${object.name || 'unnamed object'}`);
         object.traverse(node => {
             this.disposeNode(node);
         });
-        // // console.log.log('✅ Completed hierarchy disposal\n');
+        // console.log.log('✅ Completed hierarchy disposal\n');
     },
 
     _disposeProduct(product) {
         if (!this.disposedProduct && product) {
-            // // console.log.log('\n🎁 Starting product disposal...');
+            // console.log.log('\n🎁 Starting product disposal...');
             product.traverse(child => {
                 if (child.material) {
                     const materials = Array.isArray(child.material) ? child.material : [child.material];
                     materials.forEach((mat, index) => {
                         if (mat.dispose) {
                             mat.dispose();
-                            // // console.log.log(`🎨 Disposed product material ${index + 1}/${materials.length} for: ${child.name || 'unnamed child'}`);
+                            // console.log.log(`🎨 Disposed product material ${index + 1}/${materials.length} for: ${child.name || 'unnamed child'}`);
                         }
                     });
                 }
                 if (child.geometry) {
                     child.geometry.dispose();
-                    // // console.log.log(`📐 Disposed product geometry for: ${child.name || 'unnamed child'}`);
+                    // console.log.log(`📐 Disposed product geometry for: ${child.name || 'unnamed child'}`);
                 }
             });
             product.visible = false;
             this.disposedProduct = true;
-            // // console.log.log('✅ Product disposal complete\n');
+            // console.log.log('✅ Product disposal complete\n');
         } else {
-            // // console.log.log('ℹ️ Product already disposed or not available');
+            // console.log.log('ℹ️ Product already disposed or not available');
         }
     },
 
@@ -521,7 +521,7 @@ export const cleanupManager = {
 
     _disposeCellAndStarfield(cellObject, starField) {
         if (!this.disposedCellAndStarfield) {
-            // // console.log.log('\n🔄 Starting cell and starfield disposal...');
+            // console.log.log('\n🔄 Starting cell and starfield disposal...');
             if (cellObject) {
                 this.originalCellVisibility = cellObject.visible;
                 cellObject.traverse(child => {
@@ -530,33 +530,33 @@ export const cleanupManager = {
                         materials.forEach((mat, index) => {
                             if (mat.dispose) {
                                 mat.dispose();
-                                // // console.log.log(`🎨 Disposed cell material ${index + 1}/${materials.length} for: ${child.name || 'unnamed child'}`);
+                                // console.log.log(`🎨 Disposed cell material ${index + 1}/${materials.length} for: ${child.name || 'unnamed child'}`);
                             }
                         });
                     }
                     if (child.geometry) {
                         child.geometry.dispose();
-                        // // console.log.log(`📐 Disposed cell geometry for: ${child.name || 'unnamed child'}`);
+                        // console.log.log(`📐 Disposed cell geometry for: ${child.name || 'unnamed child'}`);
                     }
                 });
                 cellObject.visible = false;
-                // // console.log.log('👁️ Cell visibility set to false');
+                // console.log.log('👁️ Cell visibility set to false');
             }
 
             if (starField) {
                 this.originalStarfieldVisibility = starField.visible;
                 starField.visible = false;
-                // // console.log.log('⭐ Starfield visibility set to false');
+                // console.log.log('⭐ Starfield visibility set to false');
                 if (starField.dispose) {
                     starField.dispose();
-                    // // console.log.log('🌟 Disposed starfield completely');
+                    // console.log.log('🌟 Disposed starfield completely');
                 }
             }
 
             this.disposedCellAndStarfield = true;
-            // // console.log.log('✅ Cell and starfield disposal complete\n');
+            // console.log.log('✅ Cell and starfield disposal complete\n');
         } else {
-            // // console.log.log('ℹ️ Cell and starfield already disposed');
+            // console.log.log('ℹ️ Cell and starfield already disposed');
         }
     },
 
@@ -599,13 +599,13 @@ export const cleanupManager = {
                 this.geometryCache.delete(key);
                 this.materialCache.delete(key);
                 this.textureCache.delete(key);
-                // // console.log.log(`🧹 Cleaned up old cache entries for ${key}`);
+                // console.log.log(`🧹 Cleaned up old cache entries for ${key}`);
             }
         });
     },
 
     cleanup() {
-        // // console.log.log('\n🧹 Starting cleanup process...');
+        // console.log.log('\n🧹 Starting cleanup process...');
         const startTime = performance.now();
 
         try {
@@ -655,10 +655,10 @@ export const cleanupManager = {
             this.disposables.clear();
 
             const cleanupTime = performance.now() - startTime;
-            // // console.log.log(`✨ Cleanup complete in ${cleanupTime.toFixed(2)}ms\n`);
+            // console.log.log(`✨ Cleanup complete in ${cleanupTime.toFixed(2)}ms\n`);
 
             // Log performance metrics
-            // // console.log.log('📊 Disposal Metrics:', this.metrics);
+            // console.log.log('📊 Disposal Metrics:', this.metrics);
         } catch (error) {
             // console.log.error('❌ Error during cleanup:', error);
         }
@@ -697,7 +697,7 @@ export const cleanupManager = {
             // Clear exploded dot groups when entering zoom section
             if (section === 'zoom' && explodedGroups) {
                 if (explodedGroups.size > 0) {
-                    // // console.log.log('🧹 Clearing previous exploded dot groups');
+                    // console.log.log('🧹 Clearing previous exploded dot groups');
                     explodedGroups.clear();
                     if (wavingBlob?.children) {
                         wavingBlob.children.forEach((group, index) => {
@@ -712,11 +712,11 @@ export const cleanupManager = {
 
             // Handle cell and starfield
             if (productBool && productProgress > 0.5 && !this.disposedCellAndStarfield) {
-                // // console.log.log('🔄 Product progress > 0.5, disposing cell and starfield');
+                // console.log.log('🔄 Product progress > 0.5, disposing cell and starfield');
                 this.disposeCellAndStarfield(cellObject, starField);
                 stateChanges.push({ component: 'cell_and_starfield', action: 'dispose' });
             } else if (productBool && productProgress <= 0.5 && this.disposedCellAndStarfield) {
-                // // console.log.log('🔄 Product progress <= 0.5, reinstating cell and starfield');
+                // console.log.log('🔄 Product progress <= 0.5, reinstating cell and starfield');
                 this.reinstateCellAndStarfield(cellObject, starField);
                 if (cellObject) cellObject.visible = true;
                 stateChanges.push({ component: 'cell_and_starfield', action: 'reinstate' });
@@ -728,11 +728,11 @@ export const cleanupManager = {
                 const isDisposed = this.componentStates.cell.isDisposed;
 
                 if (!shouldBeVisible && !isDisposed) {
-                    // // console.log.log('🔄 Disposing cell - not in valid section');
+                    // console.log.log('🔄 Disposing cell - not in valid section');
                     this.disposeCellAndStarfield(cellObject, starField);
                     stateChanges.push({ component: 'cell', action: 'dispose' });
                 } else if (shouldBeVisible && isDisposed) {
-                    // // console.log.log('🔄 Reinstating cell - entering valid section');
+                    // console.log.log('🔄 Reinstating cell - entering valid section');
                     this.reinstateCellAndStarfield(cellObject, starField);
                     stateChanges.push({ component: 'cell', action: 'reinstate' });
                 }
@@ -744,11 +744,11 @@ export const cleanupManager = {
                 const isDisposed = this.componentStates.product.isDisposed;
 
                 if (!shouldBeVisible && !isDisposed) {
-                    // // console.log.log('📦 Disposing product - not in valid section/progress');
+                    // console.log.log('📦 Disposing product - not in valid section/progress');
                     this.disposeProduct(product);
                     stateChanges.push({ component: 'product', action: 'dispose' });
                 } else if (shouldBeVisible && isDisposed) {
-                    // // console.log.log('📦 Reinstating product');
+                    // console.log.log('📦 Reinstating product');
                     this.reinstateWithCache(product, 'product');
                     stateChanges.push({ component: 'product', action: 'reinstate' });
                 }
@@ -760,11 +760,11 @@ export const cleanupManager = {
                 const isDisposed = this.componentStates.speckles.isDisposed;
 
                 if (!shouldBeVisible && !isDisposed) {
-                    // // console.log.log('✨ Disposing speckle system - not in zoom/pitch section');
+                    // console.log.log('✨ Disposing speckle system - not in zoom/pitch section');
                     this.disposeSpeckles(speckleSystem);
                     stateChanges.push({ component: 'speckles', action: 'dispose' });
                 } else if (shouldBeVisible && isDisposed) {
-                    // // console.log.log('✨ Reinstating speckle system - entering zoom/pitch section');
+                    // console.log.log('✨ Reinstating speckle system - entering zoom/pitch section');
                     this.reinstateSpeckles(speckleSystem);
                     stateChanges.push({ component: 'speckles', action: 'reinstate' });
                 }
@@ -773,7 +773,7 @@ export const cleanupManager = {
             // Section-specific cleanup
             if (section === 'splash') {
                 if (ribbons && !visibilityStates.ribbons && !this.componentStates.ribbons.isDisposed) {
-                    // // console.log.log('🎗️ Disposing ribbons - not in splash section');
+                    // console.log.log('🎗️ Disposing ribbons - not in splash section');
                     this.disposeRibbons(ribbons);
                     stateChanges.push({ component: 'ribbons', action: 'dispose' });
                 }
@@ -781,7 +781,7 @@ export const cleanupManager = {
                 wavingBlob.children.forEach((group, index) => {
                     if (group.isGroup && explodedGroups.has(index)) {
                         if (!this.componentStates.speckles.isDisposed) {
-                            // // console.log.log(`🔴 Disposing exploded dot group ${index}`);
+                            // console.log.log(`🔴 Disposing exploded dot group ${index}`);
                             this.disposeWithCaching(group, 'speckles');
                             group.visible = false;
                             stateChanges.push({ component: 'dot_group', index, action: 'dispose' });
@@ -794,7 +794,7 @@ export const cleanupManager = {
             this._cleanupCache();
 
             if (stateChanges.length > 0) {
-                // // console.log.log('🔄 State changes this frame:', stateChanges);
+                // console.log.log('🔄 State changes this frame:', stateChanges);
             }
 
         } catch (error) {

@@ -149,7 +149,8 @@ export class ProductComponent extends BaseComponent {
 
     async loadObject() {
         return new Promise((resolve, reject) => {
-            const fullPath = 'https://cdn.jsdelivr.net/gh/whole-earth/taxa@main/assets/product/' + this.gltfFileName;
+            //const fullPath = 'https://cdn.jsdelivr.net/gh/whole-earth/taxa@main/assets/product/' + this.gltfFileName;
+            const fullPath = 'https://192.168.1.64:5501/assets/product/' + this.gltfFileName;
 
             this.loader.load(
                 fullPath,
