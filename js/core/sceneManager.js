@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { PMREMGenerator } from 'three';
+import { performanceMonitor } from '../utils/performance.js';
 
 /**
  * Manages the Three.js scene, camera, renderer, and controls
@@ -151,6 +152,7 @@ export class SceneManager {
     update() {
         this.controls.update();
         this.renderer.render(this.scene, this.camera);
+        performanceMonitor.recordRender();
     }
 
     dispose() {

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { waitForMeshLine } from 'three.meshline';
+import { materialManager } from '../utils/materialManager.js';
 
 const DEVICE = {
     MOBILE_BREAKPOINT: 768,
@@ -256,7 +257,7 @@ export class StarField extends THREE.Group {
             data[i] = scaledProgress;
         }
 
-        progressAttribute.needsUpdate = true;
+        materialManager.queueAttributeUpdate(progressAttribute, 'starfield-progress');
     }
 
     _resetProgress() {

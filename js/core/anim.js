@@ -8,6 +8,7 @@ import { SceneManager } from './sceneManager.js';
 import { CellComponent, ProductComponent } from '../components/components.js';
 import { SpeckleSystem } from '../effects/speckles.js';
 import { initInactivityManager } from '../utils/inactivity.js';
+import { materialManager } from '../utils/materialManager.js';
 
 const CONFIG = {
     lighting: {
@@ -72,9 +73,7 @@ document.head.appendChild(meshLineScript);
 export class App {
     constructor() {
         // Select odor radio button by default
-        
         const odorRadio = document.getElementById('odorRadio');
-        console.log('odorRadio', odorRadio);
         if (odorRadio) {
             odorRadio.checked = true;
         }
@@ -89,14 +88,139 @@ export class App {
         this.isInitialized = false;
         this.animationFrameId = null;
         this.animate = this.animate.bind(this);
+
+        // Add loading overlay to the DOM
+        const loadingOverlay = document.createElement('div');
+        loadingOverlay.className = 'product-loading-overlay';
+        loadingOverlay.innerHTML = `
+            <div class="product-loading-content">
+                <div class="product-loading-spinner"></div>
+                <div class="product-loading-text">Loading Product</div>
+                <div class="product-loading-progress">0%</div>
+                <div class="product-loading-status">Preparing 3D model...</div>
+            </div>
+        `;
+        document.body.appendChild(loadingOverlay);
+
+        // Add loading overlay styles
+        const style = document.createElement('style');
+        style.textContent = `
+            .product-loading-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(255, 251, 244, 0.3);
+                backdrop-filter: blur(6px);
+                display: none;
+                justify-content: center;
+                align-items: center;
+                z-index: 1000;
+                opacity: 0;
+                transition: all 0.3s ease;
+            }
+            .product-loading-overlay.active {
+                display: flex;
+                opacity: 1;
+            }
+            .product-loading-content {
+                text-align: center;
+                color: var(--taxa-blue);
+                font-family: sans-serif;
+            }
+            .product-loading-spinner {
+                width: 50px;
+                height: 50px;
+                border: 3px solid transparent;
+                border-top-color: var(--taxa-blue);
+                border-radius: 50%;
+                margin: 0 auto 20px;
+                animation: spin 1s linear infinite;
+            }
+            .product-loading-text {
+                font-size: 24px;
+                margin-bottom: 10px;
+                display: none;
+            }
+            .product-loading-progress {
+                font-size: 18px;
+                margin-bottom: 10px;
+            }
+            .product-loading-status {
+                font-size: 14px;
+                font-weight: 400;
+            }
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        `;
+        document.head.appendChild(style);
+
         this.init().catch(error => console.error('Failed to initialize:', error));
         this.setupEventListeners();
+    }
+
+    async initializeProductLoading() {
+        try {
+            const product = await this.loadProductOnDemand();
+            if (product) {
+                console.log('Product loaded successfully');
+                state.preloadedProduct = product;
+                state.productAssetsPreloaded = true;
+                
+                // If the product is loaded after initialization, ensure it's properly set up
+                if (this.isInitialized) {
+                    this.setupProduct(product);
+                }
+            }
+        } catch (error) {
+            console.warn('Product loading failed:', error);
+        }
+    }
+
+    // Helper method to batch update materials using the global manager
+    batchUpdateMaterials(materials) {
+        if (materials && materials.length > 0) {
+            materialManager.queueMaterialUpdate(materials);
+        }
+    }
+
+    setupProduct(product) {
+        if (!this.productAnchor) {
+            this.productAnchor = new THREE.Object3D();
+            this.sceneManager.scene.add(this.productAnchor);
+        }
+        
+        this.productAnchor.add(product);
+        
+        if (this.sceneManager.directionalContainer) {
+            product.add(this.sceneManager.directionalContainer);
+        }
+        
+        const productObj = product.getObject();
+        if (productObj) {
+            const applicatorGroup = productObj.getObjectByName('applicator');
+            if (applicatorGroup) {
+                const materialsToUpdate = [];
+                applicatorGroup.traverse(child => {
+                    if (child.name === 'outer-cap' && child.material) {
+                        child.material.ior = 200;
+                        materialsToUpdate.push(child.material);
+                    }
+                });
+                
+                // Batch update all materials at once
+                this.batchUpdateMaterials(materialsToUpdate);
+            }
+        }
     }
 
     async init() {
         try {
             window.scrollTo(0, 0);
-            this.ambientLight = this.sceneManager.initLights();
+            this.ambientLight = await this.sceneManager.initLights();
             await this.loadAllComponents();
             await this.initializeStarfield();
             this.resetInitialState();
@@ -109,17 +233,17 @@ export class App {
             state.lenis = new window.Lenis({
                 duration: isMobile ? 2.0 : 1.8,
                 overscroll: false,
-                wheelMultiplier: 0.5,
+                wheelMultiplier: 0.8,
                 smoothTouch: true,
-                lerp: isMobile ? 8.0 : 1.0,
+                lerp: isMobile ? 8.0 : 2.0,
                 friction: 0.2,
-                touchMultiplier: isMobile ? 6.2 : 1,
-                touchInertiaMultiplier: isMobile ? 2 : 1,
+                touchMultiplier: 6.2,
+                touchInertiaMultiplier: 2,
             });
 
             this.startAnimationLoop();
-
             this.completeInitialization();
+
         } catch (error) {
             console.error('Failed to initialize:', error);
             throw error;
@@ -158,32 +282,52 @@ export class App {
     async loadProductOnDemand() {
         if (!this.product) {
             try {
-                const product = await new ProductComponent(this.sceneManager.scene, "product.glb", 200);
+                const updateLoadingStatus = (status) => {
+                    const statusElement = document.querySelector('.product-loading-status');
+                    if (statusElement) {
+                        statusElement.textContent = status;
+                    }
+                };
+
+                const product = await new ProductComponent(this.sceneManager.scene, "product-compressed.glb", 200, (progress) => {
+                    // Update loading progress
+                    const progressElement = document.querySelector('.product-loading-progress');
+                    if (progressElement) {
+                        const percentage = Math.round(progress * 100);
+                        progressElement.textContent = `${percentage}%`;
+                        
+                        // Update status based on progress
+                        if (percentage < 25) {
+                            updateLoadingStatus('Downloading 3D model...');
+                        } else if (percentage < 50) {
+                            updateLoadingStatus('Processing geometry...');
+                        } else if (percentage < 75) {
+                            updateLoadingStatus('Preparing materials...');
+                        } else {
+                            updateLoadingStatus('Finalizing setup...');
+                        }
+                    }
+                });
                 this.product = product;
 
-                // Add reflectivity to outer-cap
-                const productObj = product.getObject();
-                const applicatorGroup = productObj.getObjectByName('applicator');
-                if (applicatorGroup) {
-                    applicatorGroup.traverse(child => {
-                        if (child.name === 'outer-cap' && child.material) {
-                            child.material.ior = 200;
-                            child.material.needsUpdate = true;
-                        }
-                    });
-                }
+                updateLoadingStatus('Setting up product view...');
 
                 this.productAnchor = new THREE.Object3D();
-                this.productAnchor.add(productObj);
+                this.productAnchor.add(product.getObject());
                 this.sceneManager.scene.add(this.productAnchor);
 
                 if (this.sceneManager.directionalContainer) {
-                    productObj.add(this.sceneManager.directionalContainer);
+                    product.getObject().add(this.sceneManager.directionalContainer);
                 }
 
-                return productObj;
+                return product.getObject();
             } catch (error) {
                 console.error('Failed to load product:', error);
+                const statusElement = document.querySelector('.product-loading-status');
+                if (statusElement) {
+                    statusElement.textContent = 'Error loading product. Please try again.';
+                    statusElement.style.color = '#ff4444';
+                }
                 throw error;
             }
         }
@@ -212,6 +356,10 @@ export class App {
         // Cleanup after all transitions complete
         setTimeout(() => {
             document.body.classList.remove('completing');
+            const loadingOverlay = document.querySelector('.load-progress');
+            if (loadingOverlay) {
+                loadingOverlay.remove();
+            }
         }, 2800); // Matches longest transition duration (1.8s + 1s delay)
     }
 
@@ -236,6 +384,9 @@ export class App {
     }
 
     animate = (time) => {
+        // Process any pending material updates first
+        materialManager.processUpdates();
+        
         const needsUpdate = this.updateActiveAnimations();
         if (needsUpdate) {
             this.sceneManager.update();
@@ -281,30 +432,71 @@ export class App {
 
     async loadCellComponents() {
         try {
-            const [blobInner, blobOuter, ribbons] = await Promise.all([
-                new CellComponent(this.sceneManager.scene, "blob-inner.glb", pearlBlue, 0),
-                new CellComponent(this.sceneManager.scene, "blob-outer.glb", window.innerWidth < 768 ? dispersionMobile : dispersion, 2),
-                new CellComponent(this.sceneManager.scene, "ribbons.glb", mauve, 3)
-            ]);
+            const components = {
+                blobInner: { file: "blob-inner.glb", material: pearlBlue, order: 0 },
+                blobOuter: { file: "blob-outer.glb", material: window.innerWidth < 768 ? dispersionMobile : dispersion, order: 2 },
+                ribbons: { file: "ribbons.glb", material: mauve, order: 3 }
+            };
 
-            this.blobInner = blobInner;
-            this.blobOuter = blobOuter;
-            this.ribbons = ribbons;
+            // Track loading progress
+            const progress = { total: 0 };
+            const preloadOverlay = document.querySelector('.load-progress');
+            const progressElement = document.getElementById('loadProgressCount');
+            
+            // Helper function to calculate average progress
+            const getAverageProgress = () => {
+                const total = Object.values(progress).reduce((sum, val) => sum + val, 0);
+                return total / Object.keys(components).length;
+            };
+            
+            // Set up checks at different time intervals
+            setTimeout(() => {
+                if (preloadOverlay) {
+                    const average = getAverageProgress();
+                    if (average < 20) {
+                        preloadOverlay.classList.remove('hidden');
+                    }
+                }
+            }, 200);
+
+            setTimeout(() => {
+                if (preloadOverlay) {
+                    const average = getAverageProgress();
+                    if (average < 60) {
+                        preloadOverlay.classList.remove('hidden');
+                    }
+                }
+            }, 600);
+            
+            const updateProgress = (componentName, percent) => {
+                progress[componentName] = percent;
+                const average = Math.round(getAverageProgress());
+                if (progressElement) progressElement.textContent = `${average}%`;
+            };
+
+            // Load all components in parallel
+            const loaded = await Promise.all(
+                Object.entries(components).map(([name, config]) => 
+                    new CellComponent(
+                        this.sceneManager.scene,
+                        config.file,
+                        config.material,
+                        config.order,
+                        progress => updateProgress(name, Math.round((progress.loaded / progress.total) * 100))
+                    )
+                )
+            );
+
+            // Store component references
+            [this.blobInner, this.blobOuter, this.ribbons] = loaded;
 
             // Store bounding boxes
-            this.boundingBoxes = [
-                this.blobInner.getBoundingBox(),
-                this.blobOuter.getBoundingBox(),
-                this.ribbons.getBoundingBox()
-            ];
+            this.boundingBoxes = loaded.map(component => component.getBoundingBox());
 
-            // Add the Three.js objects to the scene
-            this.cellObject.add(
-                blobInner.getObject(),
-                blobOuter.getObject(),
-                ribbons.getObject()
-            );
+            // Add components to scene
+            this.cellObject.add(...loaded.map(component => component.getObject()));
             this.sceneManager.scene.add(this.cellObject);
+
         } catch (error) {
             console.error('Error loading cell components:', error);
             throw error;
@@ -353,6 +545,12 @@ export class App {
         this.sceneManager.dispose();
         this.speckleSystem.dispose();
         cancelAnimationFrame(this.animationFrameId);
+
+        // Clean up loading overlay
+        const loadingOverlay = document.querySelector('.product-loading-overlay');
+        if (loadingOverlay) {
+            //loadingOverlay.remove();
+        }
     }
 
     // Helper function to maintain your existing scroll duration logic
