@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Taxa Blobs</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+    #three {
+      width: 100vw;
+      height: 100vh;
+    }
+    .controls-panel {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 15px;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .controls-panel.collapsed {
+      transform: translateX(calc(100% + 20px));
+    }
+    .controls-panel.collapsed > *:not(.collapse-toggle) {
+      pointer-events: none;
+      opacity: 0;
+    }
+    .collapse-toggle {
+      position: absolute;
+      left: -46px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid #ddd;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      z-index: 1001;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      pointer-events: auto !important;
+      opacity: 1 !important;
+    }
+    .collapse-toggle:hover {
+      background: white;
+      transform: translateY(-50%) scale(1.05);
+    }
+    .collapse-toggle:active {
+      transform: translateY(-50%) scale(0.95);
+    }
+    .collapse-toggle svg {
+      width: 20px;
+      height: 20px;
+      transition: transform 0.3s ease;
+    }
+    .controls-panel.collapsed .collapse-toggle svg {
+      transform: rotate(180deg);
+    }
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .axis-controls {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      align-items: center;
+    }
+    .position-pad {
+      display: grid;
+      grid-template-columns: repeat(3, 30px);
+      grid-template-rows: repeat(3, 30px);
+      gap: 4px;
+      justify-content: center;
+    }
+    .arrow-button {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid #ddd;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      padding: 0;
+    }
+    .arrow-button svg {
+      width: 20px;
+      height: 20px;
+      transition: all 0.2s ease;
+    }
+    .arrow-button:hover {
+      background: white;
+      transform: scale(1.05);
+    }
+    .arrow-button:hover svg {
+      stroke: #007AFF;
+    }
+    .arrow-button:active {
+      transform: scale(0.95);
+    }
+    .arrow-button.up {
+      grid-column: 2;
+      grid-row: 1;
+    }
+    .arrow-button.left {
+      grid-column: 1;
+      grid-row: 2;
+    }
+    .arrow-button.right {
+      grid-column: 3;
+      grid-row: 2;
+    }
+    .arrow-button.down {
+      grid-column: 2;
+      grid-row: 3;
+    }
+    .axis-label {
+      font-family: monospace;
+      font-size: 14px;
+      color: #666;
+      width: auto;
+      text-align: left;
+    }
+    .control-button {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid #ddd;
+      cursor: pointer;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+    .control-button:hover {
+      background: white;
+      transform: scale(1.05);
+    }
+    .control-button:active {
+      transform: scale(0.95);
+    }
+    .reset-button {
+      width: 100%;
+      height: 30px;
+      border-radius: 15px;
+      background: #e0e0e0;
+      color: #333;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+    .reset-button:hover {
+      background: #d0d0d0;
+      transform: scale(1.02);
+    }
+    .reset-button:active {
+      transform: scale(0.98);
+    }
+    .divider {
+      height: 1px;
+      background: #ddd;
+      margin: 5px 0;
+    }
+    .capture-button {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      padding: 8px 16px;
+      background: #007AFF;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+      transition: all 0.2s ease;
+      z-index: 1000;
+    }
+    .capture-button:hover {
+      background: #0066FF;
+      transform: scale(1.02);
+    }
+    .capture-button:active {
+      transform: scale(0.98);
+    }
+    .capture-button svg {
+      width: 16px;
+      height: 16px;
+    }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "tween": "https://cdn.jsdelivr.net/gh/whole-earth/taxa/node_modules/@tweenjs/tween.js/dist/tween.esm.js",
+        "three": "https://cdn.jsdelivr.net/gh/whole-earth/taxa/node_modules/three/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/gh/whole-earth/taxa/node_modules/three/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+
+<body>
+  <div id="three"></div>
+  <div class="controls-panel">
+  <button class="collapse-toggle" id="collapse-toggle" aria-label="Toggle Controls Panel">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="15 18 9 12 15 6"></polyline>
+    </svg>
+  </button>
+    <div class="control-group">
+      <span class="axis-label" style="width: 100%; text-align: left; margin-bottom: 4px;">Position</span>
+      <div class="position-pad">
+        <button class="arrow-button up" id="y-plus">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="18 15 12 9 6 15"></polyline>
+          </svg>
+        </button>
+        <button class="arrow-button left" id="x-minus">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
+        <button class="arrow-button right" id="x-plus">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+        <button class="arrow-button down" id="y-minus">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div class="control-group">
+      <span class="axis-label" style="width: 100%; text-align: left; margin-bottom: 4px;">Zoom</span>
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <button class="control-button" id="zoom-out" aria-label="Zoom Out">−</button>
+        <button class="control-button" id="zoom-in" aria-label="Zoom In">+</button>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <button class="reset-button" id="reset">Reset View</button>
+  </div>
+  
+  <button class="capture-button" id="capture">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"></circle>
+      <path d="M19 15V12a7 7 0 0 0-7-7h0a7 7 0 0 0-7 7v3"></path>
+      <rect x="5" y="15" width="14" height="6" rx="2"></rect>
+    </svg>
+    Capture
+  </button>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+
+    class CellComponent {
+      constructor(scene, modelPath, material) {
+        this.scene = scene;
+        this.modelPath = modelPath;
+        this.material = material;
+        this.object = new THREE.Object3D();
+        this.boundingBox = null;
+      }
+
+      async load() {
+        return new Promise((resolve, reject) => {
+          const loader = new GLTFLoader();
+          
+          // Setup Draco loader
+          const dracoLoader = new DRACOLoader();
+          dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+          dracoLoader.setDecoderConfig({ type: 'js' }); // Use JavaScript decoder
+          loader.setDRACOLoader(dracoLoader);
+          
+          const baseUrl = 'https://cdn.jsdelivr.net/gh/whole-earth/taxa-v3@main/assets/cell/';
+          
+          loader.load(
+            baseUrl + this.modelPath,
+            (gltf) => {
+              gltf.scene.traverse((child) => {
+                if (child.isMesh) {
+                  child.material = this.material;
+                  // Update bounding box
+                  child.geometry.computeBoundingBox();
+                  this.boundingBox = child.geometry.boundingBox;
+                }
+              });
+              this.object.add(gltf.scene);
+              resolve(this);
+            },
+            undefined,
+            reject
+          );
+        });
+      }
+
+      getObject() {
+        return this.object;
+      }
+
+      getBoundingBox() {
+        return this.boundingBox;
+      }
+    }
+
+    class App {
+      constructor() {
+        this.initialCameraPosition = new THREE.Vector3(0, 0, 60);
+        this.init();
+        this.setupControls();
+        this.setupCaptureButton();
+        this.setupCollapseToggle();
+      }
+
+      init() {
+        // Scene setup
+        this.scene = new THREE.Scene();
+        
+        // Camera setup
+        this.camera = new THREE.PerspectiveCamera(
+          60,
+          window.innerWidth / window.innerHeight,
+          0.5,
+          2000
+        );
+        this.camera.position.set(0, 0, 60);
+
+        // Renderer setup
+        this.renderer = new THREE.WebGLRenderer({
+          antialias: true,
+          alpha: true
+        });
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.renderer.setPixelRatio(window.devicePixelRatio);
+        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        document.querySelector("#three").appendChild(this.renderer.domElement);
+
+        // Controls setup with full rotation enabled
+        this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+        this.controls.enableDamping = true;
+        this.controls.dampingFactor = 0.03;
+        this.controls.enableZoom = true;
+        this.controls.enablePan = false;
+        this.controls.autoRotate = false;
+        
+        // Remove polar angle restrictions for full 360° rotation
+        this.controls.minPolarAngle = 0;
+        this.controls.maxPolarAngle = Math.PI;
+        
+        // Add zoom limits
+        this.controls.minDistance = 30; // Maximum zoom in
+        this.controls.maxDistance = 100; // Maximum zoom out
+
+        // Lighting setup
+        const ambientLight = new THREE.AmbientLight(0xffffff, 4);
+        this.scene.add(ambientLight);
+
+        // Environment map
+        const rgbeLoader = new RGBELoader();
+        rgbeLoader.load(
+          'https://cdn.jsdelivr.net/gh/whole-earth/taxa-v3@main/assets/cell/aloe.hdr',
+          (texture) => {
+            const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
+            const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+            this.scene.environment = envMap;
+            this.scene.environment.mapping = THREE.EquirectangularReflectionMapping;
+            this.scene.environment.intensity = 1;
+
+            texture.dispose();
+            pmremGenerator.dispose();
+          }
+        );
+
+        // Create cell object
+        this.cellObject = new THREE.Object3D();
+        this.loadCellComponents();
+
+        // Animation loop
+        this.animate();
+
+        // Handle window resize
+        window.addEventListener('resize', () => this.handleResize());
+      }
+
+      setupControls() {
+        const moveSpeed = 2;
+        const zoomSpeed = 5;
+
+        // Position controls - reversed directions
+        document.getElementById('x-plus').addEventListener('click', () => {
+          const offset = new THREE.Vector3(-moveSpeed, 0, 0);
+          this.camera.position.add(offset);
+          this.controls.target.add(offset);
+        });
+
+        document.getElementById('x-minus').addEventListener('click', () => {
+          const offset = new THREE.Vector3(moveSpeed, 0, 0);
+          this.camera.position.add(offset);
+          this.controls.target.add(offset);
+        });
+
+        document.getElementById('y-plus').addEventListener('click', () => {
+          const offset = new THREE.Vector3(0, -moveSpeed, 0);
+          this.camera.position.add(offset);
+          this.controls.target.add(offset);
+        });
+
+        document.getElementById('y-minus').addEventListener('click', () => {
+          const offset = new THREE.Vector3(0, moveSpeed, 0);
+          this.camera.position.add(offset);
+          this.controls.target.add(offset);
+        });
+
+        // Zoom controls
+        document.getElementById('zoom-in').addEventListener('click', () => {
+          const zoomDirection = new THREE.Vector3().subVectors(this.camera.position, this.controls.target).normalize();
+          const newPosition = this.camera.position.clone().sub(zoomDirection.multiplyScalar(zoomSpeed));
+          const newDistance = newPosition.distanceTo(this.controls.target);
+          
+          if (newDistance >= this.controls.minDistance) {
+            this.camera.position.copy(newPosition);
+          }
+        });
+
+        document.getElementById('zoom-out').addEventListener('click', () => {
+          const zoomDirection = new THREE.Vector3().subVectors(this.camera.position, this.controls.target).normalize();
+          const newPosition = this.camera.position.clone().add(zoomDirection.multiplyScalar(zoomSpeed));
+          const newDistance = newPosition.distanceTo(this.controls.target);
+          
+          if (newDistance <= this.controls.maxDistance) {
+            this.camera.position.copy(newPosition);
+          }
+        });
+
+        // Reset control
+        document.getElementById('reset').addEventListener('click', () => {
+          this.camera.position.copy(this.initialCameraPosition);
+          this.controls.target.set(0, 0, 0);
+          this.camera.up.set(0, 1, 0);
+          this.controls.update();
+        });
+      }
+
+      async loadCellComponents() {
+        try {
+          const innerBlobMaterial = new THREE.MeshPhysicalMaterial({
+            color: new THREE.Color('#9abe8b'),
+            roughness: 0.4,
+            metalness: 0,
+            opacity: 1,
+            side: THREE.FrontSide,
+            envMapIntensity: 0.6,
+            transmission: 0.6,
+            reflectivity: 0.4
+          });
+
+          const outerBlobMaterial = new THREE.MeshPhysicalMaterial({
+            color: new THREE.Color('#7592c3'),
+            roughness: 0.4,
+            metalness: 0,
+            opacity: 1,
+            side: THREE.DoubleSide,
+            transparent: true,
+            depthWrite: true,
+            envMapIntensity: 0.6,
+            transmission: 0.6,
+            reflectivity: 0.4
+          });
+
+          const [blobInner, blobOuter] = await Promise.all([
+            new CellComponent(this.scene, "blob-inner.glb", innerBlobMaterial).load(),
+            new CellComponent(this.scene, "blob-outer.glb", outerBlobMaterial).load()
+          ]);
+
+          this.blobInner = blobInner;
+          this.blobOuter = blobOuter;
+
+          // Store bounding boxes
+          this.boundingBoxes = [
+            this.blobInner.getBoundingBox(),
+            this.blobOuter.getBoundingBox()
+          ];
+
+          // Add to cell object and scale inner blob to match post-explosion state
+          this.cellObject.add(
+            blobInner.getObject(),
+            blobOuter.getObject()
+          );
+          
+          // Set inner blob scale to 1.1 (post-explosion scale)
+          blobInner.getObject().scale.setScalar(1.1);
+          
+          this.scene.add(this.cellObject);
+        } catch (error) {
+          console.error('Error loading cell components:', error);
+        }
+      }
+
+      handleResize() {
+        this.camera.aspect = window.innerWidth / window.innerHeight;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+
+      animate() {
+        requestAnimationFrame(() => this.animate());
+        this.controls.update();
+        this.renderer.render(this.scene, this.camera);
+      }
+
+      setupCaptureButton() {
+        const captureButton = document.getElementById('capture');
+        
+        captureButton.addEventListener('click', () => {
+          this.captureHighResolution();
+        });
+      }
+
+      async captureHighResolution() {
+        // Store original settings
+        const originalSize = {
+          width: this.renderer.domElement.width,
+          height: this.renderer.domElement.height
+        };
+        const originalPixelRatio = this.renderer.getPixelRatio();
+        const originalToneMapping = this.renderer.toneMapping;
+        const originalToneMappingExposure = this.renderer.toneMappingExposure;
+        const originalOutputColorSpace = this.renderer.outputColorSpace;
+        const originalOutputEncoding = this.renderer.outputEncoding;
+        const originalGamma = this.renderer.gammaFactor;
+        const originalClearColor = this.renderer.getClearColor(new THREE.Color());
+        const originalClearAlpha = this.renderer.getClearAlpha();
+
+        // Set high resolution size
+        const size = 4000;
+        this.renderer.setSize(size, size, false);
+        this.renderer.setPixelRatio(1);
+
+        // Calculate bounding sphere for the cell object
+        const boundingSphere = new THREE.Sphere();
+        const bbox = new THREE.Box3().setFromObject(this.cellObject);
+        bbox.getBoundingSphere(boundingSphere);
+
+        // Store original camera settings
+        const originalCameraState = {
+          position: this.camera.position.clone(),
+          fov: this.camera.fov,
+          aspect: this.camera.aspect,
+          target: this.controls.target.clone()
+        };
+
+        // Adjust camera for capture
+        const radius = boundingSphere.radius;
+        const idealFov = 30;
+        const idealDistance = (radius * 2.2) / Math.tan((idealFov * Math.PI) / 360);
+        const direction = this.camera.position.clone().sub(this.controls.target).normalize();
+        this.camera.position.copy(direction.multiplyScalar(idealDistance));
+        this.controls.target.copy(boundingSphere.center);
+        this.camera.fov = idealFov;
+        this.camera.aspect = 1;
+        this.camera.updateProjectionMatrix();
+
+        // Decrease exposure for capture.
+        // Not sure why the exposure was an issue, but this preserves the look of the original.
+        this.renderer.toneMappingExposure = Math.max(0, originalToneMappingExposure - 0.25);
+
+        // Ensure one render cycle to update scene
+        this.renderer.clear();
+        this.controls.update();
+        this.renderer.render(this.scene, this.camera);
+
+        // Capture the image
+        const imageUrl = this.renderer.domElement.toDataURL('image/png', 1.0);
+
+        // Get next file number
+        let fileNumber = parseInt(localStorage.getItem('lastCaptureNumber') || '0');
+        fileNumber = (fileNumber + 1) % 100;
+        const fileName = String(fileNumber).padStart(2, '0') + '.png';
+        localStorage.setItem('lastCaptureNumber', fileNumber.toString());
+
+        // Create download link
+        const link = document.createElement('a');
+        link.download = fileName;
+        link.href = imageUrl;
+        link.click();
+
+        // Restore original settings
+        this.renderer.setSize(originalSize.width, originalSize.height, false);
+        this.renderer.setPixelRatio(originalPixelRatio);
+        this.renderer.toneMapping = originalToneMapping;
+        this.renderer.toneMappingExposure = originalToneMappingExposure;
+        this.renderer.outputColorSpace = originalOutputColorSpace;
+        this.renderer.outputEncoding = originalOutputEncoding;
+        if (this.renderer.gammaFactor) this.renderer.gammaFactor = originalGamma;
+        this.renderer.setClearColor(originalClearColor, originalClearAlpha);
+
+        // Restore camera settings
+        this.camera.position.copy(originalCameraState.position);
+        this.camera.fov = originalCameraState.fov;
+        this.camera.aspect = originalCameraState.aspect;
+        this.controls.target.copy(originalCameraState.target);
+        this.camera.updateProjectionMatrix();
+        this.controls.update();
+      }
+
+      setupCollapseToggle() {
+        const panel = document.querySelector('.controls-panel');
+        const toggle = document.getElementById('collapse-toggle');
+        
+        // Load initial state from localStorage
+        const isCollapsed = localStorage.getItem('controlsPanelCollapsed') === 'true';
+        if (isCollapsed) {
+          panel.classList.add('collapsed');
+        }
+
+        toggle.addEventListener('click', () => {
+          panel.classList.toggle('collapsed');
+          localStorage.setItem('controlsPanelCollapsed', panel.classList.contains('collapsed'));
+        });
+      }
+    }
+
+    // Initialize the app
+    new App();
+  </script>
+</body>
+
+</html>
