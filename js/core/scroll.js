@@ -1016,8 +1016,29 @@ export function animatePage(controls, camera, cellObject, blobInner, blobOuter, 
     state.lastScrollY = scrollY;
 }
 
+// Add style element for pointer events
+const pointerEventsStyle = document.createElement('style');
+pointerEventsStyle.textContent = `
+    .pointer-events-none * {
+        pointer-events: none !important;
+    }
+`;
+document.head.appendChild(pointerEventsStyle);
+
 function activateText(parentElement, timeout = true) {
     let activeText = parentElement.querySelector('.child');
+
+    // Handle pointer events based on which section is being activated
+    const productElement = document.querySelector('.product');
+    if (productElement) {
+        if (parentElement === productArea) {
+            // If activating product area, remove pointer-events-none
+            productElement.classList.remove('pointer-events-none');
+        } else {
+            // If activating any other area, add pointer-events-none to product
+            productElement.classList.add('pointer-events-none');
+        }
+    }
 
     if (activeText) {
         if (!activeText.classList.contains('active')) {
