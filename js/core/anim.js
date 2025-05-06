@@ -520,6 +520,22 @@ export class App {
             new ColorChangeAnimationSequence(state.applicatorObject, this.product.getObject(), PRODUCT_COLORS.yellow).start();
         });
 
+        // Replace wakiga.com links with swap.care after DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            const links = document.getElementsByTagName('a');
+            for (const link of links) {
+                if (link.href.includes('wakiga.com')) {
+                    link.href = link.href.replace('wakiga.com', 'swap.care');
+                }
+            }
+
+            // Update text of link inside #ctaStep3Japan
+            const japanCta = document.querySelector('#ctaStep3Japan a');
+            if (japanCta) {
+                japanCta.textContent = 'Visit swap.care';
+            }
+        });
+
         // Scroll handler
         window.addEventListener('scroll', () => {
             if (!this.isInitialized) return;
