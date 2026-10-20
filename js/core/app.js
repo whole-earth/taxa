@@ -62,7 +62,7 @@ export class StoryApp {
     this.ambientLight = this.sceneManager.initLights();
     const progress = new Map();
     const updateProgress = (name, event) => {
-      if (this.disposed) return;
+      if (this.disposed || this.sceneManager.contextLost) return;
       if (event.lengthComputable)
         progress.set(name, event.loaded / event.total);
       const value = Math.round(
@@ -76,15 +76,27 @@ export class StoryApp {
         ["blob-inner.glb", materials.inner, 0],
         ["blob-outer.glb", materials.shell, 2],
         ["ribbons.glb", materials.ribbons, 3],
-      ].map(([file, material, order]) =>
-        loadCellModel(file, {
-          material,
-          renderOrder: order,
-          onProgress: (event) => updateProgress(file, event),
-        }),
-      ),
+      ].map(async ([file, material, order]) => {
+        let model;
+        try {
+          model = await loadCellModel(file, {
+            material,
+            renderOrder: order,
+            onProgress: (event) => updateProgress(file, event),
+          });
+        } catch (error) {
+          material.dispose();
+          throw error;
+        }
+        // Take ownership as each sibling resolves, including after another
+        // load has failed and the app has already been disposed.
+        if (this.disposed) disposeScene(model.root);
+        else this.cellGroup.add(model.root);
+        return model;
+      }),
     );
     if (this.disposed) return;
+    // Keep traversal order independent of network completion order.
     this.cellGroup.add(
       this.innerCell.root,
       this.cellShell.root,
@@ -108,6 +120,7 @@ export class StoryApp {
     // Warm shader programs before the first visible frame. This uses parallel
     // GPU compilation where supported, with the environment already available.
     await this.sceneManager.warmMaterials(this.sceneManager.scene);
+    await this.sceneManager.waitForContext();
     if (this.disposed) return;
     this.scroller = new Lenis({
       autoRaf: false,
@@ -143,29 +156,27 @@ export class StoryApp {
     // One shared promise prevents scroll bursts from starting duplicate loads.
     this.productPromise = loadProductModel("swap.glb", { renderOrder: 200 })
       .then(async (product) => {
-        if (this.disposed) {
-          disposeScene(product.root);
-          return;
+        try {
+          if (this.disposed) return;
+          await this.sceneManager.warmProduct(product);
+          if (this.disposed) return;
+          const anchor = await this.sceneManager.warmProductFrames(
+            product,
+            this.cellGroup,
+            this.starField,
+          );
+          if (this.disposed) return;
+          this.product = product;
+          this.productAnchor = anchor;
+          this.sceneManager.scene.add(this.productAnchor);
+          this.loadingStatus.hide();
+          this.invalidate(true);
+        } finally {
+          if (this.product !== product) {
+            product.root.removeFromParent();
+            disposeScene(product.root);
+          }
         }
-        await this.sceneManager.warmProduct(product);
-        if (this.disposed) {
-          disposeScene(product.root);
-          return;
-        }
-        const anchor = await this.sceneManager.warmProductFrames(
-          product,
-          this.cellGroup,
-          this.starField,
-        );
-        if (this.disposed) {
-          disposeScene(product.root);
-          return;
-        }
-        this.product = product;
-        this.productAnchor = anchor;
-        this.sceneManager.scene.add(this.productAnchor);
-        this.loadingStatus.hide();
-        this.invalidate(true);
       })
       .catch((error) => {
         if (this.disposed) return;
@@ -182,6 +193,7 @@ export class StoryApp {
     if (
       this.isInitialized &&
       !document.hidden &&
+      !this.sceneManager.contextLost &&
       this.animationFrameId === null
     ) {
       this.animationFrameId = requestAnimationFrame(this.frame);
@@ -190,7 +202,8 @@ export class StoryApp {
 
   frame(time) {
     this.animationFrameId = null;
-    if (this.disposed || document.hidden) return;
+    if (this.disposed || document.hidden || this.sceneManager.contextLost)
+      return;
     const delta =
       this.lastFrameTime === null
         ? 1 / 60
@@ -249,7 +262,11 @@ export class StoryApp {
               Math.floor((time - this.lastRenderSlot + 0.5) / frameInterval),
             ) *
               frameInterval;
-      this.sceneManager.render();
+      if (this.sceneManager.render() === false) {
+        this.needsRender = true;
+        this.resetFrameClock();
+        return;
+      }
       if (!this.sceneRevealed) {
         // Reveal only after the first story frame, never an empty canvas or
         // a temporary shader-warming pose. CSS handles the original fade.
@@ -267,7 +284,38 @@ export class StoryApp {
       this.needsRender
     )
       this.invalidate();
-    else this.lastFrameTime = null;
+    else this.resetFrameClock();
+  }
+
+  resetFrameClock() {
+    this.lastFrameTime = null;
+    performanceMonitor.resetClock();
+  }
+
+  updateMotionPreference() {
+    this.reducedMotion = this.motionQuery.matches;
+    if (this.scroller) {
+      this.scroller.options.smoothWheel = !this.reducedMotion;
+      if (this.reducedMotion)
+        this.scroller.scrollTo(this.scroller.targetScroll, {
+          immediate: true,
+          force: true,
+        });
+    }
+    if (this.reducedMotion) {
+      // Complete chains in order, including the dot reveal queued by fade-out.
+      // Every story tween is finite; completion also restores pod controls.
+      while (!this.tweens.allStopped()) {
+        for (const tween of this.tweens.getAll()) {
+          if (!tween.isPlaying()) continue;
+          tween.end();
+          this.tweens.remove(tween);
+        }
+      }
+      for (const label of this.podSelector?.labels ?? [])
+        for (const animation of label.getAnimations()) animation.finish();
+    }
+    this.invalidate(true);
   }
 
   setupEvents() {
@@ -309,7 +357,7 @@ export class StoryApp {
         if (document.hidden) {
           cancelAnimationFrame(this.animationFrameId);
           this.animationFrameId = null;
-          this.lastFrameTime = null;
+          this.resetFrameClock();
         } else {
           this.lastActivity = performance.now();
           this.invalidate(true);
@@ -322,10 +370,7 @@ export class StoryApp {
     );
     this.motionQuery.addEventListener(
       "change",
-      () => {
-        this.reducedMotion = this.motionQuery.matches;
-        this.invalidate(true);
-      },
+      () => this.updateMotionPreference(),
       { signal },
     );
     document.getElementById("motion-toggle").addEventListener(
@@ -358,7 +403,8 @@ export class StoryApp {
         event.preventDefault();
         cancelAnimationFrame(this.animationFrameId);
         this.animationFrameId = null;
-        this.isInitialized = false;
+        this.resetFrameClock();
+        this.sceneManager.loseContext();
         this.loadingStatus.show("Restoring the animation…");
       },
       { signal },
@@ -366,8 +412,12 @@ export class StoryApp {
     this.sceneManager.renderer.domElement.addEventListener(
       "webglcontextrestored",
       () => {
-        this.isInitialized = true;
-        this.loadingStatus.hide();
+        this.sceneManager.restoreContext();
+        if (this.isInitialized) {
+          if (this.productError)
+            this.loadingStatus.show("The product could not load.", true);
+          else this.loadingStatus.hide();
+        }
         this.invalidate(true);
       },
       { signal },
@@ -375,6 +425,7 @@ export class StoryApp {
   }
 
   dispose() {
+    if (this.disposed) return;
     this.disposed = true;
     cancelAnimationFrame(this.animationFrameId);
     this.events.abort();

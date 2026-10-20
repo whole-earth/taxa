@@ -53,13 +53,24 @@ Runtime dependencies belong to `StoryApp`: `scroller` owns smooth scrolling and 
 | `js/ui/` | Navigation, contact dialog and loading status |
 | `js/utils/` | Resource disposal and opt-in performance measurements |
 
-Open `/?perf` to expose `window.taxaDebug.app` and `window.taxaDebug.performanceMonitor.snapshot()` in browser DevTools. These diagnostics count scheduled story renders, excluding bounded loading warm-up draws. They do not run a separate animation loop.
+Open `/?perf` to expose `window.taxaDebug.app` and `window.taxaDebug.performanceMonitor.snapshot()` in browser DevTools. These diagnostics count scheduled story renders, excluding bounded loading warm-up draws. They do not run a separate animation loop. Intentional sleep, tab hiding and GPU loss reset the sampling clock so those gaps do not count as slow frames; render pacing keeps its separate fractional clock.
 
 The render clock carries fractional time between submissions, maintaining the 60 fps target on 90/144/165 Hz displays without catch-up bursts after stalls. Open menus and contact dialogs suspend ambient motion; closing them resumes it. Chapter text and loading UI update only when their state changes. The chapter controls have 44 × 44 px targets with transform-only visual indicators. Short viewports use a bounded, independently scrollable product card so the waitlist remains reachable.
 
 ## Validation and measurements
 
-The 21-test browser suite covers story seeks in both directions, chapter-button navigation, cell/dot fades, all pod colors, load deduplication, same-origin requests, static-frame suspension, mobile and short-screen layouts, reduced motion, contact/menu focus behavior, overlay suspension, resize poses, repeated-visit GPU geometry and shader counts, product retry, a readable fallback after a failed cell download, scroll DOM mutations and frame pacing from 60 to 240 Hz. The final complete run passed, along with formatting and the production build.
+The 31-test browser suite covers story seeks in both directions, chapter-button navigation, cell/dot fades, all pod colors, load deduplication, same-origin requests, static-frame suspension, mobile and short-screen layouts, reduced motion, contact/menu focus behavior, overlay suspension, resize poses, repeated-visit GPU geometry and shader counts, product retry, a readable fallback after a failed cell download, scroll DOM mutations and frame pacing from 60 to 240 Hz. All 31 checks passed in both Chrome and WebKit. PERFORMANCE.md records the results, the stock Safari smoke check and the limits of device emulation.
+
+Reliability checks also cover failed and late model loads, teardown during loading or shader preparation, product-preparation cleanup/retry, live reduced-motion changes, idle timing, delayed product delivery, and GPU context loss during loading, compilation and the settled product. Before/after context-recovery screenshots are saved with the test output. The environment source retains 1 MiB of decoded CPU data so generated lighting can be rebuilt without another download; its temporary GPU upload is released after conversion.
+
+Run the same suite against WebKit locally:
+
+```sh
+npx playwright install webkit
+BROWSER=webkit npm test
+```
+
+WebKit checks include mobile-sized layouts and touch/Retina contexts. They do not replace physical iPhone or Android testing. For separate retained outputs, use `npx playwright test --output test-results/chromium` and `BROWSER=webkit npx playwright test --output test-results/webkit`.
 
 The local benchmark compares the original `main` animation against the optimized animation in the same HTML/CSS shell at 1440 × 900 and DPR 1. Original model URLs are redirected to local copies for this comparison. It samples three seconds per settled scene. `BASELINE_URL` can point to a separately served copy of the original animation that exposes its app as `window.taxaBaseline`:
 

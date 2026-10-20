@@ -102,12 +102,30 @@ The app now owns its scrolling controller and tween group. Model loading uses ex
 
 The full 21-test suite passed after the refactor. An import-graph check found 18 source modules and 25 local imports with no missing imports or cycles. Fixed-pose captures at 1440 × 900 and 390 × 844 (DPR 1, reduced motion) compared the hero, pitch, transition and final product before/after the refactor. All six desktop poses were pixel-identical. Three mobile poses were pixel-identical; the other three differed at isolated pixels by at most 4/255 in a channel, with a maximum image-wide mean channel difference below 0.000028/255. Assets, material values and animation timings were preserved. Records are in `test-results/refactor/visual-comparison.json` with the paired PNGs.
 
+## Loading, motion and recovery hardening
+
+Cell roots become owned by the scene as each load resolves, while final traversal order remains deterministic. Failed materials and late results after disposal are released explicitly. Product preparation releases unadopted resources on failure or teardown. The shared Draco pool finishes pending loads before terminating workers, and page teardown is registered before initialization begins. Renderer teardown waits for outstanding shader-readiness checks; context restoration recreates programs used by those checks.
+
+Changing the system reduced-motion preference updates wheel smoothing, completes an active scroll, finishes finite tween chains in order, and ends label fades. New speckle and material transitions apply immediately in reduced-motion mode. Intentional idle periods no longer enter frame-interval samples. The render clock remains independent so rapid isolated updates still respect the 60 fps cap.
+
+Context loss suspends scheduled rendering without marking unfinished initialization complete. Restoration regenerates the PMREM environment from a retained 1 MiB decoded HDR source, then resumes the current scroll pose and selected pod. This trades that bounded CPU memory for recovery without another environment download. Captured final-product images before/after recovery were pixel-identical in Chrome and WebKit. WebKit testing also identified a dialog focus-restoration difference; the page now returns focus explicitly to the visible opener.
+
+The expanded suite has 31 tests, including ten new reliability checks. The final runs passed **31/31 in Chrome and 31/31 in WebKit**, with no skipped checks. Build, formatting, Git whitespace and import-graph checks also passed (18 modules, 25 local imports, no cycles). The JavaScript bundle is 687,369 bytes, gzip 179,139 bytes and Brotli 148,387 bytes; this reliability pass adds 740 gzip bytes compared with the previous naming refactor. Recovery captures and their comparison are retained in `test-results/chromium/`, `test-results/webkit/` and `test-results/resilience/recovery-visual.json`. GPU recovery tests cover loss during initial model loading, product shader preparation and the settled product, plus teardown during compilation. These simulated failures do not cover every possible driver failure.
+
+### Throttled local loading
+
+Chrome DevTools tested a 390 × 844, DPR 3 touch viewport with Slow 4G networking and 4× CPU throttling. A recorded navigation reported **1,714 ms LCP and 0.00 CLS**. A separate cold-load observation reached the first 3D frame at approximately **14.7 seconds**; the product download completed around **21 seconds** in the traced load. LCP measures the visible page content, not 3D readiness.
+
+This exposed a network wait, not a polygon-count diagnosis: the uncompressed local JavaScript response took about five seconds, then the environment/models/decoder downloads dominated the next nine seconds. The approximately 1 MB product followed after the hero. The local esbuild server sends the roughly 687 KB JavaScript bundle without content encoding; its gzip equivalent is about 179 KB. These are development-server observations, not production-hosting measurements. Production delivery should be checked with actual compression and cache headers when deployment is authorized. This pass changes neither production nor its hosting.
+
+Delayed-product tests separately hold the request while seeking between chapters and opening contact, then verify that one product request completes at the current scroll pose. Core page controls remain usable while the 3D scene loads.
+
 ## Tradeoffs and limits
 
 The refraction change is an intermediate-rendering adjustment, not mathematically identical rendering during the overlap. The full-resolution hero and final-product policy is retained. Two transmission target sizes stay resident to avoid allocation churn, so intermediate-buffer memory is higher than with a single target. GPU preparation performs bounded extra loading draws and fetches the product earlier; it does not make that work free.
 
 The canvas intentionally tops out at 60 fps even on faster displays. The page stops rendering when settled. This favors predictable frame delivery and lower GPU/power usage over attempting 120 full-resolution 3D frames per second.
 
-Real iOS/Android GPUs, Safari, slow networks and thermal throttling were not available for this run. Mobile viewport emulation is not a physical-phone performance result. Browser/device variability and first-load preparation remain relevant; this report does not promise zero missed frames on every device.
+WebKit and throttled-network checks now supplement the Chrome results. Stock Safari 26.5.2 was also checked through the native UI: the hero rendered and chapter navigation reached the product. Its WebDriver suite could not run because “Allow remote automation” is disabled. No connected physical device or configured iOS simulator was available. Real iOS/Android GPU and thermal performance remain unverified; mobile viewport emulation is not a physical-phone performance result. Browser/device variability and first-load preparation remain relevant; this report does not promise zero missed frames on every device.
 
 Run commands and artifact locations are documented in [README.md](README.md). Benchmark JSON and PNG pairs are retained under `test-results/`; Playwright uses its own subdirectory so it does not erase profiling evidence.

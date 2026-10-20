@@ -116,8 +116,13 @@ export class StoryTimeline {
       previous.stop();
       this.app.tweens.remove(previous);
     }
+    if (this.app.reducedMotion) {
+      this.materialTweens.delete(key);
+      Object.assign(target, values);
+      return;
+    }
     const tween = new Tween(target, this.app.tweens)
-      .to(values, this.app.reducedMotion ? 0 : duration)
+      .to(values, duration)
       .easing(Easing.Quadratic.InOut)
       .onComplete(() => this.materialTweens.delete(key));
     this.materialTweens.set(key, tween);

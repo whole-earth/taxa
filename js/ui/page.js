@@ -15,6 +15,7 @@ export class PageUI {
       button.addEventListener(
         "click",
         () => {
+          this.contactTrigger = button;
           this.setMenu(false);
           this.dialog.showModal();
           this.syncOverlay();
@@ -41,7 +42,19 @@ export class PageUI {
       },
       { signal },
     );
-    this.dialog.addEventListener("close", () => this.syncOverlay(), { signal });
+    this.dialog.addEventListener(
+      "close",
+      () => {
+        this.syncOverlay();
+        // Safari does not focus buttons on pointer click, so native dialog
+        // restoration can return focus to the body instead of the opener.
+        const trigger = this.contactTrigger?.getClientRects().length
+          ? this.contactTrigger
+          : this.toggle;
+        trigger.focus({ preventScroll: true });
+      },
+      { signal },
+    );
     document.addEventListener(
       "keydown",
       (event) => {

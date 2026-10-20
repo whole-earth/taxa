@@ -4,6 +4,9 @@ export const performanceMonitor = {
   samples: [],
   enabled: new URLSearchParams(location.search).has("perf"),
   lastTime: 0,
+  resetClock() {
+    this.lastTime = 0;
+  },
   recordFrame(time, info) {
     this.frames++;
     if (!this.enabled) return;

@@ -73,7 +73,12 @@ test("contact overlay suspends ambient renders and closing it resumes motion", a
   await page.waitForFunction(() => !!window.taxaDebug.app.product);
   await page.locator(".contact-desktop").click();
   await expect(page.locator("#contact-dialog")).toBeVisible();
-  await page.waitForTimeout(2000);
+  // Damping settles at different rates across browser/GPU combinations.
+  await page.waitForFunction(
+    () => window.taxaDebug.app.animationFrameId === null,
+    null,
+    { timeout: 10000 },
+  );
   const frames = await page.evaluate(
     () => window.taxaDebug.performanceMonitor.frames,
   );

@@ -7,11 +7,22 @@ dracoLoader.setDecoderPath(new URL("assets/draco/", document.baseURI).href);
 dracoLoader.setWorkerLimit(2);
 const loader = new GLTFLoader().setDRACOLoader(dracoLoader);
 
+let pendingLoads = 0;
+let disposed = false;
+
 // One decoder pool serves every model; loading is explicit, never a constructor side effect.
 export async function loadModel(path, { renderOrder = 1, onProgress } = {}) {
-  const gltf = await new Promise((resolve, reject) => {
-    loader.load(path, resolve, onProgress, reject);
-  });
+  if (disposed) throw new Error("The model loader has been disposed.");
+  pendingLoads++;
+  let gltf;
+  try {
+    gltf = await new Promise((resolve, reject) => {
+      loader.load(path, resolve, onProgress, reject);
+    });
+  } finally {
+    pendingLoads--;
+    if (disposed && pendingLoads === 0) dracoLoader.dispose();
+  }
   const root = gltf.scene;
   root.position.set(0, 0, 0);
   root.name = path.split("/").pop();
@@ -24,5 +35,7 @@ export async function loadModel(path, { renderOrder = 1, onProgress } = {}) {
 }
 
 export function disposeModelLoader() {
-  dracoLoader.dispose();
+  disposed = true;
+  // Let in-flight decodes settle so callers can release their results.
+  if (pendingLoads === 0) dracoLoader.dispose();
 }

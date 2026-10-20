@@ -6,7 +6,8 @@ export default defineConfig({
   workers: 1,
   use: {
     baseURL: "http://127.0.0.1:4173",
-    channel: "chrome",
+    browserName: process.env.BROWSER === "webkit" ? "webkit" : "chromium",
+    channel: process.env.BROWSER === "webkit" ? undefined : "chrome",
     headless: true,
     viewport: { width: 1440, height: 900 },
     screenshot: "only-on-failure",

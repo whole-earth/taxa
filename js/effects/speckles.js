@@ -112,6 +112,12 @@ export class SpeckleSystem {
   }
 
   startTween(target, values, duration, delay = 0, complete) {
+    if (this.app.reducedMotion || duration === 0) {
+      Object.assign(target, values);
+      complete?.();
+      this.app.invalidate();
+      return;
+    }
     const tween = new Tween(target, this.app.tweens)
       .to(values, duration)
       .delay(delay)

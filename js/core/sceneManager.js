@@ -12,6 +12,9 @@ export class SceneManager {
   constructor(config, invalidate = () => {}) {
     this.invalidate = invalidate;
     this.config = config;
+    this.contextLost = false;
+    this.contextReady = Promise.resolve();
+    this.compilations = new Map();
     this.scene = new THREE.Scene();
     this.camera = this.initCamera();
     this.transitionCamera = this.camera.clone(false);
@@ -121,21 +124,17 @@ export class SceneManager {
     // Load environment map
     this.environmentReady = new RGBELoader()
       .loadAsync(this.config.assets.envMap)
-      .then((texture) => {
+      .then(async (texture) => {
         if (this.disposed) {
           texture.dispose();
           return;
         }
-        const pmremGenerator = new PMREMGenerator(this.renderer);
-        pmremGenerator.compileEquirectangularShader();
-        this.environmentTarget = pmremGenerator.fromEquirectangular(texture);
-        const envMap = this.environmentTarget.texture;
-        this.scene.environment = envMap;
-        this.scene.environmentIntensity = this.config.lighting.envMapIntensity;
-
-        // Clean up resources
-        texture.dispose();
-        pmremGenerator.dispose();
+        // Retain the decoded HDR on the CPU so context recovery needs no
+        // network request. The temporary GPU upload is released after PMREM.
+        this.environmentSource = texture;
+        await this.waitForContext();
+        if (this.disposed) return;
+        if (!this.environmentTarget) this.rebuildEnvironment();
         this.invalidate();
       })
       .catch((error) => {
@@ -145,7 +144,58 @@ export class SceneManager {
     return ambientLight;
   }
 
+  rebuildEnvironment() {
+    if (!this.environmentSource || this.disposed) return;
+    const generator = new PMREMGenerator(this.renderer);
+    try {
+      this.environmentTarget?.dispose();
+      this.environmentSource.needsUpdate = true;
+      this.environmentTarget = generator.fromEquirectangular(
+        this.environmentSource,
+      );
+      this.scene.environment = this.environmentTarget.texture;
+      this.scene.environmentIntensity = this.config.lighting.envMapIntensity;
+    } finally {
+      this.environmentSource.dispose();
+      generator.dispose();
+    }
+  }
+
+  loseContext() {
+    if (this.contextLost) return;
+    this.contextLost = true;
+    this.contextReady = new Promise((resolve) => {
+      this.resolveContext = resolve;
+    });
+  }
+
+  async waitForContext() {
+    if (this.disposed) return;
+    // The GL context can be lost before its DOM event is delivered.
+    if (this.renderer.getContext().isContextLost()) this.loseContext();
+    await this.contextReady;
+  }
+
+  restoreContext() {
+    if (this.disposed) return;
+    this.rebuildEnvironment();
+    // Three's async readiness checks consult the current renderer cache.
+    // Recreate pending programs before those checks resume after restoration.
+    for (const { object, lightingScene } of this.compilations.values()) {
+      lightingScene.environment = this.scene.environment;
+      this.renderer.compile(object, this.camera, lightingScene);
+    }
+    this.contextLost = false;
+    this.resolveContext?.();
+    this.resolveContext = null;
+  }
+
   render() {
+    if (this.disposed || this.contextLost) return false;
+    if (this.renderer.getContext().isContextLost()) {
+      this.loseContext();
+      return false;
+    }
     let camera = this.camera;
     if (this.renderer.transmissionResolutionScale < 1) {
       // Three keeps transmission targets per camera. A second camera retains
@@ -155,9 +205,26 @@ export class SceneManager {
       camera = this.transitionCamera;
     }
     this.renderer.render(this.scene, camera);
+    return true;
+  }
+
+  async compileMaterials(object, lightingScene) {
+    const ready = this.renderer.compileAsync(
+      object,
+      this.camera,
+      lightingScene,
+    );
+    this.compilations.set(ready, { object, lightingScene });
+    try {
+      await ready;
+    } finally {
+      this.compilations.delete(ready);
+    }
   }
 
   async warmMaterials(object, lightingScene = this.scene) {
+    await this.waitForContext();
+    if (this.disposed) return;
     const renderer = this.renderer;
     const transmissive = new Map();
     const transmissionObjects = new THREE.Group();
@@ -205,11 +272,7 @@ export class SceneManager {
         // A render target selects both linear output and NoToneMapping.
         // Changing toneMapping alone misses the linear-color shader variant.
         renderer.setRenderTarget(transmissionTarget);
-        ready = renderer.compileAsync(
-          transmissionObjects,
-          this.camera,
-          lightingScene,
-        );
+        ready = this.compileMaterials(transmissionObjects, lightingScene);
       } finally {
         for (const [material, side] of transmissive) {
           material.side = side;
@@ -219,8 +282,8 @@ export class SceneManager {
       }
       // Restore synchronous renderer state before yielding to the app RAF.
       await ready;
-      if (!this.disposed)
-        await renderer.compileAsync(object, this.camera, lightingScene);
+      await this.waitForContext();
+      if (!this.disposed) await this.compileMaterials(object, lightingScene);
     } finally {
       transmissionTarget.dispose();
     }
@@ -262,6 +325,7 @@ export class SceneManager {
           window.requestIdleCallback(resolve, { timeout: 500 });
         else setTimeout(resolve, 0);
       });
+      await this.waitForContext();
       if (this.disposed) return anchor;
       const saved = {
         cell: cell.visible,
@@ -298,11 +362,21 @@ export class SceneManager {
 
   dispose() {
     this.disposed = true;
+    this.resolveContext?.();
+    this.resolveContext = null;
     window.removeEventListener("resize", this.onResize);
     this.controls.dispose();
-    disposeScene(this.scene);
-    this.environmentTarget?.dispose();
-    this.renderer.dispose();
     this.renderer.domElement.remove();
+    const release = () => {
+      this.environmentSource?.dispose();
+      this.environmentSource = null;
+      disposeScene(this.scene);
+      this.environmentTarget?.dispose();
+      this.renderer.dispose();
+    };
+    // Do not destroy program caches underneath Three's pending readiness polls.
+    if (this.compilations.size)
+      Promise.allSettled([...this.compilations.keys()]).then(release);
+    else release();
   }
 }
