@@ -123,48 +123,50 @@
     </nav>
     <main class="main" id="story">
       <section class="splash" id="splash" aria-labelledby="splash-title">
-        <div class="child active">
-          <div class="cell-child_left">
-            <h1 class="h1" id="splash-title">Your skin microbiome</h1>
+        <div class="story-panel active">
+          <div class="story-heading">
+            <h1 class="story-title" id="splash-title">Your skin microbiome</h1>
           </div>
-          <div class="cell-child_right">
-            <p class="h1">is full of secrets.</p>
+          <div class="story-detail">
+            <p class="story-title">is full of secrets.</p>
           </div>
         </div>
       </section>
       <section class="zoom" id="zoom" aria-labelledby="zoom-title">
-        <div class="child">
-          <div class="cell-child_left">
-            <h2 class="h1" id="zoom-title">These microbes</h2>
+        <div class="story-panel">
+          <div class="story-heading">
+            <h2 class="story-title" id="zoom-title">These microbes</h2>
           </div>
-          <div class="cell-child_right offset-left">
-            <div class="dot-text-wrap">
-              <div id="zoomFirst" class="zoom-child active">
+          <div class="story-detail">
+            <div class="topic-list">
+              <div id="topic-odor" class="topic-panel active">
                 <a
-                  class="zoom-child-elem"
+                  class="topic-link"
                   href="https://www.nature.com/articles/s41598-020-68860-z"
                   target="_blank"
                   rel="noopener"
-                  ><span class="h1 dot-h1">cause body odor.</span
+                  ><span class="story-title topic-title">cause body odor.</span
                   ><sup>1</sup></a
                 >
               </div>
-              <div id="zoomSecond" class="zoom-child">
+              <div id="topic-uv" class="topic-panel">
                 <a
-                  class="zoom-child-elem"
+                  class="topic-link"
                   href="https://journals.asm.org/doi/10.1128/msphere.00793-19"
                   target="_blank"
                   rel="noopener"
-                  ><span class="h1 dot-h1">absorb UV.</span><sup>2</sup></a
+                  ><span class="story-title topic-title">absorb UV.</span
+                  ><sup>2</sup></a
                 >
               </div>
-              <div id="zoomThird" class="zoom-child">
+              <div id="topic-mosquitoes" class="topic-panel">
                 <a
-                  class="zoom-child-elem"
+                  class="topic-link"
                   href="https://www.cell.com/cell/fulltext/S0092-8674%2822%2901253-3"
                   target="_blank"
                   rel="noopener"
-                  ><span class="h1 dot-h1">attract mosquitoes.</span
+                  ><span class="story-title topic-title"
+                    >attract mosquitoes.</span
                   ><sup>3</sup></a
                 >
               </div>
@@ -173,26 +175,26 @@
         </div>
       </section>
       <section class="pitch" id="pitch" aria-labelledby="pitch-title">
-        <div class="child">
-          <div class="cell-child_left">
-            <h2 class="h1" id="pitch-title">What if we could</h2>
+        <div class="story-panel">
+          <div class="story-heading">
+            <h2 class="story-title" id="pitch-title">What if we could</h2>
           </div>
-          <div class="cell-child_right"><p class="h1">swap them out?</p></div>
+          <div class="story-detail">
+            <p class="story-title">swap them out?</p>
+          </div>
         </div>
       </section>
       <section class="product" id="product" aria-labelledby="product-title">
-        <div class="child">
-          <div class="cell-child_left">
-            <h2 class="h1" id="product-title">Superpower your skin.</h2>
+        <div class="story-panel">
+          <div class="story-heading">
+            <h2 class="story-title" id="product-title">
+              Superpower your skin.
+            </h2>
           </div>
-          <div class="cell-child_right product-mobile-offset">
-            <div class="product-cta" data-lenis-prevent>
+          <div class="story-detail product-details">
+            <div class="product-card" data-lenis-prevent>
               <div class="pod-selector">
-                <div
-                  class="applicator-container"
-                  role="group"
-                  aria-label="Choose a pod"
-                >
+                <div class="pod-options" role="group" aria-label="Choose a pod">
                   <button
                     id="podOrange"
                     class="pod-indicator orange current"
@@ -212,26 +214,26 @@
                     aria-pressed="false"
                   ></button>
                 </div>
-                <p class="product-p">
+                <p class="product-copy">
                   Pod: <span id="showingLabel">Body odor</span>
                 </p>
               </div>
               <div class="product-card-section top">
-                <h3 class="product-p-large cta-header">
+                <h3 class="product-heading product-name">
                   Taxa <span id="productType">Deodorant</span>
                 </h3>
-                <p class="product-p">
+                <p class="product-copy">
                   Single-application
                   <span id="productTypeSubtitle">deodorant</span> that lasts one
                   week.
                 </p>
               </div>
               <div class="product-card-section potency">
-                <p class="product-p">Our shelf-stable probiotic cream.</p>
-                <p class="product-p-large">25.4 Billion CFUs</p>
+                <p class="product-copy">Our shelf-stable probiotic cream.</p>
+                <p class="product-heading">25.4 Billion CFUs</p>
               </div>
               <div class="product-card-section ingredients">
-                <p class="product-p-large">Clean, natural ingredients.</p>
+                <p class="product-heading">Clean, natural ingredients.</p>
                 <ul class="ingredients-list">
                   <li>
                     <img
@@ -272,7 +274,7 @@
                 </ul>
               </div>
               <a
-                class="product-card-section module orange"
+                class="product-card-section waitlist-link orange"
                 id="waitlist-link"
                 href="https://www.taxatech.com/#product"
                 >Join the <span id="waitlistLabel">deodorant</span> waitlist
@@ -309,7 +311,7 @@
         .scroll-indicator {
           display: none;
         }
-        .main .child {
+        .main .story-panel {
           position: relative;
           opacity: 1;
           visibility: visible;

@@ -36,8 +36,8 @@ for (const progress of [0.2, 0.32, 0.45, 0.55, 0.62, 0.7, 0.75, 0.99]) {
       r = a.sceneManager.renderer;
     const { top, height } = a.timeline.bounds[3];
     a.timeline.update(top + (height - innerHeight) * p);
-    a.ribbons.getObject().visible = false;
-    a.speckleSystem.instancedMeshes.forEach((m) => (m.visible = false));
+    a.ribbons.root.visible = false;
+    a.speckles.meshes.forEach((m) => (m.visible = false));
     a.productAnchor.lookAt(a.sceneManager.camera.position);
     const scale = r.transmissionResolutionScale;
     const canvas = document.createElement("canvas");

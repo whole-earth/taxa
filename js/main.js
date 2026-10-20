@@ -1,11 +1,11 @@
-import { App } from "./core/anim.js";
+import { StoryApp } from "./core/app.js";
 import { PageUI } from "./ui/page.js";
 import { performanceMonitor } from "./utils/performance.js";
 
 const page = new PageUI();
 let app;
 try {
-  app = new App();
+  app = new StoryApp();
   page.connect(app);
   await app.init();
   if (performanceMonitor.enabled)

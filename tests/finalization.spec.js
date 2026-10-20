@@ -18,16 +18,16 @@ test("frame pacing maintains 60 submissions across common display refresh rates"
     const counts = {};
     for (const hz of [60, 72, 75, 90, 120, 144, 165, 240]) {
       draws = 0;
-      app.lastRenderTime = null;
+      app.lastRenderSlot = null;
       app.lastFrameTime = null;
       const start = performance.now();
       for (let i = 0; i < hz; i++) {
-        app.dirty = true;
+        app.needsRender = true;
         app.frame(start + (i * 1000) / hz);
       }
       counts[hz] = draws;
       // A long task skips missed slots instead of drawing a catch-up burst.
-      app.dirty = true;
+      app.needsRender = true;
       app.frame(start + 3000);
       counts[`${hz}-after-stall`] = draws;
     }
@@ -122,7 +122,7 @@ for (const [width, height] of [
     await ready(page);
     await seek(page, "product", 0.99);
     await page.waitForFunction(() => !!window.taxaDebug.app.product);
-    const card = page.locator(".product-cta");
+    const card = page.locator(".product-card");
     const box = await card.boundingBox();
     expect(box.y).toBeGreaterThanOrEqual(65);
     expect(box.y + box.height).toBeLessThanOrEqual(height);

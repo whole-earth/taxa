@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { PRODUCT_PHASE } from "./productConfig.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
 import { PMREMGenerator } from "three";
@@ -91,7 +92,7 @@ export class SceneManager {
     );
     this.scene.add(ambientLight);
 
-    const directionalContainer = new THREE.Object3D();
+    const productLightRig = new THREE.Object3D();
 
     const spotLight = new THREE.SpotLight(0xebeeff, 20);
     spotLight.position.set(36, -50, 75);
@@ -104,18 +105,18 @@ export class SceneManager {
     // Add target that will move with the container
     const target = new THREE.Object3D();
     target.position.set(-44, 15, -20);
-    directionalContainer.add(target);
+    productLightRig.add(target);
     spotLight.target = target;
 
     // Add spotlight to container
-    directionalContainer.add(spotLight);
+    productLightRig.add(spotLight);
 
     // No scene meshes cast or receive shadows. Avoid allocating and clearing
     // an empty shadow map whenever the product light becomes visible.
     spotLight.castShadow = false;
 
-    this.directionalLight = spotLight;
-    this.directionalContainer = directionalContainer;
+    this.productLight = spotLight;
+    this.productLightRig = productLightRig;
 
     // Load environment map
     this.environmentReady = new RGBELoader()
@@ -197,7 +198,7 @@ export class SceneManager {
       const previousTarget = renderer.getRenderTarget();
       let ready;
       try {
-        for (const [material, side] of transmissive) {
+        for (const material of transmissive.keys()) {
           material.side = THREE.BackSide;
           material.needsUpdate = true;
         }
@@ -231,23 +232,23 @@ export class SceneManager {
     const lighting = new THREE.Scene();
     lighting.environment = this.scene.environment;
     lighting.add(new THREE.AmbientLight(0xffffff, 4));
-    const spot = this.directionalLight.clone();
+    const spot = this.productLight.clone();
     spot.visible = false;
     lighting.add(spot);
-    for (const phase of [0, 1]) {
-      product.setPhase(phase);
-      spot.visible = phase === 1;
-      await this.warmMaterials(product.getObject(), lighting);
+    for (const phase of [PRODUCT_PHASE.TRANSITION, PRODUCT_PHASE.DISPLAY]) {
+      product.setMaterialPhase(phase);
+      spot.visible = phase === PRODUCT_PHASE.DISPLAY;
+      await this.warmMaterials(product.root, lighting);
       if (this.disposed) return;
     }
-    product.setPhase(0);
+    product.setMaterialPhase(PRODUCT_PHASE.TRANSITION);
   }
 
   async warmProductFrames(product, cell, starField) {
-    const root = product.getObject();
+    const root = product.root;
     const anchor = new THREE.Group();
     anchor.add(root);
-    root.add(this.directionalContainer);
+    root.add(this.productLightRig);
     root.position.set(0, 0, 0);
     root.scale.setScalar(4);
     root.rotation.set(Math.PI / 2, 0, 0);
@@ -255,7 +256,7 @@ export class SceneManager {
     // creation, buffer uploads and transmission-target allocation until a draw.
     // Prepare those during loading, one phase per idle task. Restore the real
     // scene in the same task, before the browser can present the warm-up pose.
-    for (const phase of [0, 1]) {
+    for (const phase of [PRODUCT_PHASE.TRANSITION, PRODUCT_PHASE.DISPLAY]) {
       await new Promise((resolve) => {
         if (window.requestIdleCallback)
           window.requestIdleCallback(resolve, { timeout: 500 });
@@ -265,31 +266,33 @@ export class SceneManager {
       const saved = {
         cell: cell.visible,
         stars: starField.visible,
-        light: this.directionalLight.visible,
+        light: this.productLight.visible,
         scale: this.renderer.transmissionResolutionScale,
       };
       try {
         this.scene.add(anchor);
         anchor.lookAt(this.camera.position);
         root.visible = true;
-        product.setPhase(phase);
-        cell.visible = phase === 0 && saved.cell;
-        starField.visible = phase === 0;
-        this.directionalLight.visible = phase === 1;
+        product.setMaterialPhase(phase);
+        cell.visible = phase === PRODUCT_PHASE.TRANSITION && saved.cell;
+        starField.visible = phase === PRODUCT_PHASE.TRANSITION;
+        this.productLight.visible = phase === PRODUCT_PHASE.DISPLAY;
         this.renderer.transmissionResolutionScale =
-          phase === 0 ? Math.min(1, 1 / this.renderer.getPixelRatio()) : 1;
+          phase === PRODUCT_PHASE.TRANSITION
+            ? Math.min(1, 1 / this.renderer.getPixelRatio())
+            : 1;
         this.render();
       } finally {
         root.visible = false;
         this.scene.remove(anchor);
         cell.visible = saved.cell;
         starField.visible = saved.stars;
-        this.directionalLight.visible = saved.light;
+        this.productLight.visible = saved.light;
         this.renderer.transmissionResolutionScale = saved.scale;
         this.render();
       }
     }
-    product.setPhase(0);
+    product.setMaterialPhase(PRODUCT_PHASE.TRANSITION);
     return anchor;
   }
 

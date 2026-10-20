@@ -1,29 +1,22 @@
 import * as THREE from "three";
 import Lenis from "lenis";
-import {
-  dispersion,
-  dispersionMobile,
-  mauve,
-  pearlBlue,
-} from "../utils/materials.js";
+import { Group as TweenGroup } from "tween";
+import { createCellMaterials } from "./cellMaterials.js";
 import { SceneManager } from "./sceneManager.js";
-import {
-  CellComponent,
-  ProductComponent,
-  disposeLoaders,
-} from "../components/components.js";
+import { loadCellModel } from "../models/cell.js";
+import { loadProductModel } from "../models/product.js";
+import { disposeModelLoader } from "../models/loader.js";
 import { SpeckleSystem } from "../effects/speckles.js";
 import { StarField, starfieldParams } from "../effects/starfield.js";
-import { ColorChangeAnimationSequence } from "../effects/podColors.js";
-import { StoryTimeline } from "./scroll.js";
-import { state } from "./state.js";
+import { PodSelector } from "../effects/podSelector.js";
+import { StoryTimeline } from "./timeline.js";
 import { disposeScene } from "../utils/dispose.js";
 import { performanceMonitor } from "../utils/performance.js";
 import { LoadingStatus } from "../ui/loadingStatus.js";
 
-export class App {
+export class StoryApp {
   constructor() {
-    this.mobile = window.innerWidth < 768;
+    this.isMobile = window.innerWidth < 768;
     this.motionQuery = matchMedia("(prefers-reduced-motion: reduce)");
     this.reducedMotion = this.motionQuery.matches;
     this.motionPaused = false;
@@ -32,25 +25,25 @@ export class App {
     this.events = new AbortController();
     this.animationFrameId = null;
     this.lastFrameTime = null;
-    this.lastRenderTime = null;
+    this.lastRenderSlot = null;
     this.lastActivity = performance.now();
-    this.dirty = true;
-    this.scrollDirty = true;
+    this.needsRender = true;
+    this.needsTimelineUpdate = true;
     this.disposed = false;
     this.frame = this.frame.bind(this);
-    state.app = this;
+    this.tweens = new TweenGroup();
     this.sceneManager = new SceneManager(
       {
         lighting: { ambientIntensity: 4, envMapIntensity: 1 },
         renderer: {
-          antialias: !this.mobile,
+          antialias: !this.isMobile,
           alpha: true,
           powerPreference: "high-performance",
           precision: "mediump",
           stencil: false,
         },
         camera: {
-          fov: this.mobile ? 90 : 60,
+          fov: this.isMobile ? 90 : 60,
           near: 0.5,
           far: 2000,
           position: [0, 0, 60],
@@ -60,8 +53,8 @@ export class App {
       },
       () => this.invalidate(true),
     );
-    this.cellObject = new THREE.Group();
-    this.sceneManager.scene.add(this.cellObject);
+    this.cellGroup = new THREE.Group();
+    this.sceneManager.scene.add(this.cellGroup);
     this.setupEvents();
   }
 
@@ -77,28 +70,31 @@ export class App {
       );
       this.loadingStatus.show(`Loading the microbiome… ${value}%`);
     };
-    [this.blobInner, this.blobOuter, this.ribbons] = await Promise.all(
+    const materials = createCellMaterials(this.isMobile);
+    [this.innerCell, this.cellShell, this.ribbons] = await Promise.all(
       [
-        ["blob-inner.glb", pearlBlue, 0],
-        ["blob-outer.glb", this.mobile ? dispersionMobile : dispersion, 2],
-        ["ribbons.glb", mauve, 3],
-      ].map(
-        ([file, material, order]) =>
-          new CellComponent(file, material, order, (event) =>
-            updateProgress(file, event),
-          ),
+        ["blob-inner.glb", materials.inner, 0],
+        ["blob-outer.glb", materials.shell, 2],
+        ["ribbons.glb", materials.ribbons, 3],
+      ].map(([file, material, order]) =>
+        loadCellModel(file, {
+          material,
+          renderOrder: order,
+          onProgress: (event) => updateProgress(file, event),
+        }),
       ),
     );
     if (this.disposed) return;
-    this.cellObject.add(
-      this.blobInner.getObject(),
-      this.blobOuter.getObject(),
-      this.ribbons.getObject(),
+    this.cellGroup.add(
+      this.innerCell.root,
+      this.cellShell.root,
+      this.ribbons.root,
     );
-    const size = this.blobInner.getBoundingBox().getSize(new THREE.Vector3());
-    this.speckleSystem = new SpeckleSystem(
+    const size = this.innerCell.bounds.getSize(new THREE.Vector3());
+    this.speckles = new SpeckleSystem(
+      this,
       Math.max(size.x, size.y, size.z) * 0.48,
-      this.cellObject,
+      this.cellGroup,
     );
     this.starField = new StarField(starfieldParams);
     this.starField.visible = false;
@@ -113,16 +109,16 @@ export class App {
     // GPU compilation where supported, with the environment already available.
     await this.sceneManager.warmMaterials(this.sceneManager.scene);
     if (this.disposed) return;
-    state.lenis = new Lenis({
+    this.scroller = new Lenis({
       autoRaf: false,
       duration: 1.8,
       wheelMultiplier: 0.8,
       smoothWheel: !this.reducedMotion,
       syncTouch: false,
     });
-    state.lenis.on("scroll", () => this.invalidate(true));
+    this.scroller.on("scroll", () => this.invalidate(true));
     this.timeline = new StoryTimeline(this);
-    this.colorSequence = new ColorChangeAnimationSequence(this);
+    this.podSelector = new PodSelector(this);
     this.isInitialized = true;
     this.loadingStatus.hide();
     document.fonts.ready.then(() => {
@@ -145,24 +141,24 @@ export class App {
   preloadProduct() {
     if (this.productPromise || this.productError) return;
     // One shared promise prevents scroll bursts from starting duplicate loads.
-    this.productPromise = new ProductComponent("swap.glb", 200)
+    this.productPromise = loadProductModel("swap.glb", { renderOrder: 200 })
       .then(async (product) => {
         if (this.disposed) {
-          disposeScene(product.getObject());
+          disposeScene(product.root);
           return;
         }
         await this.sceneManager.warmProduct(product);
         if (this.disposed) {
-          disposeScene(product.getObject());
+          disposeScene(product.root);
           return;
         }
         const anchor = await this.sceneManager.warmProductFrames(
           product,
-          this.cellObject,
+          this.cellGroup,
           this.starField,
         );
         if (this.disposed) {
-          disposeScene(product.getObject());
+          disposeScene(product.root);
           return;
         }
         this.product = product;
@@ -179,10 +175,10 @@ export class App {
       });
   }
 
-  invalidate(scroll = false) {
+  invalidate(updateTimeline = false) {
     if (this.disposed) return;
-    this.dirty = true;
-    this.scrollDirty ||= scroll;
+    this.needsRender = true;
+    this.needsTimelineUpdate ||= updateTimeline;
     if (
       this.isInitialized &&
       !document.hidden &&
@@ -200,25 +196,23 @@ export class App {
         ? 1 / 60
         : Math.min(0.05, (time - this.lastFrameTime) / 1000);
     this.lastFrameTime = time;
-    state.lenis.raf(time);
-    if (this.scrollDirty) {
-      this.scrollDirty = false;
+    this.scroller.raf(time);
+    if (this.needsTimelineUpdate) {
+      this.needsTimelineUpdate = false;
       this.timeline.update(window.scrollY);
     }
     // Preserve unstarted chained tweens, remove only those that completed.
     // Tween.js update(time, false) would auto-start the entire chain at once.
-    const tweening = !state.tweens.allStopped();
+    const tweening = !this.tweens.allStopped();
     if (tweening) {
-      const playing = state.tweens
-        .getAll()
-        .filter((tween) => tween.isPlaying());
-      state.tweens.update(time);
+      const playing = this.tweens.getAll().filter((tween) => tween.isPlaying());
+      this.tweens.update(time);
       for (const tween of playing)
-        if (!tween.isPlaying()) state.tweens.remove(tween);
+        if (!tween.isPlaying()) this.tweens.remove(tween);
     }
     this.timeline.tick(delta);
-    this.ribbons.getObject().visible = this.timeline.ribbonMaterial.opacity > 0;
-    for (const mesh of this.speckleSystem.instancedMeshes)
+    this.ribbons.root.visible = this.timeline.ribbonMaterial.opacity > 0;
+    for (const mesh of this.speckles.meshes)
       mesh.visible = mesh.material.opacity > 0;
     const idle = time - this.lastActivity > 40000;
     const continuous =
@@ -228,31 +222,31 @@ export class App {
     controls.autoRotate = configuredRotation && continuous;
     const cameraChanged = controls.update(delta);
     controls.autoRotate = configuredRotation;
-    const particles = continuous && this.speckleSystem.animated;
-    if (particles) this.speckleSystem.updatePositions(time);
-    if (this.productAnchor && (cameraChanged || this.dirty || tweening))
+    const particles = continuous && this.speckles.canAnimate;
+    if (particles) this.speckles.rotateGroups(time);
+    if (this.productAnchor && (cameraChanged || this.needsRender || tweening))
       this.productAnchor.lookAt(this.sceneManager.camera.position);
     // High-refresh displays can request 120+ full-resolution transmission
     // frames/sec and saturate the GPU command queue. Update motion at the
     // display cadence, but submit at most 60 scene renders/sec. Preserve dirty
     // state until it is actually drawn, including a tween's final frame.
-    this.dirty ||= cameraChanged || particles || tweening;
+    this.needsRender ||= cameraChanged || particles || tweening;
     const frameInterval = 1000 / 60;
     const renderDue =
-      this.lastRenderTime === null ||
-      time - this.lastRenderTime >= frameInterval - 0.5;
-    if (this.dirty && renderDue) {
-      this.dirty = false;
+      this.lastRenderSlot === null ||
+      time - this.lastRenderSlot >= frameInterval - 0.5;
+    if (this.needsRender && renderDue) {
+      this.needsRender = false;
       // Keep the fractional remainder. Resetting the clock to `time` on each
       // draw accidentally limits 90 Hz screens to 45 fps and 144 Hz to 48 fps.
       // Skip missed slots after a stall; never submit catch-up render bursts.
-      this.lastRenderTime =
-        this.lastRenderTime === null
+      this.lastRenderSlot =
+        this.lastRenderSlot === null
           ? time
-          : this.lastRenderTime +
+          : this.lastRenderSlot +
             Math.max(
               1,
-              Math.floor((time - this.lastRenderTime + 0.5) / frameInterval),
+              Math.floor((time - this.lastRenderSlot + 0.5) / frameInterval),
             ) *
               frameInterval;
       this.sceneManager.render();
@@ -267,10 +261,10 @@ export class App {
     const moving = continuous && (configuredRotation || particles);
     if (
       moving ||
-      !state.tweens.allStopped() ||
-      state.lenis.isScrolling ||
+      !this.tweens.allStopped() ||
+      this.scroller.isScrolling ||
       cameraChanged ||
-      this.dirty
+      this.needsRender
     )
       this.invalidate();
     else this.lastFrameTime = null;
@@ -301,9 +295,9 @@ export class App {
     window.addEventListener(
       "resize",
       () => {
-        this.mobile = innerWidth < 768;
+        this.isMobile = innerWidth < 768;
         if (this.timeline) {
-          this.timeline.setMobile(this.mobile);
+          this.timeline.setMobile(this.isMobile);
           this.timeline.measure();
         }
       },
@@ -384,10 +378,10 @@ export class App {
     this.disposed = true;
     cancelAnimationFrame(this.animationFrameId);
     this.events.abort();
-    state.lenis?.destroy();
-    state.tweens.removeAll();
+    this.scroller?.destroy();
+    this.tweens.removeAll();
     this.timeline?.dispose();
-    disposeLoaders();
+    disposeModelLoader();
     this.sceneManager.dispose();
   }
 }

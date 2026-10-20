@@ -1,22 +1,12 @@
 import * as THREE from "three";
 import { Tween, Easing } from "tween";
-import { state } from "../core/state.js";
 
-export const PRODUCT_COLORS = {
-  orange: "#bf541e",
-  green: "#00a86b",
-  yellow: "#ffd700",
-};
-const TYPES = {
-  orange: ["deodorant", "Body odor"],
-  yellow: ["sunscreen", "Sunscreen"],
-  green: ["anti-attractant", "Mosquito"],
-};
+import { POD_COLORS, POD_LABELS } from "../core/productConfig.js";
 
-export class ColorChangeAnimationSequence {
+export class PodSelector {
   constructor(app) {
     this.app = app;
-    this.current = "orange";
+    this.currentPod = "orange";
     this.isAnimating = false;
     this.buttons = [...document.querySelectorAll(".pod-indicator")];
     this.labels = [
@@ -28,56 +18,47 @@ export class ColorChangeAnimationSequence {
     this.buttons.forEach((button) =>
       button.addEventListener(
         "click",
-        () => this.start(button.id.slice(3).toLowerCase()),
+        () => this.select(button.id.slice(3).toLowerCase()),
         { signal: app.events.signal },
       ),
     );
   }
 
-  start(color) {
-    if (
-      this.isAnimating ||
-      color === this.current ||
-      !state.applicatorObject ||
-      !this.app.product
-    )
-      return;
+  select(podId) {
+    const applicator = this.app.product?.applicator;
+    if (this.isAnimating || podId === this.currentPod || !applicator) return;
     this.isAnimating = true;
-    state.lenis.stop();
+    this.app.scroller.stop();
     this.buttons.forEach((button) => {
       button.disabled = true;
     });
-    const selected = document.getElementById(
-      `pod${color[0].toUpperCase()}${color.slice(1)}`,
+    const selectedButton = document.getElementById(
+      `pod${podId[0].toUpperCase()}${podId.slice(1)}`,
     );
-    selected.classList.add("progress-loading");
-    const applicator = state.applicatorObject;
+    selectedButton.classList.add("progress-loading");
     const initialY = applicator.position.y;
     const initialRotation = applicator.rotation.y;
     const materials = new Set();
-    this.app.product
-      .getObject()
-      .getObjectByName("inner-cap")
-      ?.traverse((node) => {
-        if (node.material) materials.add(node.material);
-      });
+    this.app.product.root.getObjectByName("inner-cap")?.traverse((node) => {
+      if (node.material) materials.add(node.material);
+    });
     const first = [...materials][0];
     const currentColor =
-      first?.color.clone() ?? new THREE.Color(PRODUCT_COLORS[this.current]);
-    const targetColor = new THREE.Color(PRODUCT_COLORS[color]);
+      first?.color.clone() ?? new THREE.Color(POD_COLORS[this.currentPod]);
+    const targetColor = new THREE.Color(POD_COLORS[podId]);
     const duration = this.app.reducedMotion ? 0 : 500;
     const tween = (target, values, time = duration) =>
-      new Tween(target, state.tweens)
+      new Tween(target, this.app.tweens)
         .to(values, time)
         .easing(Easing.Cubic.InOut);
-    const down = tween(applicator.rotation, { y: -Math.PI * 0.26 });
-    const up = tween(applicator.position, { y: initialY + 1 });
+    const rotateOut = tween(applicator.rotation, { y: -Math.PI * 0.26 });
+    const raise = tween(applicator.position, { y: initialY + 1 });
     const recolor = tween(
       currentColor,
       { r: targetColor.r, g: targetColor.g, b: targetColor.b },
       this.app.reducedMotion ? 0 : 700,
     )
-      .onStart(() => this.updateLabels(color))
+      .onStart(() => this.updateLabels(podId))
       .onUpdate(() =>
         materials.forEach((material) => {
           material.color.copy(currentColor);
@@ -85,30 +66,30 @@ export class ColorChangeAnimationSequence {
         }),
       );
     const lower = tween(applicator.position, { y: initialY });
-    const rotate = tween(applicator.rotation, {
+    const rotateBack = tween(applicator.rotation, {
       y: initialRotation,
     }).onComplete(() => {
-      this.current = color;
+      this.currentPod = podId;
       this.isAnimating = false;
-      selected.classList.remove("progress-loading");
+      selectedButton.classList.remove("progress-loading");
       this.buttons.forEach((button) => {
         button.disabled = false;
-        button.classList.toggle("current", button === selected);
-        button.setAttribute("aria-pressed", String(button === selected));
+        button.classList.toggle("current", button === selectedButton);
+        button.setAttribute("aria-pressed", String(button === selectedButton));
       });
-      state.lenis.start();
+      this.app.scroller.start();
       this.app.invalidate(true);
     });
-    down.chain(up);
-    up.chain(recolor);
+    rotateOut.chain(raise);
+    raise.chain(recolor);
     recolor.chain(lower);
-    lower.chain(rotate);
-    down.start();
+    lower.chain(rotateBack);
+    rotateOut.start();
     this.app.invalidate();
   }
 
-  updateLabels(color) {
-    const [type, label] = TYPES[color];
+  updateLabels(podId) {
+    const [type, label] = POD_LABELS[podId];
     this.labels.forEach((element) => {
       element.textContent = element.id === "showingLabel" ? label : type;
       if (!this.app.reducedMotion)
@@ -116,6 +97,6 @@ export class ColorChangeAnimationSequence {
     });
     const link = document.getElementById("waitlist-link");
     link.classList.remove("orange", "green", "yellow");
-    link.classList.add(color);
+    link.classList.add(podId);
   }
 }

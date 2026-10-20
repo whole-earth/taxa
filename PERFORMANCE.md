@@ -64,7 +64,7 @@ The settled-scene benchmark uses 1440 × 900, DPR 1, and samples three seconds p
 
 The optimized product wakes on input, resize or a color change; zero idle renders does not mean frozen interaction. Raw records and screenshots are under `test-results/benchmark/`.
 
-The final build contains **685,049 bytes** of minified JavaScript (178,452 gzip / 147,885 Brotli) and **10,567 bytes** of CSS (3,164 gzip / 2,743 Brotli). Compressed figures are size calculations; the local development server does not constitute a production compression/cache configuration.
+The final build contains **684,441 bytes** of minified JavaScript (178,399 gzip / 147,797 Brotli) and **10,637 bytes** of CSS (3,157 gzip / 2,732 Brotli). Compressed figures are size calculations; the local development server does not constitute a production compression/cache configuration.
 
 ## Visual and functional checks
 
@@ -72,7 +72,7 @@ The final build contains **685,049 bytes** of minified JavaScript (178,452 gzip 
 
 The DPR 3 mobile overlap samples had a maximum whole-image mean difference of about **0.196/255**. Sparse edge differences reached 14/255; fewer than 0.005% of pixels exceeded an 8-level difference in the worst sampled pose. Final-product mobile samples were pixel-identical. These are sampled numerical comparisons plus visual inspection, not proof that every possible device/pose produces identical pixels.
 
-All **21 browser checks passed** in the final complete regression run (53.2 seconds). Formatting, the production build and the Git whitespace check also passed. The suite covers forward/reverse seeking, chapter navigation, color changes, failed-load recovery, readable fallback, mobile layout, reduced motion, resize poses, static-frame suspension, repeated resource reuse, desktop/mobile shader reuse, and a simulated 120 Hz stream that verifies final pending frames are retained. Transition checks also verify the cell stays hidden until its first rendered frame and fades in, and desktop/mobile dots fade out before their color and position change, fade back in, and cancel pending reveals when leaving the chapter. Finalization coverage adds common display refresh rates, long stalls, DOM mutation counts, overlay suspension, focus restoration and short-screen card access.
+All **21 browser checks passed** in the final complete regression run (59.9 seconds). The final pod-selector naming cleanup also passed both targeted desktop/mobile interaction checks. Formatting, the production build and the Git whitespace check also passed. The suite covers forward/reverse seeking, chapter navigation, color changes, failed-load recovery, readable fallback, mobile layout, reduced motion, resize poses, static-frame suspension, repeated resource reuse, desktop/mobile shader reuse, and a simulated 120 Hz stream that verifies final pending frames are retained. Transition checks also verify the cell stays hidden until its first rendered frame and fades in, and desktop/mobile dots fade out before their color and position change, fade back in, and cancel pending reveals when leaving the chapter. Finalization coverage adds common display refresh rates, long stalls, DOM mutation counts, overlay suspension, focus restoration and short-screen card access.
 
 The entrance fade restores the original Webflow CSS timing (1.8 seconds, ease-out). The dot transitions restore the original scroll script's 180 ms fade-out and 400 ms fade-in. They use the existing shared tween scheduler; position buffers change once per topic while invisible. Reduced-motion mode applies topic changes immediately.
 
@@ -95,6 +95,12 @@ A MutationObserver recorded **480 redundant DOM attribute writes over 120 update
 The product card previously extended below the viewport at 1280 × 720 and 844 × 390. Compact laptop spacing and a bounded scrolling card make all content and the waitlist reachable; tests cover those sizes plus 667 × 375 and 375 × 500. Larger portrait/desktop layouts retain their existing composition.
 
 Chrome DevTools recorded **122 ms LCP and 0.00 CLS** on an unthrottled localhost navigation before these fixes. CSS/image hints offered 0 ms estimated LCP savings, so they were not prioritized. This is a local lab observation, not a public-network load benchmark or a measure of when the 3D fade completes. Lighthouse accessibility improved from **95 to 100**; desktop and mobile both returned **100 accessibility and 100 best practices** after enlarging chapter hit areas. SEO remains 63 because this local demo intentionally uses `noindex, nofollow`. Reports are retained in `test-results/finalization/`. Automated scores supplement the layout and interaction tests; they do not constitute complete accessibility certification.
+
+## Naming and structure refactor
+
+The app now owns its scrolling controller and tween group. Model loading uses explicit asynchronous functions rather than promise-returning constructors. Model roots and bounds use consistent `.root` and `.bounds` properties; the product owns its applicator. Shared product configuration is independent of UI effects, and the synchronous material-update helper is named for what it actually does. The README documents the module boundaries. HTML/CSS use role-based names such as `story-panel`, `topic-panel` and `product-card`; an inverse-rename comparison verified that every CSS declaration and media query remained identical.
+
+The full 21-test suite passed after the refactor. An import-graph check found 18 source modules and 25 local imports with no missing imports or cycles. Fixed-pose captures at 1440 × 900 and 390 × 844 (DPR 1, reduced motion) compared the hero, pitch, transition and final product before/after the refactor. All six desktop poses were pixel-identical. Three mobile poses were pixel-identical; the other three differed at isolated pixels by at most 4/255 in a channel, with a maximum image-wide mean channel difference below 0.000028/255. Assets, material values and animation timings were preserved. Records are in `test-results/refactor/visual-comparison.json` with the paired PNGs.
 
 ## Tradeoffs and limits
 

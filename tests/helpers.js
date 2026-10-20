@@ -19,7 +19,7 @@ export async function seek(page, section, progress = 0) {
     { section, progress },
   );
   await page.waitForFunction(
-    () => window.taxaDebug.app.timeline.lastY === scrollY,
+    () => window.taxaDebug.app.timeline.lastScrollY === scrollY,
   );
   await expect(page.locator("body")).toHaveAttribute("data-chapter", section);
 }

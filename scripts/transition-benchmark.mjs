@@ -24,6 +24,13 @@ const result = await page.evaluate(
     a.preloadProduct();
     await a.productPromise;
     const loadMs = performance.now() - started;
+    // Frozen comparison builds predate the model/property naming cleanup.
+    // Keep compatibility in the benchmark, outside the application's API.
+    const productRoot = a.product.root ?? a.product.getObject();
+    const ribbonRoot = a.ribbons.root ?? a.ribbons.getObject();
+    const cellGroup = a.cellGroup ?? a.cellObject;
+    const speckles = a.speckles ?? a.speckleSystem;
+    const speckleMeshes = speckles.meshes ?? speckles.instancedMeshes;
     // Reach the actual pre-transition palette and settle its time-based tweens.
     window.scrollTo(0, a.timeline.bounds[2].top + 1);
     a.invalidate(true);
@@ -89,10 +96,10 @@ const result = await page.evaluate(
         a.productAnchor.lookAt(a.sceneManager.camera.position);
         // Settle the initial material/particle tweens without introducing a
         // second loop. This sweep isolates rendering, not the tween scheduler.
-        a.ribbons.getObject().visible = false;
-        a.speckleSystem.instancedMeshes.forEach((m) => (m.visible = false));
-        if (variant === "no-cell") a.cellObject.visible = false;
-        if (variant === "no-product") a.product.getObject().visible = false;
+        ribbonRoot.visible = false;
+        speckleMeshes.forEach((mesh) => (mesh.visible = false));
+        if (variant === "no-cell") cellGroup.visible = false;
+        if (variant === "no-product") productRoot.visible = false;
         if (variant === "no-stars") a.starField.visible = false;
         let query;
         if (ext) {

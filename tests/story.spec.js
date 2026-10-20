@@ -38,12 +38,10 @@ for (const mobile of [false, true]) {
     await page.waitForFunction(() => !!window.taxaDebug.app.product);
     await seek(page, "zoom", 0.1);
     await page.waitForFunction(() =>
-      window.taxaDebug.app.speckleSystem.materials.every(
-        (m) => m.opacity === 1,
-      ),
+      window.taxaDebug.app.speckles.materials.every((m) => m.opacity === 1),
     );
     await page.evaluate(() => {
-      const system = window.taxaDebug.app.speckleSystem;
+      const system = window.taxaDebug.app.speckles;
       window.dotChanges = [];
       const original = system.randomizePositions.bind(system);
       system.randomizePositions = () => {
@@ -53,7 +51,7 @@ for (const mobile of [false, true]) {
       window.dotFrames = [];
       window.recordDots = true;
       function sample() {
-        const mesh = system.instancedMeshes[0];
+        const mesh = system.meshes[0];
         window.dotFrames.push({
           color: mesh.material.color.getHexString(),
           opacity: mesh.material.opacity,
@@ -70,7 +68,7 @@ for (const mobile of [false, true]) {
     ]) {
       await seek(page, "zoom", progress);
       await page.waitForFunction((color) => {
-        const m = window.taxaDebug.app.speckleSystem.materials[0];
+        const m = window.taxaDebug.app.speckles.materials[0];
         return m.color.getHexString() === color && m.opacity === 1;
       }, color);
     }
@@ -107,20 +105,18 @@ for (const mobile of [false, true]) {
     await page.waitForTimeout(700);
     expect(
       await page.evaluate(() =>
-        window.taxaDebug.app.speckleSystem.materials.every(
-          (m) => m.opacity === 0,
-        ),
+        window.taxaDebug.app.speckles.materials.every((m) => m.opacity === 0),
       ),
     ).toBe(true);
     await page.emulateMedia({ reducedMotion: "reduce" });
     await seek(page, "zoom", 0.8);
     expect(
       await page.evaluate(() => {
-        const system = window.taxaDebug.app.speckleSystem;
+        const system = window.taxaDebug.app.speckles;
         return (
           system.materials.every(
             (m) => m.opacity === 1 && m.color.getHexString() === "92cb86",
-          ) && system.tweens.size === 0
+          ) && system.activeTweens.size === 0
         );
       }),
     ).toBe(true);
@@ -135,7 +131,7 @@ test("story seeks forward and backward, loads one product, and preserves GPU res
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("request", (request) => requests.push(request.url()));
   await ready(page);
-  await expect(page.locator("#splash .child")).toHaveClass(/active/);
+  await expect(page.locator("#splash .story-panel")).toHaveClass(/active/);
   await expect(page.locator(".three canvas")).toBeVisible();
   expect(
     await page.evaluate(() =>
@@ -146,9 +142,9 @@ test("story seeks forward and backward, loads one product, and preserves GPU res
     requests.filter((url) => url.includes("swap.glb")).length,
   ).toBeLessThanOrEqual(1);
   for (const [p, label] of [
-    [0.1, "zoomFirst"],
-    [0.45, "zoomSecond"],
-    [0.8, "zoomThird"],
+    [0.1, "topic-odor"],
+    [0.45, "topic-uv"],
+    [0.8, "topic-mosquitoes"],
   ]) {
     await seek(page, "zoom", p);
     await expect(page.locator(`#${label}`)).toHaveClass(/active/);
@@ -156,10 +152,10 @@ test("story seeks forward and backward, loads one product, and preserves GPU res
   await seek(page, "pitch", 0.5);
   await seek(page, "product", 0.99);
   await page.waitForFunction(() => !!window.taxaDebug.app.product);
-  await expect(page.locator("#product .child")).toHaveClass(/active/);
+  await expect(page.locator("#product .story-panel")).toHaveClass(/active/);
   const productState = await page.evaluate(() => {
     const a = window.taxaDebug.app,
-      p = a.product.getObject();
+      p = a.product.root;
     return {
       visible: p.visible,
       scale: p.scale.x,
@@ -186,9 +182,9 @@ test("story seeks forward and backward, loads one product, and preserves GPU res
   );
   await seek(page, "product", 0.5);
   await seek(page, "zoom", 0.1);
-  await expect(page.locator("#zoomFirst")).toHaveClass(/active/);
+  await expect(page.locator("#topic-odor")).toHaveClass(/active/);
   await seek(page, "splash", 0.1);
-  await expect(page.locator("#splash .child")).toHaveClass(/active/);
+  await expect(page.locator("#splash .story-panel")).toHaveClass(/active/);
   await seek(page, "product", 0.99);
   await page.waitForTimeout(1800);
   expect(requests.filter((url) => url.endsWith("/swap.glb"))).toHaveLength(1);
@@ -249,8 +245,8 @@ test("mobile layout, menu, contact, and reduced motion", async ({ page }) => {
   await expect(page.locator("#contact-dialog")).not.toBeVisible();
   await seek(page, "product", 0.99);
   await page.waitForFunction(() => !!window.taxaDebug.app.product);
-  await expect(page.locator("#product .child")).toHaveClass(/active/);
-  const box = await page.locator(".product-cta").boundingBox();
+  await expect(page.locator("#product .story-panel")).toHaveClass(/active/);
+  const box = await page.locator(".product-card").boundingBox();
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(391);
   expect(box.y + box.height).toBeLessThanOrEqual(845);
@@ -279,7 +275,7 @@ test("failed product request can be retried without losing scroll position", asy
   await page.locator("#retry-load").click();
   await page.waitForFunction(() => !!window.taxaDebug.app.product);
   expect(await page.evaluate(() => scrollY)).toBe(y);
-  await expect(page.locator("#product .child")).toHaveClass(/active/);
+  await expect(page.locator("#product .story-panel")).toHaveClass(/active/);
 });
 
 test("resizing a settled product recomputes its pose and preserves resource counts", async ({
@@ -297,16 +293,16 @@ test("resizing a settled product recomputes its pose and preserves resource coun
     () => window.taxaDebug.app.sceneManager.renderer.info.memory.geometries,
   );
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.waitForFunction(() => window.taxaDebug.app.timeline.mobile);
+  await page.waitForFunction(() => window.taxaDebug.app.timeline.isMobile);
   await seek(page, "product", 0.99);
   expect(
-    await page.evaluate(() => window.taxaDebug.app.product.getObject().scale.x),
+    await page.evaluate(() => window.taxaDebug.app.product.root.scale.x),
   ).toBeCloseTo(5.2);
   expect(
     await page.evaluate(() => window.taxaDebug.app.sceneManager.camera.fov),
   ).toBe(90);
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.waitForFunction(() => !window.taxaDebug.app.timeline.mobile);
+  await page.waitForFunction(() => !window.taxaDebug.app.timeline.isMobile);
   await seek(page, "product", 0.99);
   for (let i = 0; i < 3; i++) {
     await seek(page, "zoom", 0.5);
@@ -324,7 +320,7 @@ test("chapter buttons seek the product and wheel input wakes a settled scene", a
 }) => {
   await ready(page);
   await page.locator('[data-section="product"]').click();
-  await expect(page.locator("#product .child")).toHaveClass(/active/, {
+  await expect(page.locator("#product .story-panel")).toHaveClass(/active/, {
     timeout: 10000,
   });
   await page.waitForFunction(() => !!window.taxaDebug.app.product);
@@ -336,7 +332,7 @@ test("chapter buttons seek the product and wheel input wakes a settled scene", a
     .poll(() => page.evaluate(() => scrollY))
     .toBeLessThan(before - 100);
   await page.locator(".brand").click();
-  await expect(page.locator("#splash .child")).toHaveClass(/active/, {
+  await expect(page.locator("#splash .story-panel")).toHaveClass(/active/, {
     timeout: 10000,
   });
 });
@@ -365,19 +361,19 @@ test("120 Hz updates pace rendering and retain the final pending frame", async (
     a.motionPaused = true;
     a.reducedMotion = true;
     a.lastFrameTime = null;
-    a.lastRenderTime = null;
+    a.lastRenderSlot = null;
     a.sceneManager.controls.update = () => false;
     let draws = 0;
     a.sceneManager.render = () => draws++;
     const start = performance.now();
     for (let i = 0; i < 14; i++) {
-      a.dirty = true;
+      a.needsRender = true;
       a.frame(start + (i * 1000) / 120);
     }
-    const pending = a.dirty;
+    const pending = a.needsRender;
     const pacedDraws = draws;
     a.frame(start + (14 * 1000) / 120);
-    return { pending, pacedDraws, finalDraws: draws, dirty: a.dirty };
+    return { pending, pacedDraws, finalDraws: draws, dirty: a.needsRender };
   });
   expect(result).toEqual({
     pending: true,

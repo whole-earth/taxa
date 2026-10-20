@@ -1,52 +1,52 @@
 import * as THREE from "three";
+import { PRODUCT_PHASE } from "./productConfig.js";
 import { Tween, Easing } from "tween";
-import { state } from "./state.js";
 import {
-  MOBILIZE_GREEN,
-  DESKTOP_BLUE,
-  MOBILE_BLUE,
-} from "../utils/materials.js";
+  MOBILIZED_GREEN,
+  MOBILIZED_BLUE,
+  MOBILIZED_BLUE_MOBILE,
+} from "./cellMaterials.js";
 
-const clamp = (value) => Math.max(0, Math.min(1, value));
-const smooth = (value) => {
-  const t = clamp(value);
+const clamp01 = (value) => Math.max(0, Math.min(1, value));
+const smoothstep = (value) => {
+  const t = clamp01(value);
   return t * t * (3 - 2 * t);
 };
-const quadratic = (value) => {
-  const t = clamp(value);
+const easeInOutQuad = (value) => {
+  const t = clamp01(value);
   return t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
 };
 
 export class StoryTimeline {
   constructor(app) {
     this.app = app;
-    this.mobile = app.mobile;
-    this.ease = this.mobile ? quadratic : smooth;
+    this.isMobile = app.isMobile;
+    this.ease = this.isMobile ? easeInOutQuad : smoothstep;
     this.sections = ["splash", "zoom", "pitch", "product"].map((id) =>
       document.getElementById(id),
     );
-    this.children = this.sections.map((section) =>
-      section.querySelector(".child"),
+    this.chapterPanels = this.sections.map((section) =>
+      section.querySelector(".story-panel"),
     );
-    this.zoomChildren = [...document.querySelectorAll(".zoom-child")];
-    this.dots = [...document.querySelectorAll(".scroll-dot")];
+    this.topicPanels = [...document.querySelectorAll(".topic-panel")];
+    this.chapterButtons = [...document.querySelectorAll(".scroll-dot")];
     this.nav = document.querySelector(".nav");
     this.chapter = -1;
     this.topic = -1;
-    this.phase = -1;
+    this.productPhase = null;
     this.rotationBoost = 0;
-    this.lastY = window.scrollY;
-    this.ribbons = app.ribbons.getObject();
-    this.inner = app.blobInner.getObject();
-    this.outer = app.blobOuter.getObject();
-    this.innerMaterial = this.firstMaterial(this.inner);
-    this.outerMaterial = this.firstMaterial(this.outer);
+    this.lastScrollY = window.scrollY;
+    this.ribbons = app.ribbons.root;
+    this.innerCell = app.innerCell.root;
+    this.cellShell = app.cellShell.root;
+    this.innerMaterial = this.firstMaterial(this.innerCell);
+    this.outerMaterial = this.firstMaterial(this.cellShell);
     this.ribbonMaterial = this.firstMaterial(this.ribbons);
-    this.originalInner = this.innerMaterial.color.clone();
-    this.originalOuter = this.outerMaterial.clone();
+    this.originalInnerColor = this.innerMaterial.color.clone();
+    this.originalShellMaterial = this.outerMaterial.clone();
     this.materialTweens = new Map();
     this.measure();
-    this.dots.forEach((dot, index) =>
+    this.chapterButtons.forEach((dot, index) =>
       dot.addEventListener("click", () => this.goTo(index), {
         signal: app.events.signal,
       }),
@@ -62,8 +62,8 @@ export class StoryTimeline {
   }
 
   setMobile(mobile) {
-    this.mobile = mobile;
-    this.ease = mobile ? quadratic : smooth;
+    this.isMobile = mobile;
+    this.ease = mobile ? easeInOutQuad : smoothstep;
   }
 
   measure() {
@@ -73,7 +73,7 @@ export class StoryTimeline {
       top: section.offsetTop,
       height: section.offsetHeight,
     }));
-    this.viewport = window.innerHeight;
+    this.viewportHeight = window.innerHeight;
     this.app.invalidate(true);
   }
 
@@ -82,16 +82,16 @@ export class StoryTimeline {
   }
   progress(index, y) {
     const { top, height } = this.bounds[index];
-    return clamp(
-      (y - top) / Math.max(1, height - (index === 3 ? this.viewport : 0)),
+    return clamp01(
+      (y - top) / Math.max(1, height - (index === 3 ? this.viewportHeight : 0)),
     );
   }
 
   goTo(index, immediate = this.app.reducedMotion) {
     const { top, height } = this.bounds[index];
     const target =
-      index === 3 ? top + height - this.viewport : top + (index ? 1 : 0);
-    state.lenis.scrollTo(target, {
+      index === 3 ? top + height - this.viewportHeight : top + (index ? 1 : 0);
+    this.app.scroller.scrollTo(target, {
       duration: this.app.reducedMotion
         ? 0
         : Math.min(3.6, 1.2 + Math.abs(index - this.chapter) * 0.6),
@@ -103,7 +103,7 @@ export class StoryTimeline {
   setText(index) {
     if (index === this.textIndex) return;
     this.textIndex = index;
-    this.children.forEach((child, i) => {
+    this.chapterPanels.forEach((child, i) => {
       const active = i === index;
       child.classList.toggle("active", active);
       child.inert = !active;
@@ -114,9 +114,9 @@ export class StoryTimeline {
     const previous = this.materialTweens.get(key);
     if (previous) {
       previous.stop();
-      state.tweens.remove(previous);
+      this.app.tweens.remove(previous);
     }
-    const tween = new Tween(target, state.tweens)
+    const tween = new Tween(target, this.app.tweens)
       .to(values, this.app.reducedMotion ? 0 : duration)
       .easing(Easing.Quadratic.InOut)
       .onComplete(() => this.materialTweens.delete(key));
@@ -125,7 +125,7 @@ export class StoryTimeline {
   }
 
   mobilize(active) {
-    const color = active ? MOBILIZE_GREEN : this.originalInner;
+    const color = active ? MOBILIZED_GREEN : this.originalInnerColor;
     this.tween(
       "inner-color",
       this.innerMaterial.color,
@@ -134,15 +134,15 @@ export class StoryTimeline {
     );
     this.tween(
       "inner-scale",
-      this.inner.scale,
+      this.innerCell.scale,
       { x: active ? 1.1 : 1, y: active ? 1.1 : 1, z: active ? 1.1 : 1 },
       1120,
     );
     const blue = active
-      ? this.mobile
-        ? MOBILE_BLUE
-        : DESKTOP_BLUE
-      : this.originalOuter.color;
+      ? this.isMobile
+        ? MOBILIZED_BLUE_MOBILE
+        : MOBILIZED_BLUE
+      : this.originalShellMaterial.color;
     this.tween(
       "outer-color",
       this.outerMaterial.color,
@@ -152,14 +152,18 @@ export class StoryTimeline {
     const values = active
       ? { roughness: 0.4, metalness: 0, envMapIntensity: 0.6, opacity: 1 }
       : {
-          roughness: this.originalOuter.roughness,
-          metalness: this.originalOuter.metalness,
-          envMapIntensity: this.originalOuter.envMapIntensity,
-          opacity: this.originalOuter.opacity,
+          roughness: this.originalShellMaterial.roughness,
+          metalness: this.originalShellMaterial.metalness,
+          envMapIntensity: this.originalShellMaterial.envMapIntensity,
+          opacity: this.originalShellMaterial.opacity,
         };
     if (this.outerMaterial.isMeshPhysicalMaterial) {
-      values.transmission = active ? 0.6 : this.originalOuter.transmission;
-      values.reflectivity = active ? 0.4 : this.originalOuter.reflectivity;
+      values.transmission = active
+        ? 0.6
+        : this.originalShellMaterial.transmission;
+      values.reflectivity = active
+        ? 0.4
+        : this.originalShellMaterial.reflectivity;
     }
     this.tween("outer-surface", this.outerMaterial, values, 1120);
   }
@@ -167,8 +171,8 @@ export class StoryTimeline {
   update(y) {
     const {
       sceneManager: manager,
-      cellObject,
-      speckleSystem: speckles,
+      cellGroup,
+      speckles: speckles,
       starField,
     } = this.app;
     const index =
@@ -179,22 +183,28 @@ export class StoryTimeline {
           : y < this.bounds[3].top
             ? 2
             : 3;
-    const p = this.progress(index, y);
-    const delta = y - this.lastY;
-    this.lastY = y;
+    const progress = this.progress(index, y);
+    const delta = y - this.lastScrollY;
+    this.lastScrollY = y;
     if (delta)
       this.rotationBoost +=
         (delta *
-          (delta > 0 ? (this.mobile ? 0.1 : 0.2) : this.mobile ? 0.06 : 0.12) -
+          (delta > 0
+            ? this.isMobile
+              ? 0.1
+              : 0.2
+            : this.isMobile
+              ? 0.06
+              : 0.12) -
           this.rotationBoost) *
-        (this.mobile ? 0.05 : 0.2);
+        (this.isMobile ? 0.05 : 0.2);
     this.rotationBoost = Math.max(-12, Math.min(12, this.rotationBoost));
 
     if (index !== this.chapter) {
       const previous = this.chapter;
       this.chapter = index;
       document.body.dataset.chapter = this.sections[index].id;
-      this.dots.forEach((dot, i) => {
+      this.chapterButtons.forEach((dot, i) => {
         dot.classList.toggle("active", i === index);
         if (i === index) dot.setAttribute("aria-current", "step");
         else dot.removeAttribute("aria-current");
@@ -214,28 +224,28 @@ export class StoryTimeline {
       }
       if (index === 1) this.topic = -1;
       if (index >= 2 && previous < 2) speckles.explode();
-      this.phase = -1;
+      this.productPhase = null;
     }
 
-    cellObject.visible = index !== 3 || p <= 0.7;
-    starField.visible = index === 3 && p <= 0.7;
-    if (starField.visible) starField.updateProgress(p * 1.66);
+    cellGroup.visible = index !== 3 || progress <= 0.7;
+    starField.visible = index === 3 && progress <= 0.7;
+    if (starField.visible) starField.updateProgress(progress * 1.66);
     manager.controls.autoRotate =
       !this.app.motionPaused &&
       !this.app.reducedMotion &&
-      (index < 3 || p <= 0.22);
-    manager.controls.enableRotate = index < 3 && !this.mobile;
-    manager.directionalLight.visible = index === 3 && p > 0.7;
+      (index < 3 || progress <= 0.22);
+    manager.controls.enableRotate = index < 3 && !this.isMobile;
+    manager.productLight.visible = index === 3 && progress > 0.7;
     // The frosted transition samples a blurred background. Rendering that
     // intermediate buffer at CSS-pixel resolution avoids a Retina-sized
     // multisample resolve/mipmap chain. Silhouettes, labels and the canvas
     // retain native DPR; the hero and final product use full-resolution
     // transmission. No geometry, texture, or material values are reduced.
     manager.renderer.transmissionResolutionScale =
-      index === 3 && p > 0.3 && p <= 0.7
+      index === 3 && progress > 0.3 && progress <= 0.7
         ? Math.min(1, 1 / manager.renderer.getPixelRatio())
         : 1;
-    const clearNav = index === 3 && p > 0.22;
+    const clearNav = index === 3 && progress > 0.22;
     if (clearNav !== this.clearNav) {
       this.clearNav = clearNav;
       this.nav.classList.toggle("clear", clearNav);
@@ -243,20 +253,20 @@ export class StoryTimeline {
     manager.renderer.toneMappingExposure = 1;
     this.app.ambientLight.intensity = 4;
 
-    if (index === 0) cellObject.scale.setScalar(this.mix(1, 1.6, p));
-    else if (index < 3) cellObject.scale.setScalar(1.6);
+    if (index === 0) cellGroup.scale.setScalar(this.mix(1, 1.6, progress));
+    else if (index < 3) cellGroup.scale.setScalar(1.6);
 
     if (index === 1) {
-      const topic = Math.min(2, Math.floor(p * 3));
+      const topic = Math.min(2, Math.floor(progress * 3));
       if (topic !== this.topic) {
         this.topic = topic;
         const color = new THREE.Color(["#ffbb65", "#f1ff00", "#92cb86"][topic]);
-        this.zoomChildren.forEach((child, i) => {
+        this.topicPanels.forEach((child, i) => {
           child.classList.toggle("active", i === topic);
           child.inert = i !== topic;
         });
         speckles.show(color, this.app.reducedMotion ? 0 : 400);
-        if (!this.mobile)
+        if (!this.isMobile)
           this.tween("sheen", this.innerMaterial.sheenColor, {
             r: color.r,
             g: color.g,
@@ -264,20 +274,20 @@ export class StoryTimeline {
           });
       }
     }
-    if (index === 0 && this.topic === -1 && !this.mobile) {
-      const color = this.originalInner;
+    if (index === 0 && this.topic === -1 && !this.isMobile) {
+      const color = this.originalInnerColor;
       if (!this.materialTweens.has("sheen"))
         this.innerMaterial.sheenColor.copy(color);
     }
 
-    const product = this.app.product?.getObject();
-    if (product) product.visible = index === 3 && p > 0.3;
+    const product = this.app.product?.root;
+    if (product) product.visible = index === 3 && progress > 0.3;
     if (index === 3) {
-      cellObject.scale.setScalar(
-        this.mix(1.6, this.mobile ? 0.05 : 0.016, p / 0.7),
+      cellGroup.scale.setScalar(
+        this.mix(1.6, this.isMobile ? 0.05 : 0.016, progress / 0.7),
       );
-      this.setText(p > 0.95 ? 3 : p > 0.4 ? -1 : 2);
-      if (product) this.updateProduct(product, p);
+      this.setText(progress > 0.95 ? 3 : progress > 0.4 ? -1 : 2);
+      if (product) this.updateProduct(product, progress);
       else if (!this.app.productError) {
         this.app.loadingStatus.show("Preparing the product…");
       }
@@ -290,27 +300,28 @@ export class StoryTimeline {
 
   updateProduct(product, progress) {
     const { sceneManager: manager, ambientLight } = this.app;
-    const applicator = state.applicatorObject;
-    const phase = progress <= 0.7 ? 0 : 1;
-    if (phase !== this.phase || this.productObject !== product) {
-      this.phase = phase;
+    const applicator = this.app.product?.applicator;
+    const phase =
+      progress <= 0.7 ? PRODUCT_PHASE.TRANSITION : PRODUCT_PHASE.DISPLAY;
+    if (phase !== this.productPhase || this.productObject !== product) {
+      this.productPhase = phase;
       this.productObject = product;
-      this.productMaterials = this.app.product.setPhase(phase);
+      this.productMaterials = this.app.product.setMaterialPhase(phase);
     }
     // Evaluate every transform from absolute progress. Seeking, resizing and
     // reverse scrolling never depend on visiting an earlier phase first.
-    const rotation = clamp((progress - 0.7) / 0.2);
-    const secondHalf = clamp((rotation - 0.5) / 0.5);
+    const rotation = clamp01((progress - 0.7) / 0.2);
+    const secondHalf = clamp01((rotation - 0.5) / 0.5);
     if (progress <= 0.7) {
       const scale = this.mix(
-        this.mobile ? 26 : 20,
-        this.mobile ? 4.8 : 4,
+        this.isMobile ? 26 : 20,
+        this.isMobile ? 4.8 : 4,
         (progress - 0.3) / 0.4,
       );
       product.position.set(0, 0, 0);
       product.rotation.set(Math.PI / 2, 0, 0);
       product.scale.setScalar(scale);
-      const opacity = clamp((progress - 0.3) / 0.4);
+      const opacity = clamp01((progress - 0.3) / 0.4);
       this.productMaterials.forEach((mat) => {
         mat.opacity = opacity;
       });
@@ -319,7 +330,7 @@ export class StoryTimeline {
         0.6,
         (progress - 0.3) / 0.4,
       );
-    } else if (this.mobile) {
+    } else if (this.isMobile) {
       product.rotation.set(
         this.mix(Math.PI / 2, Math.PI / 7, rotation),
         this.mix(0, Math.PI / 5, rotation),
@@ -346,12 +357,12 @@ export class StoryTimeline {
     }
     if (progress > 0.7)
       manager.renderer.toneMappingExposure = this.mix(0.6, 0.36, rotation);
-    const lightProgress = this.mobile
-      ? clamp((progress - 0.85) / 0.05)
+    const lightProgress = this.isMobile
+      ? clamp01((progress - 0.85) / 0.05)
       : secondHalf;
-    manager.directionalLight.intensity = this.mix(0, 8, lightProgress);
+    manager.productLight.intensity = this.mix(0, 8, lightProgress);
     ambientLight.intensity = this.mix(4.6, 3.2, lightProgress);
-    if (applicator && !this.app.colorSequence?.isAnimating) {
+    if (applicator && !this.app.podSelector?.isAnimating) {
       applicator.position.y = this.mix(1, 0, (progress - 0.9) / 0.05);
       applicator.rotation.y = this.mix(
         0,
@@ -362,12 +373,12 @@ export class StoryTimeline {
   }
 
   tick(delta) {
-    this.rotationBoost *= Math.exp(-delta * (this.mobile ? 3 : 12));
+    this.rotationBoost *= Math.exp(-delta * (this.isMobile ? 3 : 12));
     if (Math.abs(this.rotationBoost) < 0.001) this.rotationBoost = 0;
     this.app.sceneManager.controls.autoRotateSpeed = 0.4 + this.rotationBoost;
   }
 
   dispose() {
-    this.originalOuter.dispose();
+    this.originalShellMaterial.dispose();
   }
 }
