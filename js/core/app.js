@@ -48,7 +48,11 @@ export class StoryApp {
           far: 2000,
           position: [0, 0, 60],
         },
-        controls: { dampingFactor: 0.03, autoRotateSpeed: 0.4 },
+        controls: {
+          dampingFactor: 0.03,
+          autoRotateSpeed: 0.4,
+          rotateSpeed: 0.8,
+        },
         assets: { envMap: "assets/cell/aloe.hdr" },
       },
       () => this.invalidate(true),

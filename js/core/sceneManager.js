@@ -49,6 +49,7 @@ export class SceneManager {
     const controls = new OrbitControls(this.camera, this.renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = this.config.controls.dampingFactor;
+    controls.rotateSpeed = this.config.controls.rotateSpeed;
     controls.enableZoom = false;
     controls.enablePan = false;
     controls.autoRotate = true;
