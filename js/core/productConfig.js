@@ -18,7 +18,7 @@ export const PRODUCT_PHASE = {
 // Keep the refractive cap present while solid surfaces resolve later.
 export const PRODUCT_REVEAL = {
   body: { start: 0.2, end: 0.85 },
-  seal: { start: 0.55, end: 0.95 },
-  wordmark: { start: 0.68, end: 0.98 },
+  // Both viewport paths have cleared the seal before its color appears.
+  seal: { start: 0.7, end: 0.98 },
   lighting: { start: 0.35, end: 1 },
 };

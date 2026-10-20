@@ -333,7 +333,6 @@ export class StoryTimeline {
         cap: reveal,
         body: revealStage(reveal, PRODUCT_REVEAL.body),
         seal: revealStage(reveal, PRODUCT_REVEAL.seal),
-        wordmark: revealStage(reveal, PRODUCT_REVEAL.wordmark),
       });
       manager.renderer.toneMappingExposure =
         1 - 0.4 * revealStage(reveal, PRODUCT_REVEAL.lighting);

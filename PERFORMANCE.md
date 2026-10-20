@@ -159,6 +159,16 @@ At the zoom midpoint, the seal and wordmark remain hidden and exposure is above 
 
 This changes only opacity and exposure values: no additional geometry, materials, draws, shader variants or assets. Desktop and mobile comparisons at the end of the zoom and in the final product pose were pixel-identical to the previous version. Before/after sequences are retained in `test-results/reveal-timing/`. Eight targeted checks passed in each of Chrome and WebKit, covering staging and reverse seeking, partial-opacity tab occlusion, cap continuity, product interaction and shader/texture reuse. Build, formatting and Git whitespace checks also passed.
 
+### Continuous interior-to-seal handoff
+
+Dense sampling exposed a discontinuity missed by the earlier keyframe comparisons: the seal's depth-only draw ran before the internal product surfaces. As the camera crossed the seal, it abruptly blocked those surfaces, even while the seal color was nearly invisible. The transition now renders the interior first, then seal depth, seal color, the rim and branding. This keeps the optical interior visible beneath the fade while preserving the pull tab's occlusion of the orange rim. Normal sorting resumes in the final product phase.
+
+This supersedes the separate seal and wordmark timing above. Both now fade together over 70–98% of the zoom interval, after the camera clears the seal on desktop and mobile. Optical refraction, body timing, exposure and movement retain their existing curves. There are no additional materials, geometry, draw passes or per-frame allocations.
+
+A 421-position sweep from product progress 0.300 to 0.720 checked adjacent rendered frames on desktop (1440 × 900, DPR 2) and mobile (390 × 844, DPR 3). At the desktop seal crossing, the mean RGB frame difference dropped from 7.14 to 1.38 levels out of 255; the corrected mobile crossing measured 1.76. These are image-continuity measurements, not frame-rate measurements. Final-product desktop/mobile captures were pixel-identical to the previous version. Diagnostic sequences and sweep JSON are retained in `test-results/seamless/`.
+
+Rendered-pixel regressions cover the crossing in both scroll directions, including revisiting it after the final product phase. They supplement the partial-opacity tab occlusion, reveal timing, cap continuity, product interaction and Retina shader/texture reuse checks. All ten targeted checks passed in Chrome and all ten passed in WebKit. Build, formatting and Git whitespace checks passed; the JavaScript bundle is 688,482 bytes (179,458 gzip).
+
 ## Tradeoffs and limits
 
 The refraction change is an intermediate-rendering adjustment, not mathematically identical rendering during the overlap. The full-resolution hero and final-product policy is retained. Two transmission target sizes stay resident to avoid allocation churn, so intermediate-buffer memory is higher than with a single target. GPU preparation performs bounded extra loading draws and fetches the product earlier; it does not make that work free.

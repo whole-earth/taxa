@@ -479,28 +479,89 @@ for (const mobile of [false, true]) {
           rotation: app.product.root.rotation.x,
         };
       };
-      const progress = [0.5, 0.56, 0.6, 0.696];
+      const progress = [0.5, 0.575, 0.64, 0.696];
       const forward = progress.map(sample);
       sample(0.99);
       const reverse = [...progress].reverse().map(sample).reverse();
       return { forward, reverse };
     });
     expect(samples.reverse).toEqual(samples.forward);
-    const [optical, sealEntrance, branding, resolved] = samples.forward;
+    const [optical, cameraCrossing, branding, resolved] = samples.forward;
     expect(optical.cap).toBeGreaterThan(0.4);
     expect(optical.seal).toBe(0);
     expect(optical.wordmark).toBe(0);
     expect(optical.exposure).toBeGreaterThan(0.9);
-    expect(sealEntrance.seal).toBeGreaterThan(0);
-    expect(sealEntrance.seal).toBeLessThan(0.25);
-    expect(sealEntrance.wordmark).toBe(0);
+    expect(cameraCrossing.seal).toBe(0);
+    expect(cameraCrossing.wordmark).toBe(0);
     expect(branding.wordmark).toBeGreaterThan(0);
-    expect(branding.wordmark).toBeLessThan(branding.seal);
+    expect(branding.wordmark).toBe(branding.seal);
     expect(branding.seal).toBeLessThan(0.6);
     expect(resolved.seal).toBe(1);
     expect(resolved.wordmark).toBe(1);
     expect(resolved.rotation).toBeCloseTo(Math.PI / 2);
     expect(resolved.exposure).toBeCloseTo(0.6, 2);
+  });
+}
+
+for (const mobile of [false, true]) {
+  test(`seal crossing preserves the optical interior (${mobile ? "mobile" : "desktop"})`, async ({
+    page,
+  }) => {
+    if (mobile) await page.setViewportSize({ width: 390, height: 844 });
+    await ready(page);
+    await page.evaluate(async () => {
+      const app = window.taxaDebug.app;
+      app.preloadProduct();
+      await app.productPromise;
+    });
+    await seek(page, "pitch", 0.1);
+    const changes = await page.evaluate((mobile) => {
+      const app = window.taxaDebug.app;
+      app.motionPaused = true;
+      cancelAnimationFrame(app.animationFrameId);
+      app.isInitialized = false;
+      const { camera, renderer } = app.sceneManager;
+      camera.position.set(0, 0, 60);
+      camera.lookAt(0, 0, 0);
+      const canvas = document.createElement("canvas");
+      canvas.width = 360;
+      canvas.height = 225;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      const { top, height } = app.timeline.bounds[3];
+      const capture = (progress) => {
+        app.timeline.update(top + (height - innerHeight) * progress);
+        app.ribbons.root.visible = false;
+        app.speckles.meshes.forEach((mesh) => (mesh.visible = false));
+        app.productAnchor.lookAt(camera.position);
+        app.sceneManager.render();
+        ctx.fillStyle = "#fffbf4";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(renderer.domElement, 0, 0, canvas.width, canvas.height);
+        return ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      };
+      const progress = mobile ? [0.569, 0.57] : [0.545, 0.546];
+      const forward = progress.map(capture);
+      capture(0.99);
+      const reverse = [...progress].reverse().map(capture).reverse();
+      const difference = (a, b) => {
+        let sum = 0;
+        for (let i = 0; i < a.length; i += 4) {
+          for (let c = 0; c < 3; c++) sum += Math.abs(a[i + c] - b[i + c]);
+        }
+        return sum / (canvas.width * canvas.height * 3);
+      };
+      return {
+        forward: difference(...forward),
+        reverse: difference(...reverse),
+        revisit: forward.map((frame, i) => difference(frame, reverse[i])),
+      };
+    }, mobile);
+    // The old depth order erased the interior in one step (>7/255).
+    // Normal optical motion across the same interval stays below 2/255.
+    expect(changes.forward).toBeLessThan(2);
+    expect(changes.reverse).toBeLessThan(2);
+    for (const difference of changes.revisit)
+      expect(difference).toBeLessThan(0.1);
   });
 }
 

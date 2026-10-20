@@ -22,10 +22,13 @@ export class ProductModel {
     if (this.applicator) this.prepareApplicator(this.applicator);
     this.cap = root.getObjectByName("outer-cap");
     this.seal = root.getObjectByName("film-cover");
+    this.rim = root.getObjectByName("top-ring");
     this.wordmark = root.getObjectByName("taxa-name");
     if (this.seal) {
       // The seal is solid even while the story fades it in. Resolve its
-      // nearest surface before blending color, so the rim cannot show through.
+      // nearest surface before blending the seal and rim, so the rim cannot
+      // show through. Draw the optical interior first: otherwise this depth
+      // surface cuts it off abruptly as the camera passes through the seal.
       // Share geometry; one depth draw + one color draw replaces the previous
       // two-sided color draws without increasing the transition's draw count.
       this.sealDepth = new THREE.Mesh(
@@ -39,7 +42,7 @@ export class ProductModel {
         }),
       );
       this.sealDepth.name = "seal-depth";
-      this.sealDepth.renderOrder = -1;
+      this.sealDepth.renderOrder = 1;
       this.seal.add(this.sealDepth);
     }
     // Preserve the original product's effective precision, independently of
@@ -58,6 +61,12 @@ export class ProductModel {
   setMaterialPhase(phase) {
     if (phase === this.materialPhase) return this.materials;
     this.materialPhase = phase;
+    const transitioning = phase === PRODUCT_PHASE.TRANSITION;
+    // Keep the optical interior, seal depth, seal color, rim and branding in
+    // stable order during the zoom. Restore normal sorting for the final pose.
+    if (this.seal) this.seal.renderOrder = transitioning ? 2 : 0;
+    if (this.rim) this.rim.renderOrder = transitioning ? 3 : 0;
+    if (this.wordmark) this.wordmark.renderOrder = transitioning ? 4 : 0;
     this.materials = new Set();
     this.root.traverse((node) => {
       if (node !== this.root && !node.isLight) node.visible = true;
@@ -91,15 +100,15 @@ export class ProductModel {
     return this.materials;
   }
 
-  setRevealOpacity({ body, cap, seal, wordmark }) {
+  setRevealOpacity({ body, cap, seal }) {
     this.materials.forEach((material) => {
       material.opacity = body;
     });
-    // Optical refraction, the solid seal and its branding have independent
-    // reveal timing. The seal's depth draw still blocks the rim beneath it.
+    // The seal and branding resolve together after the camera clears them.
+    // The seal's depth draw still blocks the rim beneath the pull tab.
     if (this.cap) this.cap.material.opacity = cap;
     if (this.seal) this.seal.material.opacity = seal;
-    if (this.wordmark) this.wordmark.material.opacity = wordmark;
+    if (this.wordmark) this.wordmark.material.opacity = seal;
   }
 
   initializeMaterials() {
