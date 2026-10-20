@@ -1,174 +1,319 @@
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
-import { PMREMGenerator } from 'three';
-import { performanceMonitor } from '../utils/performance.js';
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
+import { PMREMGenerator } from "three";
+import { disposeScene } from "../utils/dispose.js";
 
 /**
  * Manages the Three.js scene, camera, renderer, and controls
  */
 export class SceneManager {
-    constructor(config) {
-        this.config = config;
-        this.scene = new THREE.Scene();
-        this.camera = this.initCamera();
-        this.renderer = this.initRenderer();
-        this.controls = this.initControls();
-        
-        this.setupEventListeners();
+  constructor(config, invalidate = () => {}) {
+    this.invalidate = invalidate;
+    this.config = config;
+    this.scene = new THREE.Scene();
+    this.camera = this.initCamera();
+    this.transitionCamera = this.camera.clone(false);
+    this.renderer = this.initRenderer();
+    this.controls = this.initControls();
+
+    this.setupEventListeners();
+  }
+
+  initCamera() {
+    const { fov, near, far, position } = this.config.camera;
+    const camera = new THREE.PerspectiveCamera(
+      fov,
+      window.innerWidth / window.innerHeight,
+      near,
+      far,
+    );
+    camera.position.set(...position);
+    return camera;
+  }
+
+  initRenderer() {
+    const renderer = new THREE.WebGLRenderer(this.config.renderer);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    document.querySelector("#three").appendChild(renderer.domElement);
+    return renderer;
+  }
+
+  initControls() {
+    const controls = new OrbitControls(this.camera, this.renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = this.config.controls.dampingFactor;
+    controls.enableZoom = false;
+    controls.enablePan = false;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = this.config.controls.autoRotateSpeed;
+    controls.target.set(0, 0, 0);
+    controls.minPolarAngle = Math.PI / 2;
+    controls.maxPolarAngle = Math.PI / 2;
+
+    // Disable all touch interactions on mobile devices
+    if (
+      "ontouchstart" in window ||
+      navigator.maxTouchPoints > 0 ||
+      navigator.msMaxTouchPoints > 0
+    ) {
+      controls.enabled = false; // This disables all interactions
+      controls.enableRotate = false;
+      controls.enableZoom = false;
+      controls.enablePan = false;
+      controls.enableDamping = false;
+      controls.autoRotate = true; // Keep auto-rotation enabled
     }
 
-    initCamera() {
-        const { fov, near, far, position } = this.config.camera;
-        const camera = new THREE.PerspectiveCamera(
-            fov,
-            window.innerWidth / window.innerHeight,
-            near,
-            far
-        );
-        camera.position.set(...position);
-        return camera;
-    }
+    return controls;
+  }
 
-    initRenderer() {
-        const renderer = new THREE.WebGLRenderer(this.config.renderer);
-        renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        document.querySelector("#three").appendChild(renderer.domElement);
-        return renderer;
-    }
+  setupEventListeners() {
+    this.onResize = this.handleResize.bind(this);
+    window.addEventListener("resize", this.onResize, { passive: true });
+  }
 
-    initControls() {
-        const controls = new OrbitControls(this.camera, this.renderer.domElement);
-        controls.enableDamping = true;
-        controls.dampingFactor = this.config.controls.dampingFactor;
-        controls.enableZoom = false;
-        controls.enablePan = false;
-        controls.autoRotate = true;
-        controls.autoRotateSpeed = this.config.controls.autoRotateSpeed;
-        controls.target.set(0, 0, 0);
-        controls.minPolarAngle = Math.PI / 2;
-        controls.maxPolarAngle = Math.PI / 2;
+  handleResize() {
+    this.camera.fov = window.innerWidth < 768 ? 90 : 60;
+    this.camera.aspect = window.innerWidth / window.innerHeight;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setPixelRatio(window.devicePixelRatio);
+    this.invalidate();
+  }
 
-        // Disable all touch interactions on mobile devices
-        if ('ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0) {
-            controls.enabled = false; // This disables all interactions
-            controls.enableRotate = false;
-            controls.enableZoom = false;
-            controls.enablePan = false;
-            controls.enableDamping = false;
-            controls.autoRotate = true; // Keep auto-rotation enabled
+  initLights() {
+    const ambientLight = new THREE.AmbientLight(
+      0xffffff,
+      this.config.lighting.ambientIntensity,
+    );
+    this.scene.add(ambientLight);
+
+    //=========================================================================
+
+    const directionalContainer = new THREE.Object3D();
+    directionalContainer.matrixAutoUpdate = true;
+
+    // TODO CHANGE TO WHITE
+    const spotLight = new THREE.SpotLight(0xebeeff, 20);
+    spotLight.position.set(36, -50, 75);
+    spotLight.visible = false;
+    spotLight.angle = Math.PI / 4;
+    spotLight.penumbra = 0.5;
+    spotLight.decay = 0;
+    spotLight.distance = 1000;
+
+    // Add target that will move with the container
+    const target = new THREE.Object3D();
+    target.position.set(-44, 15, -20);
+    directionalContainer.add(target);
+    spotLight.target = target;
+
+    // Add spotlight to container
+    directionalContainer.add(spotLight);
+
+    // No scene meshes cast or receive shadows. Avoid allocating and clearing
+    // an empty shadow map whenever the product light becomes visible.
+    spotLight.castShadow = false;
+
+    // Store references
+    this.directionalLight = spotLight; // Keep the same property name for compatibility
+    this.directionalContainer = directionalContainer;
+    this.directionalTarget = target;
+
+    // Method to update light position (now relative to product)
+    this.setLightPosition = (position, targetPosition) => {
+      spotLight.position.set(position.x, position.y, position.z);
+      target.position.set(targetPosition.x, targetPosition.y, targetPosition.z);
+    };
+
+    //=========================================================================
+
+    // Load environment map
+    this.environmentReady = new RGBELoader()
+      .loadAsync(this.config.assets.envMap)
+      .then((texture) => {
+        if (this.disposed) {
+          texture.dispose();
+          return;
         }
+        const pmremGenerator = new PMREMGenerator(this.renderer);
+        pmremGenerator.compileEquirectangularShader();
+        this.environmentTarget = pmremGenerator.fromEquirectangular(texture);
+        const envMap = this.environmentTarget.texture;
+        this.scene.environment = envMap;
+        this.scene.environmentIntensity = this.config.lighting.envMapIntensity;
 
-        return controls;
-    }
-
-    setupEventListeners() {
-        window.addEventListener('resize', this.handleResize.bind(this));
-    }
-
-    handleResize() {
-        this.camera.aspect = window.innerWidth / window.innerHeight;
-        this.camera.updateProjectionMatrix();
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
-    }
-
-    initLights() {
-        const ambientLight = new THREE.AmbientLight(
-            0xffffff,
-            this.config.lighting.ambientIntensity
-        );
-        this.scene.add(ambientLight);
-
-        //=========================================================================
-        
-        const directionalContainer = new THREE.Object3D();
-        directionalContainer.matrixAutoUpdate = true;
-        
-        // TODO CHANGE TO WHITE
-        const spotLight = new THREE.SpotLight(0xebeeff, 20);
-        spotLight.position.set(36, -50, 75);
-        spotLight.visible = false;
-        spotLight.angle = Math.PI/4;
-        spotLight.penumbra = 0.5;
-        spotLight.decay = 0;
-        spotLight.distance = 1000;
-
-        // Add target that will move with the container
-        const target = new THREE.Object3D();
-        target.position.set(-44, 15, -20);
-        directionalContainer.add(target);
-        spotLight.target = target;
-
-        // Add spotlight to container
-        directionalContainer.add(spotLight);
-
-        // Enable and configure shadows
-        this.renderer.shadowMap.enabled = true;
-        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        spotLight.castShadow = true;
-        spotLight.shadow.mapSize.width = 512;
-        spotLight.shadow.mapSize.height = 512;
-        spotLight.shadow.camera.near = 0.5;
-        spotLight.shadow.camera.far = 500;
-        spotLight.shadow.bias = -0.0005;
-        spotLight.shadow.radius = 4;
-
-        // Store references
-        this.directionalLight = spotLight; // Keep the same property name for compatibility
-        this.directionalContainer = directionalContainer;
-        this.directionalTarget = target;
-
-        // Method to update light position (now relative to product)
-        this.setLightPosition = (position, targetPosition) => {
-            spotLight.position.set(position.x, position.y, position.z);
-            target.position.set(targetPosition.x, targetPosition.y, targetPosition.z);
-        };
-
-        //=========================================================================
-
-        // Load environment map
-        const rgbeLoader = new RGBELoader();
-        rgbeLoader.load(
-            this.config.assets.envMap,
-            (texture) => {
-                const pmremGenerator = new PMREMGenerator(this.renderer);
-                pmremGenerator.compileEquirectangularShader();
-                const envMap = pmremGenerator.fromEquirectangular(texture).texture;
-                this.scene.environment = envMap;
-                this.scene.environment.mapping = THREE.EquirectangularReflectionMapping;
-                this.scene.environment.intensity = this.config.lighting.envMapIntensity;
-
-                // Clean up resources
-                texture.dispose();
-                pmremGenerator.dispose();
-            }
-        );
-
-        return ambientLight;
-    }
-
-    update() {
-        this.controls.update();
-        this.renderer.render(this.scene, this.camera);
-        performanceMonitor.recordRender();
-    }
-
-    dispose() {
         // Clean up resources
-        this.renderer.dispose();
-        this.scene.traverse((object) => {
-            if (object.geometry) {
-                object.geometry.dispose();
-            }
-            if (object.material) {
-                if (Array.isArray(object.material)) {
-                    object.material.forEach(material => material.dispose());
-                } else {
-                    object.material.dispose();
-                }
-            }
-        });
+        texture.dispose();
+        pmremGenerator.dispose();
+        this.invalidate();
+      })
+      .catch((error) => {
+        this.environmentError = error;
+      });
+
+    return ambientLight;
+  }
+
+  render() {
+    let camera = this.camera;
+    if (this.renderer.transmissionResolutionScale < 1) {
+      // Three keeps transmission targets per camera. A second camera retains
+      // the smaller transition target instead of destroying/reallocating the
+      // full-size target at both ends of every scroll crossing.
+      this.transitionCamera.copy(this.camera, false);
+      camera = this.transitionCamera;
     }
+    this.renderer.render(this.scene, camera);
+  }
+
+  async warmMaterials(object, lightingScene = this.scene) {
+    const renderer = this.renderer;
+    const transmissive = new Map();
+    const transmissionObjects = new THREE.Group();
+    object.traverse((node) => {
+      if (!node.isMesh) return;
+      const passMaterials = [];
+      for (const material of Array.isArray(node.material)
+        ? node.material
+        : [node.material]) {
+        // r173 retains the last explicit precision in WebGLPrograms. Without
+        // this, lowp particles change the shader key of later null-precision
+        // cell/product materials depending on traversal order.
+        if (material.precision === null) {
+          material.precision = this.config.renderer.precision;
+          material.needsUpdate = true;
+        }
+        if (material.transmission > 0 && material.side === THREE.DoubleSide) {
+          transmissive.set(material, material.side);
+          passMaterials.push(material);
+        } else if (!material.transmission && !material.transparent) {
+          passMaterials.push(material);
+        }
+        for (const value of Object.values(material))
+          if (value?.isTexture) renderer.initTexture(value);
+      }
+      if (passMaterials.length) {
+        // Compile-only clones share geometry and materials. Transparent
+        // objects never appear in the transmission backdrop, so skip them.
+        const mesh = node.clone(false);
+        mesh.material = passMaterials;
+        transmissionObjects.add(mesh);
+      }
+    });
+    // Transmission renders opaque objects a second time without tone mapping.
+    // Its back-face pass also uses a different program from the main pass.
+    const transmissionTarget = new THREE.WebGLRenderTarget(1, 1);
+    try {
+      const previousTarget = renderer.getRenderTarget();
+      let ready;
+      try {
+        for (const [material, side] of transmissive) {
+          material.side = THREE.BackSide;
+          material.needsUpdate = true;
+        }
+        // A render target selects both linear output and NoToneMapping.
+        // Changing toneMapping alone misses the linear-color shader variant.
+        renderer.setRenderTarget(transmissionTarget);
+        ready = renderer.compileAsync(
+          transmissionObjects,
+          this.camera,
+          lightingScene,
+        );
+      } finally {
+        for (const [material, side] of transmissive) {
+          material.side = side;
+          material.needsUpdate = true;
+        }
+        renderer.setRenderTarget(previousTarget);
+      }
+      // Restore synchronous renderer state before yielding to the app RAF.
+      await ready;
+      if (!this.disposed)
+        await renderer.compileAsync(object, this.camera, lightingScene);
+    } finally {
+      transmissionTarget.dispose();
+    }
+  }
+
+  async warmProduct(product) {
+    // Use a detached lighting scene: warming a future phase must not change
+    // the lights or materials in the currently visible cell scene.
+    const lighting = new THREE.Scene();
+    lighting.environment = this.scene.environment;
+    lighting.add(new THREE.AmbientLight(0xffffff, 4));
+    const spot = this.directionalLight.clone();
+    spot.visible = false;
+    lighting.add(spot);
+    for (const phase of [0, 1]) {
+      product.setPhase(phase);
+      spot.visible = phase === 1;
+      await this.warmMaterials(product.getObject(), lighting);
+      if (this.disposed) return;
+    }
+    product.setPhase(0);
+  }
+
+  async warmProductFrames(product, cell, starField) {
+    const root = product.getObject();
+    const anchor = new THREE.Group();
+    anchor.add(root);
+    root.add(this.directionalContainer);
+    root.position.set(0, 0, 0);
+    root.scale.setScalar(4);
+    root.rotation.set(Math.PI / 2, 0, 0);
+    // compileAsync prepares WebGL programs, but drivers may defer pipeline
+    // creation, buffer uploads and transmission-target allocation until a draw.
+    // Prepare those during loading, one phase per idle task. Restore the real
+    // scene in the same task, before the browser can present the warm-up pose.
+    for (const phase of [0, 1]) {
+      await new Promise((resolve) => {
+        if (window.requestIdleCallback)
+          window.requestIdleCallback(resolve, { timeout: 500 });
+        else setTimeout(resolve, 0);
+      });
+      if (this.disposed) return anchor;
+      const saved = {
+        cell: cell.visible,
+        stars: starField.visible,
+        light: this.directionalLight.visible,
+        scale: this.renderer.transmissionResolutionScale,
+      };
+      try {
+        this.scene.add(anchor);
+        anchor.lookAt(this.camera.position);
+        root.visible = true;
+        product.setPhase(phase);
+        cell.visible = phase === 0 && saved.cell;
+        starField.visible = phase === 0;
+        this.directionalLight.visible = phase === 1;
+        this.renderer.transmissionResolutionScale =
+          phase === 0 ? Math.min(1, 1 / this.renderer.getPixelRatio()) : 1;
+        this.render();
+      } finally {
+        root.visible = false;
+        this.scene.remove(anchor);
+        cell.visible = saved.cell;
+        starField.visible = saved.stars;
+        this.directionalLight.visible = saved.light;
+        this.renderer.transmissionResolutionScale = saved.scale;
+        this.render();
+      }
+    }
+    product.setPhase(0);
+    return anchor;
+  }
+
+  dispose() {
+    this.disposed = true;
+    window.removeEventListener("resize", this.onResize);
+    this.controls.dispose();
+    disposeScene(this.scene);
+    this.environmentTarget?.dispose();
+    this.renderer.dispose();
+    this.renderer.domElement.remove();
+  }
 }

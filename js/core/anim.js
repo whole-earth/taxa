@@ -1,597 +1,388 @@
-import * as THREE from 'three';
-import { Group } from 'tween';
-import { dispersion, dispersionMobile, mauve, pearlBlue } from '../utils/materials.js';
-import { animatePage } from './scroll.js';
-import { StarField, starfieldParams } from '../effects/starfield.js';
-import { PRODUCT_COLORS, ColorChangeAnimationSequence, colorTweenGroup } from '../effects/podColors.js';
-import { SceneManager } from './sceneManager.js';
-import { CellComponent, ProductComponent } from '../components/components.js';
-import { SpeckleSystem } from '../effects/speckles.js';
-import { initInactivityManager } from '../utils/inactivity.js';
-import { materialManager } from '../utils/materialManager.js';
-
-const CONFIG = {
-    lighting: {
-        ambientIntensity: 4,
-        envMapIntensity: 1,
-        exposure: 1,
-        toneMapping: 'ACESFilmic',
-        enableEnvironment: true
-    },
-    renderer: {
-        antialias: window.innerWidth > 768,
-        alpha: true,
-        powerPreference: 'high-performance',
-        precision: 'mediump',
-        stencil: false,
-        depth: true,
-        logarithmicDepthBuffer: false
-    },
-    camera: {
-        fov: window.innerWidth < 768 ? 90 : 60,
-        near: 0.5,
-        far: 2000,
-        position: [0, 0, 60]
-    },
-    controls: {
-        dampingFactor: 0.03,
-        autoRotateSpeed: 0.4
-    },
-    assets: {
-        meshLine: "https://unpkg.com/three.meshline@1.4.0/src/THREE.MeshLine.js",
-        envMap: "https://cdn.jsdelivr.net/gh/whole-earth/taxa-v3@main/assets/cell/aloe.hdr"
-    }
-};
-
-export const state = {
-    lastScrollY: 0,
-    dotTweenGroup: new Group(),
-    ribbonTweenGroup: new Group(),
-    blobTweenGroup: new Group(),
-    mobilizeTweenGroup: new Group(),
-    applicatorObject: null,
-    starField: null,
-    sceneManager: null,
-    scrollTimeout: null,
-    lenis: null,
-    app: null,
-    setLastScrollY(value) {
-        this.lastScrollY = value;
-    }
-};
-
-export const setApplicatorObject = (value) => { state.applicatorObject = value; };
-
-window.THREE = window.THREE || {};
-Object.assign(window.THREE, THREE);
-
-// Load MeshLine dependency
-const meshLineScript = document.createElement('script');
-meshLineScript.src = CONFIG.assets.meshLine;
-document.head.appendChild(meshLineScript);
+import * as THREE from "three";
+import Lenis from "lenis";
+import {
+  dispersion,
+  dispersionMobile,
+  mauve,
+  pearlBlue,
+} from "../utils/materials.js";
+import { SceneManager } from "./sceneManager.js";
+import {
+  CellComponent,
+  ProductComponent,
+  disposeLoaders,
+} from "../components/components.js";
+import { SpeckleSystem } from "../effects/speckles.js";
+import { StarField, starfieldParams } from "../effects/starfield.js";
+import { ColorChangeAnimationSequence } from "../effects/podColors.js";
+import { StoryTimeline } from "./scroll.js";
+import { state } from "./state.js";
+import { disposeScene } from "../utils/dispose.js";
+import { performanceMonitor } from "../utils/performance.js";
 
 export class App {
-    constructor() {
-        // Select odor radio button by default
-        const odorRadio = document.getElementById('odorRadio');
-        if (odorRadio) {
-            odorRadio.checked = true;
+  constructor() {
+    this.mobile = window.innerWidth < 768;
+    this.motionQuery = matchMedia("(prefers-reduced-motion: reduce)");
+    this.reducedMotion = this.motionQuery.matches;
+    this.motionPaused = false;
+    this.events = new AbortController();
+    this.animationFrameId = null;
+    this.lastFrameTime = null;
+    this.lastRenderTime = null;
+    this.lastActivity = performance.now();
+    this.dirty = true;
+    this.scrollDirty = true;
+    this.disposed = false;
+    this.frame = this.frame.bind(this);
+    state.app = this;
+    this.sceneManager = new SceneManager(
+      {
+        lighting: { ambientIntensity: 4, envMapIntensity: 1 },
+        renderer: {
+          antialias: !this.mobile,
+          alpha: true,
+          powerPreference: "high-performance",
+          precision: "mediump",
+          stencil: false,
+        },
+        camera: {
+          fov: this.mobile ? 90 : 60,
+          near: 0.5,
+          far: 2000,
+          position: [0, 0, 60],
+        },
+        controls: { dampingFactor: 0.03, autoRotateSpeed: 0.4 },
+        assets: { envMap: "assets/cell/aloe.hdr" },
+      },
+      () => this.invalidate(true),
+    );
+    state.sceneManager = this.sceneManager;
+    this.cellObject = new THREE.Group();
+    this.sceneManager.scene.add(this.cellObject);
+    this.setupEvents();
+  }
+
+  async init() {
+    this.ambientLight = this.sceneManager.initLights();
+    const progress = new Map();
+    const updateProgress = (name, event) => {
+      if (this.disposed) return;
+      if (event.lengthComputable)
+        progress.set(name, event.loaded / event.total);
+      const value = Math.round(
+        ([...progress.values()].reduce((a, b) => a + b, 0) / 3) * 100,
+      );
+      document.getElementById("loadProgressCount").textContent =
+        `Loading the microbiome… ${value}%`;
+    };
+    [this.blobInner, this.blobOuter, this.ribbons] = await Promise.all(
+      [
+        ["blob-inner.glb", pearlBlue, 0],
+        ["blob-outer.glb", this.mobile ? dispersionMobile : dispersion, 2],
+        ["ribbons.glb", mauve, 3],
+      ].map(
+        ([file, material, order]) =>
+          new CellComponent(
+            this.sceneManager.scene,
+            file,
+            material,
+            order,
+            (event) => updateProgress(file, event),
+          ),
+      ),
+    );
+    if (this.disposed) return;
+    this.cellObject.add(
+      this.blobInner.getObject(),
+      this.blobOuter.getObject(),
+      this.ribbons.getObject(),
+    );
+    const size = this.blobInner.getBoundingBox().getSize(new THREE.Vector3());
+    this.speckleSystem = new SpeckleSystem(
+      this.sceneManager.scene,
+      Math.max(size.x, size.y, size.z) * 0.48,
+      this.cellObject,
+    );
+    this.starField = new StarField(starfieldParams);
+    this.starField.visible = false;
+    this.starField.position.set(0, 0, -20);
+    this.sceneManager.camera.add(this.starField);
+    this.sceneManager.scene.add(this.sceneManager.camera);
+    await this.sceneManager.environmentReady;
+    if (this.sceneManager.environmentError)
+      throw this.sceneManager.environmentError;
+    if (this.disposed) return;
+    // Warm shader programs before the first visible frame. This uses parallel
+    // GPU compilation where supported, with the environment already available.
+    await this.sceneManager.warmMaterials(this.sceneManager.scene);
+    if (this.disposed) return;
+    state.lenis = new Lenis({
+      autoRaf: false,
+      duration: 1.8,
+      wheelMultiplier: 0.8,
+      smoothWheel: !this.reducedMotion,
+      syncTouch: false,
+    });
+    state.lenis.on("scroll", () => this.invalidate(true));
+    this.timeline = new StoryTimeline(this);
+    this.colorSequence = new ColorChangeAnimationSequence(this);
+    this.isInitialized = true;
+    document.querySelector(".load-progress").hidden = true;
+    document.fonts.ready.then(() => {
+      if (!this.disposed) this.timeline.measure();
+    });
+    const hash = location.hash.slice(1);
+    const chapter = ["splash", "zoom", "pitch", "product"].indexOf(hash);
+    if (chapter >= 0) this.timeline.goTo(chapter);
+    this.invalidate(true);
+    // Start low-priority preparation after the hero is available, so first
+    // product use need not allocate GPU resources during the scroll handoff.
+    const prepare = () => {
+      if (!this.disposed) this.preloadProduct();
+    };
+    if (window.requestIdleCallback)
+      window.requestIdleCallback(prepare, { timeout: 1500 });
+    else setTimeout(prepare, 300);
+  }
+
+  preloadProduct() {
+    if (this.productPromise || this.productError) return;
+    // One shared promise prevents scroll bursts from starting duplicate loads.
+    this.productPromise = new ProductComponent(
+      this.sceneManager.scene,
+      "swap.glb",
+      200,
+    )
+      .then(async (product) => {
+        if (this.disposed) {
+          disposeScene(product.getObject());
+          return;
         }
-        
-        document.body.classList.add('loading');
-        this.sceneManager = new SceneManager(CONFIG);
-        state.sceneManager = this.sceneManager;
-        state.app = this;
-        this.cellObject = new THREE.Object3D();
-        this.boundingBoxes = [];
-        this.loadedObjects = [];
-        this.isInitialized = false;
-        this.animationFrameId = null;
-        this.animate = this.animate.bind(this);
+        await this.sceneManager.warmProduct(product);
+        if (this.disposed) {
+          disposeScene(product.getObject());
+          return;
+        }
+        const anchor = await this.sceneManager.warmProductFrames(
+          product,
+          this.cellObject,
+          this.starField,
+        );
+        if (this.disposed) {
+          disposeScene(product.getObject());
+          return;
+        }
+        this.product = product;
+        this.productAnchor = anchor;
+        this.sceneManager.scene.add(this.productAnchor);
+        document.querySelector(".load-progress").hidden = true;
+        this.invalidate(true);
+      })
+      .catch((error) => {
+        if (this.disposed) return;
+        this.productError = error;
+        this.productPromise = null;
+        const status = document.querySelector(".load-progress");
+        status.hidden = false;
+        document.getElementById("loadProgressCount").textContent =
+          "The product could not load.";
+        document.getElementById("retry-load").hidden = false;
+      });
+  }
 
-        // Add loading overlay to the DOM
-        const loadingOverlay = document.createElement('div');
-        loadingOverlay.className = 'product-loading-overlay';
-        loadingOverlay.innerHTML = `
-            <div class="product-loading-content">
-                <div class="product-loading-spinner"></div>
-                <div class="product-loading-text">Loading Product</div>
-                <div class="product-loading-progress">0%</div>
-                <div class="product-loading-status">Preparing 3D model...</div>
-            </div>
-        `;
-        document.body.appendChild(loadingOverlay);
-
-        // Add loading overlay styles
-        const style = document.createElement('style');
-        style.textContent = `
-            .product-loading-overlay {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background-color: rgba(255, 251, 244, 0.3);
-                backdrop-filter: blur(6px);
-                display: none;
-                justify-content: center;
-                align-items: center;
-                z-index: 1000;
-                opacity: 0;
-                transition: all 0.3s ease;
-            }
-            .product-loading-overlay.active {
-                display: flex;
-                opacity: 1;
-            }
-            .product-loading-content {
-                text-align: center;
-                color: var(--taxa-blue);
-                font-family: sans-serif;
-            }
-            .product-loading-spinner {
-                width: 50px;
-                height: 50px;
-                border: 3px solid transparent;
-                border-top-color: var(--taxa-blue);
-                border-radius: 50%;
-                margin: 0 auto 20px;
-                animation: spin 1s linear infinite;
-            }
-            .product-loading-text {
-                font-size: 24px;
-                margin-bottom: 10px;
-                display: none;
-            }
-            .product-loading-progress {
-                font-size: 18px;
-                margin-bottom: 10px;
-            }
-            .product-loading-status {
-                font-size: 14px;
-                font-weight: 400;
-            }
-            @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
-        `;
-        document.head.appendChild(style);
-
-        this.init().catch(error => console.error('Failed to initialize:', error));
-        this.setupEventListeners();
+  invalidate(scroll = false) {
+    if (this.disposed) return;
+    this.dirty = true;
+    this.scrollDirty ||= scroll;
+    if (
+      this.isInitialized &&
+      !document.hidden &&
+      this.animationFrameId === null
+    ) {
+      this.animationFrameId = requestAnimationFrame(this.frame);
     }
+  }
 
-    async initializeProductLoading() {
-        try {
-            const product = await this.loadProductOnDemand();
-            if (product) {
-                console.log('Product loaded successfully');
-                state.preloadedProduct = product;
-                state.productAssetsPreloaded = true;
-                
-                // If the product is loaded after initialization, ensure it's properly set up
-                if (this.isInitialized) {
-                    this.setupProduct(product);
-                }
-            }
-        } catch (error) {
-            console.warn('Product loading failed:', error);
-        }
+  frame(time) {
+    this.animationFrameId = null;
+    if (this.disposed || document.hidden) return;
+    const delta =
+      this.lastFrameTime === null
+        ? 1 / 60
+        : Math.min(0.05, (time - this.lastFrameTime) / 1000);
+    this.lastFrameTime = time;
+    state.lenis.raf(time);
+    if (this.scrollDirty) {
+      this.scrollDirty = false;
+      this.timeline.update(window.scrollY);
     }
-
-    // Helper method to batch update materials using the global manager
-    batchUpdateMaterials(materials) {
-        if (materials && materials.length > 0) {
-            materialManager.queueMaterialUpdate(materials);
-        }
+    // Preserve unstarted chained tweens, remove only those that completed.
+    // Tween.js update(time, false) would auto-start the entire chain at once.
+    const tweening = !state.tweens.allStopped();
+    if (tweening) {
+      const playing = state.tweens
+        .getAll()
+        .filter((tween) => tween.isPlaying());
+      state.tweens.update(time);
+      for (const tween of playing)
+        if (!tween.isPlaying()) state.tweens.remove(tween);
     }
-
-    setupProduct(product) {
-        if (!this.productAnchor) {
-            this.productAnchor = new THREE.Object3D();
-            this.sceneManager.scene.add(this.productAnchor);
-        }
-        
-        this.productAnchor.add(product);
-        
-        if (this.sceneManager.directionalContainer) {
-            product.add(this.sceneManager.directionalContainer);
-        }
-        
-        const productObj = product.getObject();
-        if (productObj) {
-            const applicatorGroup = productObj.getObjectByName('applicator');
-            if (applicatorGroup) {
-                const materialsToUpdate = [];
-                applicatorGroup.traverse(child => {
-                    if (child.name === 'outer-cap' && child.material) {
-                        child.material.ior = 200;
-                        materialsToUpdate.push(child.material);
-                    }
-                });
-                
-                // Batch update all materials at once
-                this.batchUpdateMaterials(materialsToUpdate);
-            }
-        }
+    this.timeline.tick(delta);
+    this.ribbons.getObject().visible = this.timeline.ribbonMaterial.opacity > 0;
+    for (const mesh of this.speckleSystem.instancedMeshes)
+      mesh.visible = mesh.material.opacity > 0;
+    const idle = time - this.lastActivity > 40000;
+    const continuous = !idle && !this.motionPaused && !this.reducedMotion;
+    const controls = this.sceneManager.controls;
+    const configuredRotation = controls.autoRotate;
+    controls.autoRotate = configuredRotation && continuous;
+    const cameraChanged = controls.update(delta);
+    controls.autoRotate = configuredRotation;
+    const particles = continuous && this.speckleSystem.animated;
+    if (particles) this.speckleSystem.updatePositions(time);
+    if (this.productAnchor && (cameraChanged || this.dirty || tweening))
+      this.productAnchor.lookAt(this.sceneManager.camera.position);
+    // High-refresh displays can request 120+ full-resolution transmission
+    // frames/sec and saturate the GPU command queue. Update motion at the
+    // display cadence, but submit at most 60 scene renders/sec. Preserve dirty
+    // state until it is actually drawn, including a tween's final frame.
+    this.dirty ||= cameraChanged || particles || tweening;
+    const renderDue =
+      this.lastRenderTime === null ||
+      time - this.lastRenderTime >= 1000 / 60 - 0.5;
+    if (this.dirty && renderDue) {
+      this.dirty = false;
+      this.lastRenderTime = time;
+      this.sceneManager.render();
+      performanceMonitor.recordFrame(time, this.sceneManager.renderer.info);
     }
+    const moving = continuous && (configuredRotation || particles);
+    if (
+      moving ||
+      !state.tweens.allStopped() ||
+      state.lenis.isScrolling ||
+      cameraChanged ||
+      this.dirty
+    )
+      this.invalidate();
+    else this.lastFrameTime = null;
+  }
 
-    async init() {
-        try {
-            window.scrollTo(0, 0);
-            this.ambientLight = await this.sceneManager.initLights();
-            await this.loadAllComponents();
-            await this.initializeStarfield();
-            this.resetInitialState();
-
-            const isMobile = ('ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0) && window.innerWidth < 768;
-            if (isMobile) {
-                console.log('Mobile device detected, initializing smoothScroll to mobile params');
-            }
-
-            state.lenis = new window.Lenis({
-                duration: isMobile ? 2.0 : 1.8,
-                overscroll: false,
-                wheelMultiplier: 0.8,
-                smoothTouch: true,
-                lerp: isMobile ? 8.0 : 2.0,
-                friction: 0.2,
-                touchMultiplier: 6.2,
-                touchInertiaMultiplier: 2,
-            });
-
-            this.startAnimationLoop();
-            this.completeInitialization();
-
-        } catch (error) {
-            console.error('Failed to initialize:', error);
-            throw error;
+  setupEvents() {
+    const signal = this.events.signal;
+    const activity = (event) => {
+      const now = performance.now();
+      const wasIdle = now - this.lastActivity > 40000;
+      this.lastActivity = now;
+      // Mouse movement over a static product changes nothing on the canvas.
+      // Wheel/touch must wake Lenis even when no native scroll has fired yet.
+      if (wasIdle || event.type !== "pointermove") this.invalidate();
+    };
+    ["pointerdown", "pointermove", "wheel", "touchstart", "keydown"].forEach(
+      (type) =>
+        window.addEventListener(type, activity, { passive: true, signal }),
+    );
+    window.addEventListener(
+      "scroll",
+      () => {
+        this.lastActivity = performance.now();
+        this.invalidate(true);
+      },
+      { passive: true, signal },
+    );
+    window.addEventListener(
+      "resize",
+      () => {
+        this.mobile = innerWidth < 768;
+        if (this.timeline) {
+          this.timeline.setMobile(this.mobile);
+          this.timeline.measure();
         }
-    }
-
-    async initializeStarfield() {
-        state.starField = new StarField(starfieldParams);
-        state.starField.visible = true;
-        state.starField.position.set(0, 0, -20);
-        this.sceneManager.camera.add(state.starField);
-        this.sceneManager.scene.add(this.sceneManager.camera);
-
-        // Ensure proper starfield initialization
-        await new Promise(resolve => setTimeout(resolve, 100));
-    }
-
-    async loadAllComponents() {
-        // Load cell components first
-        await this.loadCellComponents();
-
-        // Initialize speckle system if inner blob is available
-        if (this.blobInner && this.blobInner.getBoundingBox()) {
-            // Calculate radius based on blobInner's bounding box
-            const boundingBox = this.blobInner.getBoundingBox();
-            const radius = Math.max(
-                boundingBox.max.x - boundingBox.min.x,
-                boundingBox.max.y - boundingBox.min.y,
-                boundingBox.max.z - boundingBox.min.z
-            ) * 0.48;
-
-            this.speckleSystem = new SpeckleSystem(this.sceneManager.scene, radius, this.cellObject);
+      },
+      { passive: true, signal },
+    );
+    document.addEventListener(
+      "visibilitychange",
+      () => {
+        if (document.hidden) {
+          cancelAnimationFrame(this.animationFrameId);
+          this.animationFrameId = null;
+          this.lastFrameTime = null;
+        } else {
+          this.lastActivity = performance.now();
+          this.invalidate(true);
         }
-    }
-
-    async loadProductOnDemand() {
-        if (!this.product) {
-            try {
-                const updateLoadingStatus = (status) => {
-                    const statusElement = document.querySelector('.product-loading-status');
-                    if (statusElement) {
-                        statusElement.textContent = status;
-                    }
-                };
-
-                const product = await new ProductComponent(this.sceneManager.scene, "swap.glb", 200, (progress) => {
-                    // Update loading progress
-                    const progressElement = document.querySelector('.product-loading-progress');
-                    if (progressElement) {
-                        const percentage = Math.round(progress * 100);
-                        progressElement.textContent = `${percentage}%`;
-                        
-                        // Update status based on progress
-                        if (percentage < 25) {
-                            updateLoadingStatus('Downloading 3D model...');
-                        } else if (percentage < 50) {
-                            updateLoadingStatus('Processing geometry...');
-                        } else if (percentage < 75) {
-                            updateLoadingStatus('Preparing materials...');
-                        } else {
-                            updateLoadingStatus('Finalizing setup...');
-                        }
-                    }
-                });
-                this.product = product;
-
-                updateLoadingStatus('Setting up product view...');
-
-                this.productAnchor = new THREE.Object3D();
-                this.productAnchor.add(product.getObject());
-                this.sceneManager.scene.add(this.productAnchor);
-
-                if (this.sceneManager.directionalContainer) {
-                    product.getObject().add(this.sceneManager.directionalContainer);
-                }
-
-                return product.getObject();
-            } catch (error) {
-                console.error('Failed to load product:', error);
-                const statusElement = document.querySelector('.product-loading-status');
-                if (statusElement) {
-                    statusElement.textContent = 'Error loading product. Please try again.';
-                    statusElement.style.color = '#ff4444';
-                }
-                throw error;
-            }
-        }
-        return this.product.getObject();
-    }
-
-    resetInitialState() {
-        window.scrollTo(0, 0);
-        state.lastScrollY = 0;
-
-        if (state.starField) {
-            state.starField.updateProgress(0);
-        }
-    }
-
-    completeInitialization() {
-        this.isInitialized = true;
-        
-        // Initialize inactivity manager
-        initInactivityManager(this);
-
-        // Remove loading class and start completion transition
-        document.body.classList.remove('loading');
-        document.body.classList.add('completing');
-
-        // Cleanup after all transitions complete
-        setTimeout(() => {
-            document.body.classList.remove('completing');
-            const loadingOverlay = document.querySelector('.load-progress');
-            if (loadingOverlay) {
-                loadingOverlay.remove();
-            }
-        }, 2800); // Matches longest transition duration (1.8s + 1s delay)
-    }
-
-    startAnimationLoop() {
-        let lastFrameTime = 0;
-        const fpsInterval = 1000 / 60;
-
-        const animateLoop = (time) => {
-            this.animationFrameId = requestAnimationFrame(animateLoop);
-
-            const elapsed = time - lastFrameTime;
-            if (elapsed > fpsInterval) {
-                if (state.lenis) {
-                    state.lenis.raf(time);
-                }
-                this.animate(time);
-                lastFrameTime = time - (elapsed % fpsInterval);
-            }
-        };
-        
-        this.animationFrameId = requestAnimationFrame(animateLoop);
-    }
-
-    animate = (time) => {
-        // Process any pending material updates first
-        materialManager.processUpdates();
-        
-        const needsUpdate = this.updateActiveAnimations();
-        if (needsUpdate) {
-            this.sceneManager.update();
-        }
-    }
-
-    updateActiveAnimations() {
-        let needsUpdate = false;
-
-        const tweenGroups = [
-            state.dotTweenGroup,
-            state.ribbonTweenGroup,
-            state.blobTweenGroup,
-            state.mobilizeTweenGroup,
-            colorTweenGroup
-        ];
-
-        for (const group of tweenGroups) {
-            if (group.getAll().length > 0) {
-                group.update();
-                needsUpdate = true;
-            }
-        }
-
-        if (!needsUpdate &&
-            !this.productAnchor?.visible &&
-            !(this.speckleSystem?.wavingBlob.visible)) {
-            return false;
-        }
-
-        if (this.productAnchor?.visible) {
-            this.productAnchor.lookAt(this.sceneManager.camera.position);
-            needsUpdate = true;
-        }
-
-        if (this.speckleSystem?.wavingBlob.visible) {
-            this.speckleSystem.updatePositions();
-            needsUpdate = true;
-        }
-
-        return needsUpdate;
-    }
-
-    async loadCellComponents() {
-        try {
-            const components = {
-                blobInner: { file: "blob-inner.glb", material: pearlBlue, order: 0 },
-                blobOuter: { file: "blob-outer.glb", material: window.innerWidth < 768 ? dispersionMobile : dispersion, order: 2 },
-                ribbons: { file: "ribbons.glb", material: mauve, order: 3 }
-            };
-
-            // Track loading progress
-            const progress = { total: 0 };
-            const preloadOverlay = document.querySelector('.load-progress');
-            const progressElement = document.getElementById('loadProgressCount');
-            
-            // Helper function to calculate average progress
-            const getAverageProgress = () => {
-                const total = Object.values(progress).reduce((sum, val) => sum + val, 0);
-                return total / Object.keys(components).length;
-            };
-            
-            // Set up checks at different time intervals
-            setTimeout(() => {
-                if (preloadOverlay) {
-                    const average = getAverageProgress();
-                    if (average < 20) {
-                        preloadOverlay.classList.remove('hidden');
-                    }
-                }
-            }, 200);
-
-            setTimeout(() => {
-                if (preloadOverlay) {
-                    const average = getAverageProgress();
-                    if (average < 60) {
-                        preloadOverlay.classList.remove('hidden');
-                    }
-                }
-            }, 600);
-            
-            const updateProgress = (componentName, percent) => {
-                progress[componentName] = percent;
-                const average = Math.round(getAverageProgress());
-                if (progressElement) progressElement.textContent = `${average}%`;
-            };
-
-            // Load all components in parallel
-            const loaded = await Promise.all(
-                Object.entries(components).map(([name, config]) => 
-                    new CellComponent(
-                        this.sceneManager.scene,
-                        config.file,
-                        config.material,
-                        config.order,
-                        progress => updateProgress(name, Math.round((progress.loaded / progress.total) * 100))
-                    )
-                )
-            );
-
-            // Store component references
-            [this.blobInner, this.blobOuter, this.ribbons] = loaded;
-
-            // Store bounding boxes
-            this.boundingBoxes = loaded.map(component => component.getBoundingBox());
-
-            // Add components to scene
-            this.cellObject.add(...loaded.map(component => component.getObject()));
-            this.sceneManager.scene.add(this.cellObject);
-
-        } catch (error) {
-            console.error('Error loading cell components:', error);
-            throw error;
-        }
-    }
-
-    setupEventListeners() {
-        // Color change handlers
-        document.getElementById('podOrange').addEventListener('click', () => {
-            if (!state.applicatorObject || !this.product) return;
-            new ColorChangeAnimationSequence(state.applicatorObject, this.product.getObject(), PRODUCT_COLORS.orange).start();
-        });
-
-        document.getElementById('podGreen').addEventListener('click', () => {
-            if (!state.applicatorObject || !this.product) return;
-            new ColorChangeAnimationSequence(state.applicatorObject, this.product.getObject(), PRODUCT_COLORS.green).start();
-        });
-
-        document.getElementById('podYellow').addEventListener('click', () => {
-            if (!state.applicatorObject || !this.product) return;
-            new ColorChangeAnimationSequence(state.applicatorObject, this.product.getObject(), PRODUCT_COLORS.yellow).start();
-        });
-
-        // Replace wakiga.com links with swap.care after DOM is loaded
-        document.addEventListener('DOMContentLoaded', () => {
-            const links = document.getElementsByTagName('a');
-            for (const link of links) {
-                if (link.href.includes('wakiga.com')) {
-                    link.href = link.href.replace('wakiga.com', 'swap.care');
-                }
-            }
-
-            // Update text of link inside #ctaStep3Japan
-            const japanCta = document.querySelector('#ctaStep3Japan a');
-            if (japanCta) {
-                japanCta.textContent = 'Visit swap.care';
-            }
-        });
-
-        // Scroll handler
-        window.addEventListener('scroll', () => {
-            if (!this.isInitialized) return;
-
-            animatePage(
-                this.sceneManager.controls,
-                this.sceneManager.camera,
-                this.cellObject,
-                this.blobInner?.getObject(),
-                this.blobOuter?.getObject(),
-                this.ribbons?.getObject(),
-                this.speckleSystem?.spheres,
-                this.speckleSystem?.wavingBlob,
-                this.speckleSystem?.dotBounds,
-                this.product?.getObject(),
-                this.sceneManager.renderer,
-                this.ambientLight
-            );
-        });
-    }
-
-    dispose() {
-        this.sceneManager.dispose();
-        this.speckleSystem.dispose();
+      },
+      { signal },
+    );
+    this.sceneManager.controls.addEventListener("change", () =>
+      this.invalidate(),
+    );
+    this.motionQuery.addEventListener(
+      "change",
+      () => {
+        this.reducedMotion = this.motionQuery.matches;
+        this.invalidate(true);
+      },
+      { signal },
+    );
+    document.getElementById("motion-toggle").addEventListener(
+      "click",
+      (event) => {
+        this.motionPaused = !this.motionPaused;
+        event.currentTarget.textContent = this.motionPaused
+          ? "Resume motion"
+          : "Pause motion";
+        event.currentTarget.setAttribute(
+          "aria-pressed",
+          String(this.motionPaused),
+        );
+        this.invalidate(true);
+      },
+      { signal },
+    );
+    document.getElementById("retry-load").addEventListener(
+      "click",
+      () => {
+        this.productError = null;
+        document.querySelector(".load-progress").hidden = true;
+        this.preloadProduct();
+      },
+      { signal },
+    );
+    this.sceneManager.renderer.domElement.addEventListener(
+      "webglcontextlost",
+      (event) => {
+        event.preventDefault();
         cancelAnimationFrame(this.animationFrameId);
+        this.animationFrameId = null;
+        this.isInitialized = false;
+        document.getElementById("loadProgressCount").textContent =
+          "Restoring the animation…";
+        document.querySelector(".load-progress").hidden = false;
+      },
+      { signal },
+    );
+    this.sceneManager.renderer.domElement.addEventListener(
+      "webglcontextrestored",
+      () => {
+        this.isInitialized = true;
+        document.querySelector(".load-progress").hidden = true;
+        this.invalidate(true);
+      },
+      { signal },
+    );
+  }
 
-        // Clean up loading overlay
-        const loadingOverlay = document.querySelector('.product-loading-overlay');
-        if (loadingOverlay) {
-            //loadingOverlay.remove();
-        }
-    }
-
-    // Helper function to maintain your existing scroll duration logic
-    calculateScrollDuration(targetPosition) {
-        const sections = ['splash', 'zoom', 'pitch', 'product'];
-        const currentSection = sections.find(section => {
-            const elem = document.querySelector(`.${section}`);
-            return elem && isVisibleBetweenTopAndBottom(elem);
-        }) || 'splash';
-
-        const targetSection = sections.find(section => {
-            const elem = document.querySelector(`.${section}`);
-            return elem && elem.offsetTop === targetPosition;
-        });
-
-        const currentIndex = sections.indexOf(currentSection);
-        const targetIndex = sections.indexOf(targetSection);
-        const numberOfSections = Math.abs(targetIndex - currentIndex);
-
-        if (numberOfSections === 1) return 1200;
-        if (numberOfSections === 2) return 2800;
-        if (numberOfSections >= 3) return 3600;
-        return 0;
-    }
+  dispose() {
+    this.disposed = true;
+    cancelAnimationFrame(this.animationFrameId);
+    this.events.abort();
+    state.lenis?.destroy();
+    state.tweens.removeAll();
+    this.timeline?.dispose();
+    disposeLoaders();
+    this.sceneManager.dispose();
+  }
 }
-
-// Start app immediately without waiting for DOMContentLoaded
-new App();

@@ -1,0 +1,85 @@
+# Performance investigation
+
+Measured locally on October 20, 2026. Work is isolated to `optimize/story-demo`; remote `main` remains at `66063d1637e8c24ee600ea7f3c663f44856068c6`. Nothing was deployed.
+
+## What made the cell-to-stick transition expensive
+
+| Contributor | Evidence | Change |
+| --- | --- | --- |
+| Full-resolution refraction and overdraw | Both the desktop cell shell and product cap use physical transmission. Three r173 renders an intermediate multisampled image, resolves it and generates mipmaps. At 1440 × 900 and DPR 2 this starts with 5.18 million pixels. Diagnostic removal of the product or reduction of the transmission buffer reduced GPU time substantially. | During product progress 0.3–0.7 only, render the blurred transmission backdrop at CSS-pixel resolution. Keep the canvas, silhouettes, textures and final product at native DPR. |
+| Shaders first encountered during scrolling | The old preparation missed linear-color transmission shaders, back-face variants and the final spotlight/material phase. Program counts grew during the first transition. | Prepare the actual lighting/material/output variants before publishing the product to the timeline. Subsequent forward/reverse visits do not create shader programs. |
+| Traversal-dependent precision | Three r173's `WebGLPrograms.getParameters` retains the last explicitly requested precision. `lowp` particles could change later materials with `precision === null`, creating a previously unwarmed mobile shader. | Explicit precision per material: renderer-default precision for scene materials, original effective `lowp` for product materials and particles. |
+| First GPU draw and target allocation | `compileAsync` alone did not eliminate visible-browser first-draw stalls. A controlled mobile-sized visible-browser test still recorded a 162 ms render submission without GPU draw preparation. | Prepare both product phases in bounded idle loading tasks. Each task restores the current scene before yielding, so the preparation poses are not presented. The corresponding first visible transition subsequently recorded a 3.6 ms maximum submission in that check. |
+| Excess submissions on high-refresh displays | The visible browser delivered approximately 120 Hz callbacks. Submitting a full-resolution transmission frame on each callback could saturate the GPU queue. | Cap canvas submission at 60 fps while updating scroll/motion state at display cadence. Preserve pending dirty state until it is rendered. |
+| Repeated intermediate-buffer allocation | Changing the transmission scale on one camera resizes its target when crossing each boundary. | Retain full-size and transition-size targets through two cameras with identical transforms. This uses additional buffer memory but avoids repeated allocation on reverse scrolling. |
+| Particle CPU work | The original desktop particle path decomposed/rebuilt 600 matrices each animated frame. An isolated 1,000-update sample took approximately 40 ms versus 0.4 ms after grouping. | Rotate the five particle groups instead; preserve particle counts, geometry and orbital motion. This is a component-level result, not a claim of 100× whole-page speed. |
+| Idle and invisible rendering | The original settled product rendered continuously; invisible cell components could still incur draws. | Demand-driven rendering, hidden-tab suspension, explicit visibility for zero-opacity ribbons/particles, and idle sleep. |
+| Empty shadow work | No model mesh casts or receives shadows, but the product spotlight enabled shadow rendering. | Remove the empty shadow-map setup. Ablations showed this was not the dominant transition cost. |
+
+## Loading versus geometry
+
+The product GLB is **1,006,216 bytes**; the product scene uses about **20,938 triangles**, including the runtime mask geometry. The three cell meshes contain **272,352 triangles** before particle instances. The cell is dense, but the measured overlap cost was more sensitive to product refraction and render resolution than to removing the cell alone. Removing the starfield had little effect.
+
+Local product transfers ranged from a few milliseconds to tens of milliseconds; decoding, shader preparation and GPU preparation cost more. Repeat transitions incurred no new product download, so network loading cannot explain their sustained slowdown. Slow-network behavior still matters for first arrival. Preparation now begins after the hero is available, with one shared promise and a retry path.
+
+The original GLB/HDR files and embedded texture bytes are unchanged. No mesh decimation, texture recompression, particle-count reduction, or canvas-DPR cap was applied. The Manrope TTF was converted losslessly to WOFF2 (158,292 → 50,172 bytes), and unused source assets are excluded from the runtime build.
+
+## Measurement method
+
+- Chrome on Apple M4 Pro, ANGLE Metal. Local HTTP, no CPU/network throttling.
+- `scripts/transition-benchmark.mjs` freezes the app loop after settling the actual pitch palette, then renders 150 poses across product progress 0.2–0.99. Desktop: 1440 × 900, DPR 2. Mobile layout: 390 × 844, DPR 3, still using the desktop GPU.
+- GPU duration uses `EXT_disjoint_timer_query_webgl2`; CPU render submission, callback intervals and program counts are reported separately. GPU duration is not a compositor dropped-frame count. `GPU_TIMERS=0` permits a separate check without timer-query overhead.
+- “Cold” means the first visible sweep after the application's normal preparation. The optimized version deliberately performs more preparation earlier. “Warm” repeats the sweep in the same context.
+- Diagnostic ablations hide objects or reduce resolution to establish causes. They are confined to the benchmark and are not page features.
+- The transition reference is a frozen copy of the local demo before these transition fixes, with the same HTML/CSS and original assets. The separate settled-scene baseline uses the original `main` animation in the same demo shell.
+- Reference/baseline browser pages used for inspection were found to remain active in the browser tool. They were closed before the final isolated comparisons to avoid competing GPU workloads. Earlier exploratory timings are not interchangeable with the final isolated runs.
+
+## Final isolated results
+
+Desktop transition, 1440 × 900, DPR 2:
+
+| Measurement | Earlier demo | Optimized demo |
+| --- | ---: | ---: |
+| First visible sweep: maximum CPU render submission | 90.4 ms | **4.7 ms** |
+| First visible sweep: GPU time, p95 | 15.17 ms | **11.01 ms** |
+| Repeat sweep: GPU time, p95 | 13.18 ms | **9.88 ms** |
+| Repeat sweep: maximum CPU render submission | 1.9 ms | 2.2 ms |
+| First sweep: callback intervals over 25 ms, out of 150 | 1 | 0 |
+| Repeat sweep: callback intervals over 25 ms, out of 150 | 0 | 0 |
+| Observed preparation wait before the sweep | 143.3 ms | 337.6 ms |
+
+The final isolated run reduced the first visible submission spike by approximately **95%**, and repeat-sweep p95 GPU duration by approximately **25%**. The preparation row makes the tradeoff explicit: some work now happens earlier, after the hero is available, instead of during the handoff. Local transfer/cache conditions affect that preparation measurement.
+
+Raw records: `test-results/transition/reference-final.json` and `optimized-final.json`. The emulated mobile layout recorded first/repeat GPU p95 of **8.47/8.05 ms**, with a **2.2 ms** maximum first-sweep CPU submission (`optimized-mobile-final.json`). This remains an Apple M4 Pro GPU result, not an Android/iPhone claim.
+
+A separate visible-browser check at **500 × 844, DPR 2**, using actual scrolling and the normal app loop, recorded a **162 ms** maximum first-transition submission when GPU draw preparation was disabled and **3.6 ms** with it enabled. This comparison held shader preparation and frame pacing constant. The latter sample is saved in `visible-browser.json`; its callback-interval p95 was about **25.1 ms**, so it should not be described as perfectly uniform 60 fps.
+
+The settled-scene benchmark uses 1440 × 900, DPR 1, and samples three seconds per scene:
+
+| Scene | Original main: script time | Optimized: script time | Original / optimized scene renders |
+| --- | ---: | ---: | ---: |
+| Hero | 148.46 ms | **102.81 ms** | 180 / 181 |
+| Microbes | 139.22 ms | **87.37 ms** | 181 / 181 |
+| Settled product | 205.94 ms | **0 ms** | 181 / **0** |
+
+The optimized product wakes on input, resize or a color change; zero idle renders does not mean frozen interaction. Raw records and screenshots are under `test-results/benchmark/`.
+
+The final build contains **683,655 bytes** of minified JavaScript (178,047 gzip / 147,474 Brotli) and **9,275 bytes** of CSS (2,904 gzip / 2,503 Brotli). Compressed figures are size calculations; the local development server does not constitute a production compression/cache configuration.
+
+## Visual and functional checks
+
+`scripts/compare-transmission.mjs` compares the optimized canvas against full-resolution transmission at eight fixed poses. Desktop overlap samples differed by at most **6/255** in a color channel, with a maximum whole-image mean absolute channel difference of about **0.048/255**. The desktop samples outside the overlap were pixel-identical.
+
+The DPR 3 mobile overlap samples had a maximum whole-image mean difference of about **0.196/255**. Sparse edge differences reached 14/255; fewer than 0.005% of pixels exceeded an 8-level difference in the worst sampled pose. Final-product mobile samples were pixel-identical. These are sampled numerical comparisons plus visual inspection, not proof that every possible device/pose produces identical pixels.
+
+All **10 browser tests passed**. The suite covers forward/reverse seeking, chapter navigation, color changes, failed-load recovery, readable fallback, mobile layout, reduced motion, resize poses, static-frame suspension, repeated resource reuse, desktop/mobile shader reuse, and a simulated 120 Hz stream that verifies final pending frames are retained.
+
+## Tradeoffs and limits
+
+The refraction change is an intermediate-rendering adjustment, not mathematically identical rendering during the overlap. The full-resolution hero and final-product policy is retained. Two transmission target sizes stay resident to avoid allocation churn, so intermediate-buffer memory is higher than with a single target. GPU preparation performs bounded extra loading draws and fetches the product earlier; it does not make that work free.
+
+The canvas intentionally tops out at 60 fps even on faster displays. The page stops rendering when settled. This favors predictable frame delivery and lower GPU/power usage over attempting 120 full-resolution 3D frames per second.
+
+Real iOS/Android GPUs, Safari, slow networks and thermal throttling were not available for this run. Mobile viewport emulation is not a physical-phone performance result. Browser/device variability and first-load preparation remain relevant; this report does not promise zero missed frames on every device.
+
+Run commands and artifact locations are documented in [README.md](README.md). Benchmark JSON and PNG pairs are retained under `test-results/`; Playwright uses its own subdirectory so it does not erase profiling evidence.

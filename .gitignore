@@ -4,3 +4,7 @@ arrow.html
 .cert/
 .vscode/
 .env
+node_modules/
+dist/
+test-results/
+playwright-report/

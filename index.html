@@ -1,46 +1,320 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Taxa v3</title>
-  <link rel="stylesheet" href="style.css">
-  <link rel="icon"
-    href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦠</text></svg>">
-
-  <script type="importmap">
-    {
-      "imports": {
-        "tween": "https://cdn.jsdelivr.net/gh/whole-earth/taxa/node_modules/@tweenjs/tween.js/dist/tween.esm.js",
-        "three": "https://cdn.jsdelivr.net/gh/whole-earth/taxa/node_modules/three/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/gh/whole-earth/taxa/node_modules/three/examples/jsm/",
-        "three.meshline": "https://cdn.jsdelivr.net/gh/whole-earth/taxa/js/utils/meshline-module.js"
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#fffbf4" />
+    <meta
+      name="description"
+      content="Your skin microbiome is full of secrets. Explore the science behind Taxa's skin probiotics."
+    />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Taxa Technologies — Story demo</title>
+    <link rel="icon" href="assets/site/microbe.png" />
+    <link
+      rel="preload"
+      href="assets/site/manrope.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link rel="stylesheet" href="style.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./node_modules/three/build/three.module.js",
+          "three/addons/": "./node_modules/three/examples/jsm/",
+          "tween": "./node_modules/@tweenjs/tween.js/dist/tween.esm.js",
+          "lenis": "./node_modules/lenis/dist/lenis.mjs"
+        }
       }
-    }
-  </script>
-</head>
-
-<body>
-  <nav></nav>
-
-  <main>
-    <div id="three"></div>
-    <div class="splash">splash</div>
-    <div class="zoom">zoom</div>
-    <div class="zoom-out">zoom-out</div>
-    <div class="pitch">pitch</div>
-    <div class="product">product</div>
-  </main>
-
-  <div id="colorSelector">
-    <div class="pod-indicator" id="podOrange"></div>
-    <div class="pod-indicator" id="podGreen"></div>
-    <div class="pod-indicator" id="podYellow"></div>
-  </div>
-
-  <script type="module" src="js/core/anim.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/studio-freight/lenis@1.0.27/bundled/lenis.min.js"></script>
-</body>
-
+    </script>
+    <script type="module" src="js/main.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#product">Skip to product</a>
+    <header class="nav">
+      <nav class="nav-main" aria-label="Main navigation">
+        <a class="brand" href="#splash" aria-label="Taxa home"
+          ><img
+            class="brand-mark"
+            src="assets/site/microbe.png"
+            width="31"
+            height="31"
+            alt="" /><img
+            src="assets/site/taxa-wordmark.svg"
+            width="59"
+            height="23"
+            alt="Taxa"
+        /></a>
+        <button
+          class="menu-toggle"
+          aria-expanded="false"
+          aria-controls="nav-links"
+          aria-label="Open menu"
+        >
+          <span></span><span></span>
+        </button>
+        <div class="nav-links" id="nav-links">
+          <a class="swap-link" href="https://swap.care"
+            ><img
+              src="assets/site/swap.png"
+              width="66"
+              height="25"
+              alt="Swap"
+            /><sup>™</sup></a
+          >
+          <a href="https://www.taxatech.com/people">People</a>
+          <a href="https://www.taxatech.com/science"
+            >Science
+            <svg
+              class="lock-icon"
+              width="13"
+              height="17"
+              viewBox="0 0 13 17"
+              aria-hidden="true"
+            >
+              <path
+                d="M3 7V5a3.5 3.5 0 017 0v2"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              />
+              <rect
+                y="7"
+                width="13"
+                height="10"
+                rx="1.5"
+                fill="currentColor"
+              /></svg
+          ></a>
+          <button class="contact-mobile" data-contact>Contact →</button>
+        </div>
+        <button class="contact-desktop" data-contact>Contact →</button>
+      </nav>
+    </header>
+    <div id="three" class="three" aria-hidden="true"></div>
+    <div class="load-progress" role="status" aria-live="polite">
+      <span id="loadProgressCount">Loading the microbiome…</span
+      ><button id="retry-load" hidden>Try again</button>
+    </div>
+    <nav class="scroll-indicator" aria-label="Story chapters">
+      <button
+        class="scroll-dot active"
+        data-section="splash"
+        aria-label="Your skin microbiome"
+        aria-current="step"
+      ></button>
+      <button
+        class="scroll-dot"
+        data-section="zoom"
+        aria-label="These microbes"
+      ></button>
+      <button
+        class="scroll-dot"
+        data-section="pitch"
+        aria-label="Swap them out"
+      ></button>
+      <button
+        class="scroll-dot"
+        data-section="product"
+        aria-label="Superpower your skin"
+      ></button>
+    </nav>
+    <main class="main" id="story">
+      <section class="splash" id="splash" aria-labelledby="splash-title">
+        <div class="child active">
+          <div class="cell-child_left">
+            <h1 class="h1" id="splash-title">Your skin microbiome</h1>
+          </div>
+          <div class="cell-child_right">
+            <p class="h1">is full of secrets.</p>
+          </div>
+        </div>
+      </section>
+      <section class="zoom" id="zoom" aria-labelledby="zoom-title">
+        <div class="child">
+          <div class="cell-child_left">
+            <h2 class="h1" id="zoom-title">These microbes</h2>
+          </div>
+          <div class="cell-child_right offset-left">
+            <div class="dot-text-wrap">
+              <div id="zoomFirst" class="zoom-child active">
+                <a
+                  class="zoom-child-elem"
+                  href="https://www.nature.com/articles/s41598-020-68860-z"
+                  target="_blank"
+                  rel="noopener"
+                  ><span class="h1 dot-h1">cause body odor.</span
+                  ><sup>1</sup></a
+                >
+              </div>
+              <div id="zoomSecond" class="zoom-child">
+                <a
+                  class="zoom-child-elem"
+                  href="https://journals.asm.org/doi/10.1128/msphere.00793-19"
+                  target="_blank"
+                  rel="noopener"
+                  ><span class="h1 dot-h1">absorb UV.</span><sup>2</sup></a
+                >
+              </div>
+              <div id="zoomThird" class="zoom-child">
+                <a
+                  class="zoom-child-elem"
+                  href="https://www.cell.com/cell/fulltext/S0092-8674%2822%2901253-3"
+                  target="_blank"
+                  rel="noopener"
+                  ><span class="h1 dot-h1">attract mosquitoes.</span
+                  ><sup>3</sup></a
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="pitch" id="pitch" aria-labelledby="pitch-title">
+        <div class="child">
+          <div class="cell-child_left">
+            <h2 class="h1" id="pitch-title">What if we could</h2>
+          </div>
+          <div class="cell-child_right"><p class="h1">swap them out?</p></div>
+        </div>
+      </section>
+      <section class="product" id="product" aria-labelledby="product-title">
+        <div class="child">
+          <div class="cell-child_left">
+            <h2 class="h1" id="product-title">Superpower your skin.</h2>
+          </div>
+          <div class="cell-child_right product-mobile-offset">
+            <div class="product-cta">
+              <div class="pod-selector">
+                <div
+                  class="applicator-container"
+                  role="group"
+                  aria-label="Choose a pod"
+                >
+                  <button
+                    id="podOrange"
+                    class="pod-indicator orange current"
+                    aria-label="Body odor pod"
+                    aria-pressed="true"
+                  ></button>
+                  <button
+                    id="podYellow"
+                    class="pod-indicator yellow"
+                    aria-label="Sunscreen pod"
+                    aria-pressed="false"
+                  ></button>
+                  <button
+                    id="podGreen"
+                    class="pod-indicator green"
+                    aria-label="Mosquito pod"
+                    aria-pressed="false"
+                  ></button>
+                </div>
+                <p class="product-p">
+                  Pod: <span id="showingLabel">Body odor</span>
+                </p>
+              </div>
+              <div class="product-card-section top">
+                <h3 class="product-p-large cta-header">
+                  Taxa <span id="productType">Deodorant</span>
+                </h3>
+                <p class="product-p">
+                  Single-application
+                  <span id="productTypeSubtitle">deodorant</span> that lasts one
+                  week.
+                </p>
+              </div>
+              <div class="product-card-section potency">
+                <p class="product-p">Our shelf-stable probiotic cream.</p>
+                <p class="product-p-large">25.4 Billion CFUs</p>
+              </div>
+              <div class="product-card-section ingredients">
+                <p class="product-p-large">Clean, natural ingredients.</p>
+                <ul class="ingredients-list">
+                  <li>
+                    <img
+                      src="assets/site/water.png"
+                      class="ingredient-icon"
+                      width="16"
+                      height="16"
+                      alt=""
+                    />Water
+                  </li>
+                  <li>
+                    <img
+                      src="assets/site/microbe.png"
+                      class="ingredient-icon taxa"
+                      width="18"
+                      height="18"
+                      alt=""
+                    />Taxa Probiotics™
+                  </li>
+                  <li>
+                    <img
+                      src="assets/site/mango.png"
+                      class="ingredient-icon"
+                      width="16"
+                      height="16"
+                      alt=""
+                    />Mango butter
+                  </li>
+                  <li>
+                    <img
+                      src="assets/site/sunflower.png"
+                      class="ingredient-icon"
+                      width="16"
+                      height="16"
+                      alt=""
+                    />Sunflower extract
+                  </li>
+                </ul>
+              </div>
+              <a
+                class="product-card-section module orange"
+                id="waitlist-link"
+                href="https://www.taxatech.com/#product"
+                >Join the <span id="waitlistLabel">deodorant</span> waitlist
+                <span class="cta-arrow" aria-hidden="true">→</span></a
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer class="taxa-legal-footer">
+      <a href="https://www.taxatech.com/">Taxa Technologies</a
+      ><span aria-hidden="true">·</span
+      ><a href="https://www.taxatech.com/terms">Terms</a
+      ><span aria-hidden="true">·</span
+      ><a href="https://www.taxatech.com/privacy">Privacy</a>
+    </footer>
+    <button id="motion-toggle" class="motion-toggle" aria-pressed="false">
+      Pause motion
+    </button>
+    <dialog id="contact-dialog" aria-labelledby="contact-title">
+      <button class="dialog-close" aria-label="Close contact">×</button>
+      <h2 id="contact-title">Contact us</h2>
+      <a href="mailto:hello@taxatech.com">hello@taxatech.com ↗</a>
+    </dialog>
+    <noscript
+      ><style>
+        .load-progress,
+        .motion-toggle,
+        .scroll-indicator {
+          display: none;
+        }
+        .main .child {
+          position: relative;
+          opacity: 1;
+          visibility: visible;
+          min-height: 70vh;
+        }
+        .main section {
+          height: auto;
+        }
+      </style></noscript
+    >
+  </body>
 </html>

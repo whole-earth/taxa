@@ -1,9 +1,14 @@
 {
   "name": "taxa",
   "version": "1.0.0",
-  "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "node scripts/build.mjs --serve",
+    "build": "node scripts/build.mjs",
+    "test": "playwright test",
+    "benchmark": "node scripts/benchmark.mjs",
+    "benchmark:transition": "node scripts/transition-benchmark.mjs",
+    "compare:transmission": "node scripts/compare-transmission.mjs",
+    "format": "prettier --write index.html style.css js scripts tests playwright.config.js"
   },
   "repository": {
     "type": "git",
@@ -16,10 +21,16 @@
     "url": "https://github.com/whole-earth/taxa/issues"
   },
   "homepage": "https://github.com/whole-earth/taxa#readme",
-  "description": "",
+  "description": "Taxa scroll story demo: branch-local assets and demand-driven Three.js animation",
   "dependencies": {
-    "@tweenjs/tween.js": "^25.0.0",
-    "three": "^0.173.0",
-    "three.meshline": "^1.4.0"
-  }
+    "@tweenjs/tween.js": "25.0.0",
+    "lenis": "1.3.11",
+    "three": "0.173.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "esbuild": "0.25.12",
+    "prettier": "3.6.2"
+  },
+  "type": "module"
 }

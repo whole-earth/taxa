@@ -1,0 +1,16 @@
+{
+  "reference": "https://www.taxatech.com/",
+  "captured": "2026-10-20",
+  "cdn": "https://cdn.prod.website-files.com/65b87dec4ea2d21f283d48be/",
+  "files": {
+    "manrope.ttf": "65bc8fbc4a6785274b1e767f_Manrope%5Bwght%5D.ttf",
+    "taxa-wordmark.svg": "694acd309394c210be2075c5_svg-path.svg",
+    "swap.png": "66e47fbcd68cb36b5d5d6a77_swap-p-500.png",
+    "water.png": "6798a60132e84e92819bd144_water.png",
+    "microbe.png": "6949e920ae33e3df2c750176_256.png",
+    "mango.png": "6798a601a0fbafe249319ee0_mango.png",
+    "sunflower.png": "6798a60184126d45dcc350aa_sunflower.png"
+  },
+  "manrope.woff2": "Lossless WOFF2 conversion of manrope.ttf using fontTools; full variable font, no glyph subsetting.",
+  "fontLicense": "OFL.txt (SIL Open Font License 1.1)"
+}
