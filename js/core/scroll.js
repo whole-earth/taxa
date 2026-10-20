@@ -250,7 +250,6 @@ export class StoryTimeline {
           child.classList.toggle("active", i === topic);
           child.inert = i !== topic;
         });
-        speckles.randomizePositions();
         speckles.show(color, this.app.reducedMotion ? 0 : 400);
         if (!this.mobile)
           this.tween("sheen", this.innerMaterial.sheenColor, {

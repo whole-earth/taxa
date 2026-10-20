@@ -24,6 +24,131 @@ async function seek(page, section, progress = 0) {
   await expect(page.locator("body")).toHaveAttribute("data-chapter", section);
 }
 
+test("cell stays hidden during loading and fades in after its first frame", async ({
+  page,
+}) => {
+  let releaseCell;
+  const cellGate = new Promise((resolve) => {
+    releaseCell = resolve;
+  });
+  await page.route("**/blob-inner.glb", async (route) => {
+    await cellGate;
+    await route.continue();
+  });
+  await page.goto("/?perf", { waitUntil: "domcontentloaded" });
+  await expect(page.locator(".three")).toHaveCSS("opacity", "0");
+  releaseCell();
+  await page.waitForFunction(() => window.taxaDebug?.app.sceneRevealed);
+  await page.waitForFunction(() => {
+    const opacity = Number(
+      getComputedStyle(document.querySelector(".three")).opacity,
+    );
+    return opacity > 0 && opacity < 1;
+  });
+  expect(
+    await page.evaluate(() => window.taxaDebug.performanceMonitor.frames),
+  ).toBeGreaterThan(0);
+  await expect(page.locator(".three")).toHaveCSS("opacity", "1");
+});
+
+for (const mobile of [false, true]) {
+  test(`dots fade out before changing color and position, then fade in (${mobile ? "mobile" : "desktop"})`, async ({
+    page,
+  }) => {
+    if (mobile) await page.setViewportSize({ width: 390, height: 844 });
+    await ready(page);
+    await page.waitForFunction(() => !!window.taxaDebug.app.product);
+    await seek(page, "zoom", 0.1);
+    await page.waitForFunction(() =>
+      window.taxaDebug.app.speckleSystem.materials.every(
+        (m) => m.opacity === 1,
+      ),
+    );
+    await page.evaluate(() => {
+      const system = window.taxaDebug.app.speckleSystem;
+      window.dotChanges = [];
+      const original = system.randomizePositions.bind(system);
+      system.randomizePositions = () => {
+        window.dotChanges.push(system.materials.map((m) => m.opacity));
+        original();
+      };
+      window.dotFrames = [];
+      window.recordDots = true;
+      function sample() {
+        const mesh = system.instancedMeshes[0];
+        window.dotFrames.push({
+          color: mesh.material.color.getHexString(),
+          opacity: mesh.material.opacity,
+          version: mesh.instanceMatrix.version,
+        });
+        if (window.recordDots) requestAnimationFrame(sample);
+      }
+      sample();
+    });
+    for (const [progress, color] of [
+      [0.45, "f1ff00"],
+      [0.8, "92cb86"],
+      [0.1, "ffbb65"],
+    ]) {
+      await seek(page, "zoom", progress);
+      await page.waitForFunction((color) => {
+        const m = window.taxaDebug.app.speckleSystem.materials[0];
+        return m.color.getHexString() === color && m.opacity === 1;
+      }, color);
+    }
+    const trace = await page.evaluate(() => {
+      window.recordDots = false;
+      return { frames: window.dotFrames, changes: window.dotChanges };
+    });
+    expect(trace.changes).toHaveLength(3);
+    expect(trace.changes.flat().every((opacity) => opacity === 0)).toBe(true);
+    for (const color of ["ffbb65", "f1ff00", "92cb86"]) {
+      expect(
+        trace.frames.some(
+          (frame) =>
+            frame.color === color &&
+            frame.opacity > 0.05 &&
+            frame.opacity < 0.95,
+        ),
+      ).toBe(true);
+    }
+    // Position buffers change just once per topic, never during the fade.
+    expect(new Set(trace.frames.map((frame) => frame.version)).size).toBe(4);
+    await page.evaluate(async () => {
+      const app = window.taxaDebug.app;
+      const { top, height } = app.timeline.bounds[1];
+      scrollTo(0, top + height * 0.45);
+      app.invalidate(true);
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      scrollTo(0, top + height * 0.8);
+      app.invalidate(true);
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      scrollTo(0, 0);
+      app.invalidate(true);
+    });
+    await page.waitForTimeout(700);
+    expect(
+      await page.evaluate(() =>
+        window.taxaDebug.app.speckleSystem.materials.every(
+          (m) => m.opacity === 0,
+        ),
+      ),
+    ).toBe(true);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await seek(page, "zoom", 0.8);
+    expect(
+      await page.evaluate(() => {
+        const system = window.taxaDebug.app.speckleSystem;
+        return (
+          system.materials.every(
+            (m) => m.opacity === 1 && m.color.getHexString() === "92cb86",
+          ) && system.tweens.size === 0
+        );
+      }),
+    ).toBe(true);
+  });
+}
+
 test("story seeks forward and backward, loads one product, and preserves GPU resources", async ({
   page,
 }) => {

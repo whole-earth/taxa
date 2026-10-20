@@ -129,12 +129,34 @@ export class SpeckleSystem {
 
   show(color, duration = 400) {
     this.cancel();
-    this.wavingBlob.visible = true;
-    this.instancedMeshes.forEach((mesh) => {
-      mesh.visible = true;
-      mesh.scale.setScalar(1);
-      mesh.material.color.set(color);
-      this.tween(mesh.material, { opacity: 1 }, duration);
+    const reveal = () => {
+      // Change positions and color only while every group is invisible.
+      this.randomizePositions();
+      this.wavingBlob.visible = true;
+      this.instancedMeshes.forEach((mesh) => {
+        mesh.visible = true;
+        mesh.scale.setScalar(1);
+        mesh.material.color.set(color);
+        if (duration === 0) mesh.material.opacity = 1;
+        else this.tween(mesh.material, { opacity: 1 }, duration);
+      });
+      state.app.invalidate();
+    };
+    if (
+      duration === 0 ||
+      !this.wavingBlob.visible ||
+      this.materials.every((material) => material.opacity === 0)
+    ) {
+      reveal();
+      return;
+    }
+    // Completion callbacks belong to cancellable tweens, so reversing or
+    // leaving the chapter cannot reveal an outdated topic later.
+    let remaining = this.materials.length;
+    this.materials.forEach((material) => {
+      this.tween(material, { opacity: 0 }, 180, 0, () => {
+        if (--remaining === 0) reveal();
+      });
     });
   }
 

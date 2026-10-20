@@ -72,7 +72,9 @@ The final build contains **683,655 bytes** of minified JavaScript (178,047 gzip 
 
 The DPR 3 mobile overlap samples had a maximum whole-image mean difference of about **0.196/255**. Sparse edge differences reached 14/255; fewer than 0.005% of pixels exceeded an 8-level difference in the worst sampled pose. Final-product mobile samples were pixel-identical. These are sampled numerical comparisons plus visual inspection, not proof that every possible device/pose produces identical pixels.
 
-All **10 browser tests passed**. The suite covers forward/reverse seeking, chapter navigation, color changes, failed-load recovery, readable fallback, mobile layout, reduced motion, resize poses, static-frame suspension, repeated resource reuse, desktop/mobile shader reuse, and a simulated 120 Hz stream that verifies final pending frames are retained.
+All **13 browser tests passed**. The suite covers forward/reverse seeking, chapter navigation, color changes, failed-load recovery, readable fallback, mobile layout, reduced motion, resize poses, static-frame suspension, repeated resource reuse, desktop/mobile shader reuse, and a simulated 120 Hz stream that verifies final pending frames are retained. Transition checks also verify the cell stays hidden until its first rendered frame and fades in, and desktop/mobile dots fade out before their color and position change, fade back in, and cancel pending reveals when leaving the chapter.
+
+The entrance fade restores the original Webflow CSS timing (1.8 seconds, ease-out). The dot transitions restore the original scroll script's 180 ms fade-out and 400 ms fade-in. They use the existing shared tween scheduler; position buffers change once per topic while invisible. Reduced-motion mode applies topic changes immediately.
 
 ## Tradeoffs and limits
 

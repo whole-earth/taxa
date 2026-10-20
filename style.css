@@ -151,7 +151,11 @@ body::-webkit-scrollbar {
   position: fixed;
   inset: 0;
   z-index: 1;
-  transition: opacity 0.8s;
+  opacity: 0;
+  transition: opacity 1.8s ease-out;
+}
+.scene-ready .three {
+  opacity: 1;
 }
 .three canvas {
   display: block;

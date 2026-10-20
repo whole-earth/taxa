@@ -255,6 +255,12 @@ export class App {
       this.dirty = false;
       this.lastRenderTime = time;
       this.sceneManager.render();
+      if (!this.sceneRevealed) {
+        // Reveal only after the first story frame, never an empty canvas or
+        // a temporary shader-warming pose. CSS handles the original fade.
+        this.sceneRevealed = true;
+        document.body.classList.add("scene-ready");
+      }
       performanceMonitor.recordFrame(time, this.sceneManager.renderer.info);
     }
     const moving = continuous && (configuredRotation || particles);
