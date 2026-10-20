@@ -49,7 +49,7 @@ The render clock carries fractional time between submissions, maintaining the 60
 
 ## Validation and measurements
 
-The browser suite covers story seeks in both directions, chapter-button navigation, all pod colors, load deduplication, same-origin requests, static-frame suspension, mobile layout, reduced motion, contact/menu behavior, resize poses, repeated-visit GPU geometry counts, product retry and a readable fallback after a failed cell download.
+The 21-test browser suite covers story seeks in both directions, chapter-button navigation, cell/dot fades, all pod colors, load deduplication, same-origin requests, static-frame suspension, mobile and short-screen layouts, reduced motion, contact/menu focus behavior, overlay suspension, resize poses, repeated-visit GPU geometry and shader counts, product retry, a readable fallback after a failed cell download, scroll DOM mutations and frame pacing from 60 to 240 Hz. The final complete run passed, along with formatting and the production build.
 
 The local benchmark compares the original `main` animation against the optimized animation in the same HTML/CSS shell at 1440 × 900 and DPR 1. Original model URLs are redirected to local copies for this comparison. It samples three seconds per settled scene. `BASELINE_URL` can point to a separately served copy of the original animation that exposes its app as `window.taxaBaseline`:
 

@@ -60,7 +60,6 @@ export class App {
       },
       () => this.invalidate(true),
     );
-    state.sceneManager = this.sceneManager;
     this.cellObject = new THREE.Group();
     this.sceneManager.scene.add(this.cellObject);
     this.setupEvents();
@@ -85,12 +84,8 @@ export class App {
         ["ribbons.glb", mauve, 3],
       ].map(
         ([file, material, order]) =>
-          new CellComponent(
-            this.sceneManager.scene,
-            file,
-            material,
-            order,
-            (event) => updateProgress(file, event),
+          new CellComponent(file, material, order, (event) =>
+            updateProgress(file, event),
           ),
       ),
     );
@@ -102,7 +97,6 @@ export class App {
     );
     const size = this.blobInner.getBoundingBox().getSize(new THREE.Vector3());
     this.speckleSystem = new SpeckleSystem(
-      this.sceneManager.scene,
       Math.max(size.x, size.y, size.z) * 0.48,
       this.cellObject,
     );
@@ -151,11 +145,7 @@ export class App {
   preloadProduct() {
     if (this.productPromise || this.productError) return;
     // One shared promise prevents scroll bursts from starting duplicate loads.
-    this.productPromise = new ProductComponent(
-      this.sceneManager.scene,
-      "swap.glb",
-      200,
-    )
+    this.productPromise = new ProductComponent("swap.glb", 200)
       .then(async (product) => {
         if (this.disposed) {
           disposeScene(product.getObject());

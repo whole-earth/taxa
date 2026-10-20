@@ -15,8 +15,7 @@ const loader = new GLTFLoader().setDRACOLoader(dracoLoader);
 export const disposeLoaders = () => dracoLoader.dispose();
 
 class BaseComponent {
-  constructor(scene) {
-    this.scene = scene;
+  constructor() {
     this.loader = loader;
     this.position = new THREE.Vector3(0, 0, 0);
 
@@ -42,8 +41,8 @@ class BaseComponent {
  * Handles loading and setup of cell-related 3D components
  */
 export class CellComponent extends BaseComponent {
-  constructor(scene, gltf, shader = null, renderOrder = 1, onProgress = null) {
-    super(scene);
+  constructor(gltf, shader = null, renderOrder = 1, onProgress = null) {
+    super();
     this.gltfFileName = gltf;
     this.shader = shader;
     this.renderOrder = renderOrder;
@@ -121,8 +120,8 @@ export class CellComponent extends BaseComponent {
  * Handles loading and setup of product-related 3D components
  */
 export class ProductComponent extends BaseComponent {
-  constructor(scene, gltf, renderOrder = 1, onProgress) {
-    super(scene);
+  constructor(gltf, renderOrder = 1, onProgress) {
+    super();
     this.gltfFileName = gltf;
     this.renderOrder = renderOrder;
     this.object = null;

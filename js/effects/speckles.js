@@ -12,7 +12,7 @@ const ROTATIONS = [
 ];
 
 export class SpeckleSystem {
-  constructor(scene, radius, cellObject) {
+  constructor(radius, cellObject) {
     this.isMobile = window.innerWidth < 768;
     this.radius = radius;
     this.wavingBlob = new THREE.Group();

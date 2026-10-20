@@ -64,7 +64,7 @@ The settled-scene benchmark uses 1440 × 900, DPR 1, and samples three seconds p
 
 The optimized product wakes on input, resize or a color change; zero idle renders does not mean frozen interaction. Raw records and screenshots are under `test-results/benchmark/`.
 
-The final build contains **685,426 bytes** of minified JavaScript (178,563 gzip / 147,988 Brotli) and **10,567 bytes** of CSS (3,164 gzip / 2,743 Brotli). Compressed figures are size calculations; the local development server does not constitute a production compression/cache configuration.
+The final build contains **685,049 bytes** of minified JavaScript (178,452 gzip / 147,885 Brotli) and **10,567 bytes** of CSS (3,164 gzip / 2,743 Brotli). Compressed figures are size calculations; the local development server does not constitute a production compression/cache configuration.
 
 ## Visual and functional checks
 
@@ -72,7 +72,7 @@ The final build contains **685,426 bytes** of minified JavaScript (178,563 gzip 
 
 The DPR 3 mobile overlap samples had a maximum whole-image mean difference of about **0.196/255**. Sparse edge differences reached 14/255; fewer than 0.005% of pixels exceeded an 8-level difference in the worst sampled pose. Final-product mobile samples were pixel-identical. These are sampled numerical comparisons plus visual inspection, not proof that every possible device/pose produces identical pixels.
 
-All **21 browser checks passed** across the full regression run and the final targeted layout run. The suite covers forward/reverse seeking, chapter navigation, color changes, failed-load recovery, readable fallback, mobile layout, reduced motion, resize poses, static-frame suspension, repeated resource reuse, desktop/mobile shader reuse, and a simulated 120 Hz stream that verifies final pending frames are retained. Transition checks also verify the cell stays hidden until its first rendered frame and fades in, and desktop/mobile dots fade out before their color and position change, fade back in, and cancel pending reveals when leaving the chapter. Finalization coverage adds common display refresh rates, long stalls, DOM mutation counts, overlay suspension, focus restoration and short-screen card access.
+All **21 browser checks passed** in the final complete regression run (53.2 seconds). Formatting, the production build and the Git whitespace check also passed. The suite covers forward/reverse seeking, chapter navigation, color changes, failed-load recovery, readable fallback, mobile layout, reduced motion, resize poses, static-frame suspension, repeated resource reuse, desktop/mobile shader reuse, and a simulated 120 Hz stream that verifies final pending frames are retained. Transition checks also verify the cell stays hidden until its first rendered frame and fades in, and desktop/mobile dots fade out before their color and position change, fade back in, and cancel pending reveals when leaving the chapter. Finalization coverage adds common display refresh rates, long stalls, DOM mutation counts, overlay suspension, focus restoration and short-screen card access.
 
 The entrance fade restores the original Webflow CSS timing (1.8 seconds, ease-out). The dot transitions restore the original scroll script's 180 ms fade-out and 400 ms fade-in. They use the existing shared tween scheduler; position buffers change once per topic while invisible. Reduced-motion mode applies topic changes immediately.
 

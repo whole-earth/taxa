@@ -91,12 +91,8 @@ export class SceneManager {
     );
     this.scene.add(ambientLight);
 
-    //=========================================================================
-
     const directionalContainer = new THREE.Object3D();
-    directionalContainer.matrixAutoUpdate = true;
 
-    // TODO CHANGE TO WHITE
     const spotLight = new THREE.SpotLight(0xebeeff, 20);
     spotLight.position.set(36, -50, 75);
     spotLight.visible = false;
@@ -118,18 +114,8 @@ export class SceneManager {
     // an empty shadow map whenever the product light becomes visible.
     spotLight.castShadow = false;
 
-    // Store references
-    this.directionalLight = spotLight; // Keep the same property name for compatibility
+    this.directionalLight = spotLight;
     this.directionalContainer = directionalContainer;
-    this.directionalTarget = target;
-
-    // Method to update light position (now relative to product)
-    this.setLightPosition = (position, targetPosition) => {
-      spotLight.position.set(position.x, position.y, position.z);
-      target.position.set(targetPosition.x, targetPosition.y, targetPosition.z);
-    };
-
-    //=========================================================================
 
     // Load environment map
     this.environmentReady = new RGBELoader()
