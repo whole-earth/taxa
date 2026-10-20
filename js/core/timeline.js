@@ -311,7 +311,7 @@ export class StoryTimeline {
     if (phase !== this.productPhase || this.productObject !== product) {
       this.productPhase = phase;
       this.productObject = product;
-      this.productMaterials = this.app.product.setMaterialPhase(phase);
+      this.app.product.setMaterialPhase(phase);
     }
     // Evaluate every transform from absolute progress. Seeking, resizing and
     // reverse scrolling never depend on visiting an earlier phase first.
@@ -327,9 +327,7 @@ export class StoryTimeline {
       product.rotation.set(Math.PI / 2, 0, 0);
       product.scale.setScalar(scale);
       const opacity = clamp01((progress - 0.3) / 0.4);
-      this.productMaterials.forEach((mat) => {
-        mat.opacity = opacity;
-      });
+      this.app.product.setRevealOpacity(opacity);
       manager.renderer.toneMappingExposure = this.mix(
         1,
         0.6,

@@ -20,6 +20,26 @@ export class ProductModel {
     this.initializeMaterials();
     this.applicator = root.getObjectByName("applicator");
     if (this.applicator) this.prepareApplicator(this.applicator);
+    this.seal = root.getObjectByName("film-cover");
+    if (this.seal) {
+      // The seal is solid even while the story fades it in. Resolve its
+      // nearest surface before blending color, so the rim cannot show through.
+      // Share geometry; one depth draw + one color draw replaces the previous
+      // two-sided color draws without increasing the transition's draw count.
+      this.sealDepth = new THREE.Mesh(
+        this.seal.geometry,
+        new THREE.MeshBasicMaterial({
+          colorWrite: false,
+          depthWrite: true,
+          transparent: true,
+          side: THREE.DoubleSide,
+          forceSinglePass: true,
+        }),
+      );
+      this.sealDepth.name = "seal-depth";
+      this.sealDepth.renderOrder = -1;
+      this.seal.add(this.sealDepth);
+    }
     // Preserve the original product's effective precision, independently of
     // whichever particle material Three r173 encountered most recently.
     root.traverse((node) => {
@@ -41,6 +61,12 @@ export class ProductModel {
       if (node !== this.root && !node.isLight) node.visible = true;
       if (node.name === "overflowMask")
         node.visible = phase === PRODUCT_PHASE.TRANSITION;
+      if (node === this.sealDepth) {
+        node.visible = phase === PRODUCT_PHASE.TRANSITION;
+        return;
+      }
+      if (node === this.seal)
+        node.material.forceSinglePass = phase === PRODUCT_PHASE.TRANSITION;
       if (!node.material) return;
       for (const material of Array.isArray(node.material)
         ? node.material
@@ -61,6 +87,15 @@ export class ProductModel {
       }
     });
     return this.materials;
+  }
+
+  setRevealOpacity(opacity) {
+    this.materials.forEach((material) => {
+      material.opacity = opacity;
+    });
+    // Preserve the apparent fade of the old front/back color layers while
+    // shading only the nearest seal surface.
+    if (this.seal) this.seal.material.opacity = 1 - (1 - opacity) ** 2;
   }
 
   initializeMaterials() {

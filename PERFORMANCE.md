@@ -143,6 +143,14 @@ node scripts/repair-product-seal.mjs /tmp/taxa-original-product.glb /tmp/taxa-re
 
 The generated asset was verified byte-identical to the committed repair. The story suite passed **14/14 checks in Chrome and 14/14 in WebKit**, including forward/reverse scrolling, desktop/mobile pod changes, cap fade continuity and shader/texture reuse. These results describe the repaired asset; the earlier pixel-identical cap-fade comparisons predate this intentional branding change.
 
+### Pull-tab occlusion during the reveal
+
+The imported seal uses alpha blending with depth writing disabled. During the reveal, the orange rim could therefore draw through the nearer pull tab. Enabling depth writing directly exposed inconsistent overlap between the seal's upper and lower surfaces. The transition now draws the seal's nearest depth with a colorless basic material, then shades that surface once. This shares the existing geometry and replaces the previous two-sided color draws: sampled desktop and mobile **draw counts and submitted triangle counts are unchanged**.
+
+The seal's reveal opacity is `1 - (1 - opacity)²`, preserving the apparent opacity of its previous two blended surfaces. ProductModel owns this material behavior; the timeline supplies only reveal progress. The depth mesh participates in normal shader preparation and shared-resource disposal. It is disabled in the final product phase, which retains its original rendering; sampled final-product frames were pixel-identical.
+
+New desktop/mobile pixel tests hide the rim and verify that pixels covered by the tab stay unchanged while exposed rim pixels change. They repeat after visiting the final product and seeking backward. These checks, cap fade continuity, desktop/mobile shader reuse and product interactions passed: **6 targeted checks in Chrome and 6 in WebKit**. Build, formatting and Git whitespace checks passed. Before/after captures and draw statistics are in `test-results/seal-fixed/` and `test-results/seal-fixed-mobile/`.
+
 ## Tradeoffs and limits
 
 The refraction change is an intermediate-rendering adjustment, not mathematically identical rendering during the overlap. The full-resolution hero and final-product policy is retained. Two transmission target sizes stay resident to avoid allocation churn, so intermediate-buffer memory is higher than with a single target. GPU preparation performs bounded extra loading draws and fetches the product earlier; it does not make that work free.

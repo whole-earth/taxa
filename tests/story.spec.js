@@ -383,6 +383,78 @@ test("120 Hz updates pace rendering and retain the final pending frame", async (
   });
 });
 
+for (const mobile of [false, true]) {
+  test(`pull tab occludes the rim during the reveal (${mobile ? "mobile" : "desktop"})`, async ({
+    page,
+  }) => {
+    if (mobile) await page.setViewportSize({ width: 390, height: 844 });
+    await ready(page);
+    await page.evaluate(async () => {
+      const app = window.taxaDebug.app;
+      app.preloadProduct();
+      await app.productPromise;
+    });
+    const samples = await page.evaluate((mobile) => {
+      const app = window.taxaDebug.app;
+      app.motionPaused = true;
+      cancelAnimationFrame(app.animationFrameId);
+      app.isInitialized = false;
+      const { camera, renderer } = app.sceneManager;
+      camera.position.set(0, 0, 60);
+      camera.lookAt(0, 0, 0);
+      const seal = app.product.root.getObjectByName("film-cover");
+      const rim = app.product.root.getObjectByName("top-ring");
+      const canvas = document.createElement("canvas");
+      canvas.width = renderer.domElement.width;
+      canvas.height = renderer.domElement.height;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      const { top, height } = app.timeline.bounds[3];
+      const capture = (visible) => {
+        rim.visible = visible;
+        app.sceneManager.render();
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(renderer.domElement, 0, 0);
+        return ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      };
+      const samples = [];
+      const progress = mobile ? 0.68 : 0.6;
+      // Revisit the overlap after the opaque product phase to catch stale state.
+      for (const p of [progress, 0.99, progress]) {
+        app.timeline.update(top + (height - innerHeight) * p);
+        app.productAnchor.lookAt(camera.position);
+        const visible = capture(true);
+        if (p === 0.99) continue;
+        const hidden = capture(false);
+        const differences = [-14, 14].map((z) => {
+          const point = seal.position.clone().set(0, 107.5, z);
+          seal.localToWorld(point).project(camera);
+          const x = Math.round(((point.x + 1) / 2) * canvas.width);
+          const y = Math.round(((1 - point.y) / 2) * canvas.height);
+          if (x < 2 || y < 2 || x >= canvas.width - 2 || y >= canvas.height - 2)
+            throw new Error("Occlusion sample fell outside the viewport");
+          let difference = 0;
+          for (let dy = -2; dy <= 2; dy++) {
+            for (let dx = -2; dx <= 2; dx++) {
+              const i = ((y + dy) * canvas.width + x + dx) * 4;
+              for (let c = 0; c < 3; c++)
+                difference += Math.abs(visible[i + c] - hidden[i + c]);
+            }
+          }
+          return difference / 75;
+        });
+        samples.push(differences);
+      }
+      return samples;
+    }, mobile);
+    for (const [covered, exposed] of samples) {
+      // Hiding the rim cannot change pixels covered by the tab. An exposed
+      // rim sample must change, proving the test isn't inspecting empty space.
+      expect(covered).toBeLessThan(1);
+      expect(exposed).toBeGreaterThan(10);
+    }
+  });
+}
+
 test("cap fades continuously through half opacity in both scroll directions", async ({
   page,
 }) => {
