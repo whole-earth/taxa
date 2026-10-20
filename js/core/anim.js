@@ -19,6 +19,7 @@ import { StoryTimeline } from "./scroll.js";
 import { state } from "./state.js";
 import { disposeScene } from "../utils/dispose.js";
 import { performanceMonitor } from "../utils/performance.js";
+import { LoadingStatus } from "../ui/loadingStatus.js";
 
 export class App {
   constructor() {
@@ -26,6 +27,8 @@ export class App {
     this.motionQuery = matchMedia("(prefers-reduced-motion: reduce)");
     this.reducedMotion = this.motionQuery.matches;
     this.motionPaused = false;
+    this.overlayActive = false;
+    this.loadingStatus = new LoadingStatus();
     this.events = new AbortController();
     this.animationFrameId = null;
     this.lastFrameTime = null;
@@ -73,8 +76,7 @@ export class App {
       const value = Math.round(
         ([...progress.values()].reduce((a, b) => a + b, 0) / 3) * 100,
       );
-      document.getElementById("loadProgressCount").textContent =
-        `Loading the microbiome… ${value}%`;
+      this.loadingStatus.show(`Loading the microbiome… ${value}%`);
     };
     [this.blobInner, this.blobOuter, this.ribbons] = await Promise.all(
       [
@@ -128,7 +130,7 @@ export class App {
     this.timeline = new StoryTimeline(this);
     this.colorSequence = new ColorChangeAnimationSequence(this);
     this.isInitialized = true;
-    document.querySelector(".load-progress").hidden = true;
+    this.loadingStatus.hide();
     document.fonts.ready.then(() => {
       if (!this.disposed) this.timeline.measure();
     });
@@ -176,18 +178,14 @@ export class App {
         this.product = product;
         this.productAnchor = anchor;
         this.sceneManager.scene.add(this.productAnchor);
-        document.querySelector(".load-progress").hidden = true;
+        this.loadingStatus.hide();
         this.invalidate(true);
       })
       .catch((error) => {
         if (this.disposed) return;
         this.productError = error;
         this.productPromise = null;
-        const status = document.querySelector(".load-progress");
-        status.hidden = false;
-        document.getElementById("loadProgressCount").textContent =
-          "The product could not load.";
-        document.getElementById("retry-load").hidden = false;
+        this.loadingStatus.show("The product could not load.", true);
       });
   }
 
@@ -233,7 +231,8 @@ export class App {
     for (const mesh of this.speckleSystem.instancedMeshes)
       mesh.visible = mesh.material.opacity > 0;
     const idle = time - this.lastActivity > 40000;
-    const continuous = !idle && !this.motionPaused && !this.reducedMotion;
+    const continuous =
+      !idle && !this.motionPaused && !this.reducedMotion && !this.overlayActive;
     const controls = this.sceneManager.controls;
     const configuredRotation = controls.autoRotate;
     controls.autoRotate = configuredRotation && continuous;
@@ -248,12 +247,24 @@ export class App {
     // display cadence, but submit at most 60 scene renders/sec. Preserve dirty
     // state until it is actually drawn, including a tween's final frame.
     this.dirty ||= cameraChanged || particles || tweening;
+    const frameInterval = 1000 / 60;
     const renderDue =
       this.lastRenderTime === null ||
-      time - this.lastRenderTime >= 1000 / 60 - 0.5;
+      time - this.lastRenderTime >= frameInterval - 0.5;
     if (this.dirty && renderDue) {
       this.dirty = false;
-      this.lastRenderTime = time;
+      // Keep the fractional remainder. Resetting the clock to `time` on each
+      // draw accidentally limits 90 Hz screens to 45 fps and 144 Hz to 48 fps.
+      // Skip missed slots after a stall; never submit catch-up render bursts.
+      this.lastRenderTime =
+        this.lastRenderTime === null
+          ? time
+          : this.lastRenderTime +
+            Math.max(
+              1,
+              Math.floor((time - this.lastRenderTime + 0.5) / frameInterval),
+            ) *
+              frameInterval;
       this.sceneManager.render();
       if (!this.sceneRevealed) {
         // Reveal only after the first story frame, never an empty canvas or
@@ -352,7 +363,7 @@ export class App {
       "click",
       () => {
         this.productError = null;
-        document.querySelector(".load-progress").hidden = true;
+        this.loadingStatus.hide();
         this.preloadProduct();
       },
       { signal },
@@ -364,9 +375,7 @@ export class App {
         cancelAnimationFrame(this.animationFrameId);
         this.animationFrameId = null;
         this.isInitialized = false;
-        document.getElementById("loadProgressCount").textContent =
-          "Restoring the animation…";
-        document.querySelector(".load-progress").hidden = false;
+        this.loadingStatus.show("Restoring the animation…");
       },
       { signal },
     );
@@ -374,7 +383,7 @@ export class App {
       "webglcontextrestored",
       () => {
         this.isInitialized = true;
-        document.querySelector(".load-progress").hidden = true;
+        this.loadingStatus.hide();
         this.invalidate(true);
       },
       { signal },

@@ -262,31 +262,37 @@ body::-webkit-scrollbar {
 }
 .scroll-indicator {
   position: fixed;
-  right: 18px;
+  right: 1px;
   top: 50%;
   transform: translateY(-50%);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
   z-index: 100;
   opacity: 0.8;
 }
 .scroll-dot {
-  width: 10px;
-  height: 10px;
+  width: 44px;
+  height: 44px;
   border-radius: 8px;
   padding: 0;
-  background: #4e4e4e80;
-  transition: height 0.3s;
   position: relative;
 }
 .scroll-dot:before {
   content: "";
   position: absolute;
-  inset: -6px -10px;
+  width: 10px;
+  height: 10px;
+  left: 17px;
+  top: 17px;
+  border-radius: 8px;
+  background: #4e4e4e80;
+  transition:
+    transform 0.3s,
+    background-color 0.3s;
 }
-.scroll-dot.active {
-  height: 48px;
+.scroll-dot.active:before {
+  transform: scaleY(3.4);
   background: var(--taxa-blue);
 }
 .product-mobile-offset {
@@ -299,6 +305,9 @@ body::-webkit-scrollbar {
   gap: 4px;
   width: 560px;
   max-width: 56vw;
+}
+.product-cta > * {
+  flex-shrink: 0;
 }
 .child.active .product-cta {
   pointer-events: auto;
@@ -629,15 +638,16 @@ html.lenis body {
     font-size: 11px;
   }
   .scroll-indicator {
-    right: 10px;
-    gap: 10px;
+    right: 0;
   }
-  .scroll-dot {
+  .scroll-dot:before {
     width: 7px;
     height: 7px;
+    left: 18.5px;
+    top: 18.5px;
   }
-  .scroll-dot.active {
-    height: 34px;
+  .scroll-dot.active:before {
+    transform: scaleY(4);
   }
   .product-mobile-offset {
     top: auto;
@@ -694,6 +704,68 @@ html.lenis body {
     padding-bottom: 40px;
   }
 }
+/* Keep the complete product card reachable on laptops and landscape phones.
+   Only the card scrolls when its content exceeds the available height. */
+@media (min-width: 768px) and (max-height: 850px) {
+  .product .cell-child_left {
+    max-width: 40%;
+  }
+  .product-mobile-offset {
+    position: absolute;
+    top: 4vh;
+    bottom: 4vh;
+    height: calc(100% - 8vh);
+    right: var(--gutter);
+    max-width: 48%;
+  }
+  .product-cta {
+    width: 560px;
+    max-width: 100%;
+    max-height: 100%;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-width: thin;
+    border-radius: 14px;
+  }
+  .product-card-section {
+    padding: 1rem 1.2rem;
+  }
+  .product-p-large {
+    font-size: 26px;
+  }
+  .cta-header {
+    font-size: 2rem;
+  }
+  .product-p,
+  .ingredients-list,
+  .module {
+    font-size: 16px;
+  }
+}
+@media (max-height: 560px) {
+  .product .cell-child_left {
+    max-width: 40%;
+  }
+  .product .h1 {
+    font-size: 2rem;
+  }
+  .product-mobile-offset {
+    position: absolute;
+    top: 12px;
+    bottom: 24px;
+    height: calc(100% - 36px);
+    right: max(var(--gutter), 44px);
+    max-width: 50%;
+  }
+  .product-cta {
+    max-width: 100%;
+    max-height: 100%;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-width: thin;
+    border-radius: 14px;
+  }
+}
 @media (max-width: 479px) {
   :root {
     --gutter: 1.15rem;
@@ -739,6 +811,18 @@ html.lenis body {
   }
   .product .cell-child_left {
     transform: translateY(-1rem);
+  }
+}
+@media (max-width: 767px) and (max-height: 560px) and (orientation: portrait) {
+  .product .cell-child_left {
+    max-width: 100%;
+  }
+  .product-mobile-offset {
+    top: 80px;
+    bottom: 24px;
+    height: calc(100% - 104px);
+    right: var(--gutter);
+    max-width: calc(100% - 2 * var(--gutter));
   }
 }
 @media (prefers-reduced-motion: reduce) {

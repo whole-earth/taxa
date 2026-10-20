@@ -34,7 +34,7 @@ The small brand mark is a static local image. The story has a keyboard-accessibl
 
 ## Animation design
 
-- `js/main.js` initializes the page UI and app. Importing `anim.js` no longer starts an app as a side effect.
+- `js/main.js` initializes and tears down the page UI and app. Importing `anim.js` no longer starts an app as a side effect. `js/ui/page.js` owns menu, contact dialog and keyboard/focus behavior independently of model loading; `js/ui/loadingStatus.js` owns loading messages and avoids repeated DOM writes.
 - `js/core/anim.js` owns the frame scheduler. Scroll and asynchronous loads invalidate the scene. Lenis, tweens, camera controls and particle motion update at display cadence; canvas submission is paced to at most 60 fps to avoid flooding the GPU on 120 Hz displays. Dirty state persists until rendered, including final tween/scroll states. Settled product views and paused scenes stop scheduling frames; hidden tabs stop immediately. Ambient motion also sleeps after 40 seconds without activity and wakes on input.
 - `js/core/scroll.js` maps absolute scroll positions to chapters and product poses. Layout measurements are cached on initialization, font readiness and resize. Forward seeks, reverse scrolling and chapter jumps all use the same calculations.
 - `js/effects/speckles.js` preserves the particle count, sizes and tilted-axis orbital motion. Each group rotates as a whole, replacing 600 matrix decompositions, compositions and instance uploads per animated desktop frame. Instance matrices change only when positions are randomized.
@@ -44,6 +44,8 @@ The small brand mark is a static local image. The story has a keyboard-accessibl
 - `js/core/sceneManager.js` owns rendering and GPU resource teardown. Models remain resident while visiting chapters, avoiding disposal/reupload churn on reverse scroll. Shader preparation includes screen and linear transmission passes, back faces, both product material phases and their lighting. Materials specify their precision explicitly to avoid traversal-order-dependent shader variants in Three r173; product materials retain the original product's effective `lowp` precision. Two bounded idle tasks prepare actual GPU draws and allocations, restoring the visible scene before returning. Separate cameras retain the two transmission-target sizes instead of reallocating them on each crossing. This trades earlier loading work and additional intermediate-buffer memory for smoother transitions. Resources are released when the app is torn down.
 
 Open `/?perf` to expose `window.taxaDebug.app` and `window.taxaDebug.performanceMonitor.snapshot()` in browser DevTools. These diagnostics count scheduled story renders, excluding bounded loading warm-up draws. They do not run a separate animation loop.
+
+The render clock carries fractional time between submissions, maintaining the 60 fps target on 90/144/165 Hz displays without catch-up bursts after stalls. Open menus and contact dialogs suspend ambient motion; closing them resumes it. Chapter text and loading UI update only when their state changes. The chapter controls have 44 × 44 px targets with transform-only visual indicators. Short viewports use a bounded, independently scrollable product card so the waitlist remains reachable.
 
 ## Validation and measurements
 

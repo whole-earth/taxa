@@ -1,28 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-async function ready(page) {
-  await page.goto("/?perf");
-  await page.waitForFunction(() => window.taxaDebug?.app.isInitialized);
-}
-async function seek(page, section, progress = 0) {
-  await page.evaluate(
-    ({ section, progress }) => {
-      const app = window.taxaDebug.app;
-      const i = ["splash", "zoom", "pitch", "product"].indexOf(section);
-      const { top, height } = app.timeline.bounds[i];
-      window.scrollTo(
-        0,
-        top + (height - (i === 3 ? innerHeight : 0)) * progress + 1,
-      );
-      app.invalidate(true);
-    },
-    { section, progress },
-  );
-  await page.waitForFunction(
-    () => window.taxaDebug.app.timeline.lastY === scrollY,
-  );
-  await expect(page.locator("body")).toHaveAttribute("data-chapter", section);
-}
+import { ready, seek } from "./helpers.js";
 
 test("cell stays hidden during loading and fades in after its first frame", async ({
   page,

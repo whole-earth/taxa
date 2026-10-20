@@ -30,6 +30,7 @@ export class StoryTimeline {
     );
     this.zoomChildren = [...document.querySelectorAll(".zoom-child")];
     this.dots = [...document.querySelectorAll(".scroll-dot")];
+    this.nav = document.querySelector(".nav");
     this.chapter = -1;
     this.topic = -1;
     this.phase = -1;
@@ -100,6 +101,8 @@ export class StoryTimeline {
   }
 
   setText(index) {
+    if (index === this.textIndex) return;
+    this.textIndex = index;
     this.children.forEach((child, i) => {
       const active = i === index;
       child.classList.toggle("active", active);
@@ -232,9 +235,11 @@ export class StoryTimeline {
       index === 3 && p > 0.3 && p <= 0.7
         ? Math.min(1, 1 / manager.renderer.getPixelRatio())
         : 1;
-    document
-      .querySelector(".nav")
-      .classList.toggle("clear", index === 3 && p > 0.22);
+    const clearNav = index === 3 && p > 0.22;
+    if (clearNav !== this.clearNav) {
+      this.clearNav = clearNav;
+      this.nav.classList.toggle("clear", clearNav);
+    }
     manager.renderer.toneMappingExposure = 1;
     this.app.ambientLight.intensity = 4;
 
@@ -274,13 +279,10 @@ export class StoryTimeline {
       this.setText(p > 0.95 ? 3 : p > 0.4 ? -1 : 2);
       if (product) this.updateProduct(product, p);
       else if (!this.app.productError) {
-        document.querySelector(".load-progress").hidden = false;
-        document.getElementById("loadProgressCount").textContent =
-          "Preparing the product…";
+        this.app.loadingStatus.show("Preparing the product…");
       }
     }
-    if (index < 3 && !this.app.productError)
-      document.querySelector(".load-progress").hidden = true;
+    if (index < 3 && !this.app.productError) this.app.loadingStatus.hide();
     // Once the reader enters the story, prepare the later product while there
     // is still a full chapter of scrolling available for decode/compilation.
     if (index >= 1) this.app.preloadProduct();

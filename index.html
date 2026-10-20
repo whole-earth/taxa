@@ -186,7 +186,7 @@
             <h2 class="h1" id="product-title">Superpower your skin.</h2>
           </div>
           <div class="cell-child_right product-mobile-offset">
-            <div class="product-cta">
+            <div class="product-cta" data-lenis-prevent>
               <div class="pod-selector">
                 <div
                   class="applicator-container"
@@ -293,7 +293,11 @@
     <button id="motion-toggle" class="motion-toggle" aria-pressed="false">
       Pause motion
     </button>
-    <dialog id="contact-dialog" aria-labelledby="contact-title">
+    <dialog
+      id="contact-dialog"
+      aria-labelledby="contact-title"
+      data-lenis-prevent
+    >
       <button class="dialog-close" aria-label="Close contact">×</button>
       <h2 id="contact-title">Contact us</h2>
       <a href="mailto:hello@taxatech.com">hello@taxatech.com ↗</a>
