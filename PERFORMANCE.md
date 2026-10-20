@@ -120,6 +120,14 @@ This exposed a network wait, not a polygon-count diagnosis: the uncompressed loc
 
 Delayed-product tests separately hold the request while seeking between chapters and opening contact, then verify that one product request completes at the current scroll pose. Core page controls remain usable while the 3D scene loads.
 
+### Cap fade continuity
+
+The product GLB exports the frosted outer cap with a 0.5 alpha-test cutoff, despite having no alpha cutout texture. During the scroll fade, this discarded the entire cap below half opacity and exposed the cream background before abruptly rendering it again. Product initialization now disables that redundant cutoff before shader preparation. The existing opacity curve, frosted material, geometry and textures remain intact; no additional render pass or per-frame work is introduced.
+
+Desktop frame comparisons at product progress 0.499 reproduced the missing surface: removing the cutoff changed 53.48% of pixels by more than eight channel levels. Sampled desktop frames from 0.501 onward, including the final product, were pixel-identical. Mobile samples retained their appearance (at most two channel levels of isolated render variation); the mobile framing did not expose the same background gap at half opacity. Comparison images are retained under `test-results/cap/` and `test-results/cap-mobile/`.
+
+A rendered-pixel regression check now crosses half opacity in both scroll directions and rejects a large frame discontinuity. It passed in Chrome and WebKit, alongside desktop/mobile Retina shader and texture reuse checks: **3/3 targeted checks in each browser**. Build, formatting and Git whitespace checks also passed.
+
 ## Tradeoffs and limits
 
 The refraction change is an intermediate-rendering adjustment, not mathematically identical rendering during the overlap. The full-resolution hero and final-product policy is retained. Two transmission target sizes stay resident to avoid allocation churn, so intermediate-buffer memory is higher than with a single target. GPU preparation performs bounded extra loading draws and fetches the product earlier; it does not make that work free.

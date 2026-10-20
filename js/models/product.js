@@ -76,6 +76,10 @@ export class ProductModel {
         }
         child.material.transparent = true;
         child.material.opacity = 0;
+        // The GLB exports the frosted cap with a 50% alpha cutoff, despite
+        // having no cutout texture. Remove it so the scroll fade cannot
+        // discard the cap and expose the background halfway through.
+        if (child.name === "outer-cap") child.material.alphaTest = 0;
         materialsToUpdate.push(child.material);
       }
 

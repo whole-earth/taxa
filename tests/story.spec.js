@@ -383,6 +383,57 @@ test("120 Hz updates pace rendering and retain the final pending frame", async (
   });
 });
 
+test("cap fades continuously through half opacity in both scroll directions", async ({
+  page,
+}) => {
+  await ready(page);
+  await page.evaluate(async () => {
+    const app = window.taxaDebug.app;
+    app.preloadProduct();
+    await app.productPromise;
+  });
+  await seek(page, "pitch", 0.1);
+  const changes = await page.evaluate(() => {
+    const app = window.taxaDebug.app;
+    app.motionPaused = true;
+    cancelAnimationFrame(app.animationFrameId);
+    app.isInitialized = false;
+    const { camera, renderer } = app.sceneManager;
+    camera.position.set(0, 0, 60);
+    camera.lookAt(0, 0, 0);
+    const canvas = document.createElement("canvas");
+    canvas.width = renderer.domElement.width;
+    canvas.height = renderer.domElement.height;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const { top, height } = app.timeline.bounds[3];
+    const frames = [0.4999, 0.5001, 0.4999].map((progress) => {
+      app.timeline.update(top + (height - innerHeight) * progress);
+      app.ribbons.root.visible = false;
+      app.speckles.meshes.forEach((mesh) => (mesh.visible = false));
+      app.productAnchor.lookAt(camera.position);
+      app.sceneManager.render();
+      ctx.fillStyle = "#fffbf4";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(renderer.domElement, 0, 0);
+      return ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    });
+    return frames.slice(1).map((frame, index) => {
+      let difference = 0;
+      for (let i = 0; i < frame.length; i += 4) {
+        for (let channel = 0; channel < 3; channel++) {
+          difference += Math.abs(
+            frame[i + channel] - frames[index][i + channel],
+          );
+        }
+      }
+      return difference / (canvas.width * canvas.height * 3);
+    });
+  });
+  // A tiny scroll step must not reveal a screen-sized patch of background.
+  // The exported cap's 50% alpha cutoff produced a >16/255 average jump.
+  for (const difference of changes) expect(difference).toBeLessThan(2);
+});
+
 for (const [name, width, height, dpr] of [
   ["desktop", 1440, 900, 2],
   ["mobile", 390, 844, 3],
