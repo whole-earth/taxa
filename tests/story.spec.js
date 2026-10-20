@@ -417,7 +417,7 @@ for (const mobile of [false, true]) {
         return ctx.getImageData(0, 0, canvas.width, canvas.height).data;
       };
       const samples = [];
-      const progress = mobile ? 0.68 : 0.6;
+      const progress = mobile ? 0.64 : 0.6;
       // Revisit the overlap after the opaque product phase to catch stale state.
       for (const p of [progress, 0.99, progress]) {
         app.timeline.update(top + (height - innerHeight) * p);
@@ -452,6 +452,55 @@ for (const mobile of [false, true]) {
       expect(covered).toBeLessThan(1);
       expect(exposed).toBeGreaterThan(10);
     }
+  });
+}
+
+for (const mobile of [false, true]) {
+  test(`optical zoom precedes the seal and wordmark reveal (${mobile ? "mobile" : "desktop"})`, async ({
+    page,
+  }) => {
+    if (mobile) await page.setViewportSize({ width: 390, height: 844 });
+    await ready(page);
+    const samples = await page.evaluate(async () => {
+      const app = window.taxaDebug.app;
+      app.preloadProduct();
+      await app.productPromise;
+      app.motionPaused = true;
+      cancelAnimationFrame(app.animationFrameId);
+      app.isInitialized = false;
+      const { top, height } = app.timeline.bounds[3];
+      const sample = (progress) => {
+        app.timeline.update(top + (height - innerHeight) * progress);
+        return {
+          cap: app.product.cap.material.opacity,
+          seal: app.product.seal.material.opacity,
+          wordmark: app.product.wordmark.material.opacity,
+          exposure: app.sceneManager.renderer.toneMappingExposure,
+          rotation: app.product.root.rotation.x,
+        };
+      };
+      const progress = [0.5, 0.56, 0.6, 0.696];
+      const forward = progress.map(sample);
+      sample(0.99);
+      const reverse = [...progress].reverse().map(sample).reverse();
+      return { forward, reverse };
+    });
+    expect(samples.reverse).toEqual(samples.forward);
+    const [optical, sealEntrance, branding, resolved] = samples.forward;
+    expect(optical.cap).toBeGreaterThan(0.4);
+    expect(optical.seal).toBe(0);
+    expect(optical.wordmark).toBe(0);
+    expect(optical.exposure).toBeGreaterThan(0.9);
+    expect(sealEntrance.seal).toBeGreaterThan(0);
+    expect(sealEntrance.seal).toBeLessThan(0.25);
+    expect(sealEntrance.wordmark).toBe(0);
+    expect(branding.wordmark).toBeGreaterThan(0);
+    expect(branding.wordmark).toBeLessThan(branding.seal);
+    expect(branding.seal).toBeLessThan(0.6);
+    expect(resolved.seal).toBe(1);
+    expect(resolved.wordmark).toBe(1);
+    expect(resolved.rotation).toBeCloseTo(Math.PI / 2);
+    expect(resolved.exposure).toBeCloseTo(0.6, 2);
   });
 }
 

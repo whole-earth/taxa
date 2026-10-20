@@ -20,7 +20,9 @@ export class ProductModel {
     this.initializeMaterials();
     this.applicator = root.getObjectByName("applicator");
     if (this.applicator) this.prepareApplicator(this.applicator);
+    this.cap = root.getObjectByName("outer-cap");
     this.seal = root.getObjectByName("film-cover");
+    this.wordmark = root.getObjectByName("taxa-name");
     if (this.seal) {
       // The seal is solid even while the story fades it in. Resolve its
       // nearest surface before blending color, so the rim cannot show through.
@@ -89,13 +91,15 @@ export class ProductModel {
     return this.materials;
   }
 
-  setRevealOpacity(opacity) {
+  setRevealOpacity({ body, cap, seal, wordmark }) {
     this.materials.forEach((material) => {
-      material.opacity = opacity;
+      material.opacity = body;
     });
-    // Preserve the apparent fade of the old front/back color layers while
-    // shading only the nearest seal surface.
-    if (this.seal) this.seal.material.opacity = 1 - (1 - opacity) ** 2;
+    // Optical refraction, the solid seal and its branding have independent
+    // reveal timing. The seal's depth draw still blocks the rim beneath it.
+    if (this.cap) this.cap.material.opacity = cap;
+    if (this.seal) this.seal.material.opacity = seal;
+    if (this.wordmark) this.wordmark.material.opacity = wordmark;
   }
 
   initializeMaterials() {

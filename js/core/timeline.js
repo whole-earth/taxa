@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { PRODUCT_PHASE } from "./productConfig.js";
+import { PRODUCT_PHASE, PRODUCT_REVEAL } from "./productConfig.js";
 import { Tween, Easing } from "tween";
 import {
   MOBILIZED_GREEN,
@@ -12,6 +12,8 @@ const smoothstep = (value) => {
   const t = clamp01(value);
   return t * t * (3 - 2 * t);
 };
+const revealStage = (progress, { start, end }) =>
+  smoothstep((progress - start) / (end - start));
 const easeInOutQuad = (value) => {
   const t = clamp01(value);
   return t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
@@ -318,21 +320,23 @@ export class StoryTimeline {
     const rotation = clamp01((progress - 0.7) / 0.2);
     const secondHalf = clamp01((rotation - 0.5) / 0.5);
     if (progress <= 0.7) {
+      const reveal = clamp01((progress - 0.3) / 0.4);
       const scale = this.mix(
         this.isMobile ? 26 : 20,
         this.isMobile ? 4.8 : 4,
-        (progress - 0.3) / 0.4,
+        reveal,
       );
       product.position.set(0, 0, 0);
       product.rotation.set(Math.PI / 2, 0, 0);
       product.scale.setScalar(scale);
-      const opacity = clamp01((progress - 0.3) / 0.4);
-      this.app.product.setRevealOpacity(opacity);
-      manager.renderer.toneMappingExposure = this.mix(
-        1,
-        0.6,
-        (progress - 0.3) / 0.4,
-      );
+      this.app.product.setRevealOpacity({
+        cap: reveal,
+        body: revealStage(reveal, PRODUCT_REVEAL.body),
+        seal: revealStage(reveal, PRODUCT_REVEAL.seal),
+        wordmark: revealStage(reveal, PRODUCT_REVEAL.wordmark),
+      });
+      manager.renderer.toneMappingExposure =
+        1 - 0.4 * revealStage(reveal, PRODUCT_REVEAL.lighting);
     } else if (this.isMobile) {
       product.rotation.set(
         this.mix(Math.PI / 2, Math.PI / 7, rotation),

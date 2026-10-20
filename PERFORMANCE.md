@@ -147,9 +147,17 @@ The generated asset was verified byte-identical to the committed repair. The sto
 
 The imported seal uses alpha blending with depth writing disabled. During the reveal, the orange rim could therefore draw through the nearer pull tab. Enabling depth writing directly exposed inconsistent overlap between the seal's upper and lower surfaces. The transition now draws the seal's nearest depth with a colorless basic material, then shades that surface once. This shares the existing geometry and replaces the previous two-sided color draws: sampled desktop and mobile **draw counts and submitted triangle counts are unchanged**.
 
-The seal's reveal opacity is `1 - (1 - opacity)²`, preserving the apparent opacity of its previous two blended surfaces. ProductModel owns this material behavior; the timeline supplies only reveal progress. The depth mesh participates in normal shader preparation and shared-resource disposal. It is disabled in the final product phase, which retains its original rendering; sampled final-product frames were pixel-identical.
+The initial occlusion fix used seal opacity `1 - (1 - opacity)²` to preserve the apparent opacity of its previous two blended surfaces. The staged reveal below supersedes that accelerated fade. The depth mesh participates in normal shader preparation and shared-resource disposal. It is disabled in the final product phase, which retains its original rendering; sampled final-product frames were pixel-identical.
 
 New desktop/mobile pixel tests hide the rim and verify that pixels covered by the tab stay unchanged while exposed rim pixels change. They repeat after visiting the final product and seeking backward. These checks, cap fade continuity, desktop/mobile shader reuse and product interactions passed: **6 targeted checks in Chrome and 6 in WebKit**. Build, formatting and Git whitespace checks passed. Before/after captures and draw statistics are in `test-results/seal-fixed/` and `test-results/seal-fixed-mobile/`.
+
+### Staged optical zoom and product reveal
+
+The cell-to-product zoom now separates optical refraction, the product body, the seal, the Taxa wordmark and exposure. The refractive cap retains its original fade and movement. Smooth fades introduce the body over 20–85% of the zoom, the seal over 55–95%, and the wordmark over 68–98%. Darkening starts at 35% and reaches the original exposure at the end. These are fractions of the existing zoom interval (product chapter progress 0.3–0.7), not additional section height or time-based animations.
+
+At the zoom midpoint, the seal and wordmark remain hidden and exposure is above 0.9. At three quarters, the seal is half visible instead of the previous 93.75%. Both seal and branding are fully revealed before the product tilts. The timeline owns the named timing intervals in `PRODUCT_REVEAL`; ProductModel applies the individual material opacities while retaining seal occlusion. Direct seeking, reverse scrolling and mobile use the same absolute-progress staging.
+
+This changes only opacity and exposure values: no additional geometry, materials, draws, shader variants or assets. Desktop and mobile comparisons at the end of the zoom and in the final product pose were pixel-identical to the previous version. Before/after sequences are retained in `test-results/reveal-timing/`. Eight targeted checks passed in each of Chrome and WebKit, covering staging and reverse seeking, partial-opacity tab occlusion, cap continuity, product interaction and shader/texture reuse. Build, formatting and Git whitespace checks also passed.
 
 ## Tradeoffs and limits
 
