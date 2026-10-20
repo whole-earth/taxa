@@ -128,6 +128,21 @@ Desktop frame comparisons at product progress 0.499 reproduced the missing surfa
 
 A rendered-pixel regression check now crosses half opacity in both scroll directions and rejects a large frame discontinuity. It passed in Chrome and WebKit, alongside desktop/mobile Retina shader and texture reuse checks: **3/3 targeted checks in each browser**. Build, formatting and Git whitespace checks also passed.
 
+### Removing the old seal branding
+
+The faint SWAP mark beneath the Taxa decal was cut-through geometry in `film-cover`, not a texture or a transparency sorting failure. The product asset now has a repaired center on both sides of the domed seal, using radial height samples from its intact surface. The outer seal, pull tab, side text, all other meshes, materials, transforms and embedded textures are preserved. Binary comparisons confirmed that only the seal's position, normal and index buffers changed.
+
+This is an offline asset correction: there is no new runtime material, mask, shader, dependency or draw call. The seal has **8,504 triangles instead of 8,862**, and the GLB is **989,096 bytes instead of 1,006,216**. A geometric audit cast 1,632 probes through the old lettering region; every probe crossed exactly two seal surfaces with positive thickness. Desktop/mobile close-ups with the Taxa decal temporarily hidden confirm the old lettering is absent; the normal view retains the single Taxa mark. Captures are in `test-results/branding-repaired/` and `test-results/branding-repaired-mobile/`.
+
+The repair is reproducible from the original asset in Git. The script validates its source hash, reconstructs only the seal center and compacts that mesh's buffers. It is deliberately separate from the site build and never runs in the browser:
+
+```sh
+git show a7972a2:assets/product/swap.glb > /tmp/taxa-original-product.glb
+node scripts/repair-product-seal.mjs /tmp/taxa-original-product.glb /tmp/taxa-repaired-product.glb
+```
+
+The generated asset was verified byte-identical to the committed repair. The story suite passed **14/14 checks in Chrome and 14/14 in WebKit**, including forward/reverse scrolling, desktop/mobile pod changes, cap fade continuity and shader/texture reuse. These results describe the repaired asset; the earlier pixel-identical cap-fade comparisons predate this intentional branding change.
+
 ## Tradeoffs and limits
 
 The refraction change is an intermediate-rendering adjustment, not mathematically identical rendering during the overlap. The full-resolution hero and final-product policy is retained. Two transmission target sizes stay resident to avoid allocation churn, so intermediate-buffer memory is higher than with a single target. GPU preparation performs bounded extra loading draws and fetches the product earlier; it does not make that work free.
