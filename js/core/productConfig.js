@@ -15,12 +15,10 @@ export const PRODUCT_PHASE = {
 };
 
 // Fractions of the cell-to-product zoom, independent of section height.
-// Keep the refractive cap present while solid surfaces resolve later.
 export const PRODUCT_REVEAL = {
-  // The seated base clears the camera before its surfaces fade into view.
-  base: { start: 0.5, end: 0.85 },
-  body: { start: 0.2, end: 0.85 },
-  // Both viewport paths have cleared the seal before its color appears.
-  seal: { start: 0.7, end: 0.98 },
+  interior: { start: 0, end: 0.4 },
+  // The seal conceals the detailed internals before the exterior resolves.
+  seal: { start: 0.7, end: 0.9 },
+  exterior: { start: 0.9, end: 1 },
   lighting: { start: 0.35, end: 1 },
 };

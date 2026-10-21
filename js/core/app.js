@@ -243,6 +243,10 @@ export class StoryApp {
     if (particles) this.speckles.rotateGroups(time);
     if (this.productAnchor && (cameraChanged || this.needsRender || tweening))
       this.productAnchor.lookAt(this.sceneManager.camera.position);
+    if (cameraChanged && this.timeline.chapter === 3)
+      this.timeline.updateCellPose(
+        this.timeline.progress(3, this.timeline.lastScrollY),
+      );
     // High-refresh displays can request 120+ full-resolution transmission
     // frames/sec and saturate the GPU command queue. Update motion at the
     // display cadence, but submit at most 60 scene renders/sec. Preserve dirty

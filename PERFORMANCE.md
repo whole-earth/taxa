@@ -4,17 +4,17 @@ Measured locally on October 20, 2026. Work is isolated to `optimize/story-demo`;
 
 ## What made the cell-to-stick transition expensive
 
-| Contributor | Evidence | Change |
-| --- | --- | --- |
-| Full-resolution refraction and overdraw | Both the desktop cell shell and product cap use physical transmission. Three r173 renders an intermediate multisampled image, resolves it and generates mipmaps. At 1440 × 900 and DPR 2 this starts with 5.18 million pixels. Diagnostic removal of the product or reduction of the transmission buffer reduced GPU time substantially. | During product progress 0.3–0.7 only, render the blurred transmission backdrop at CSS-pixel resolution. Keep the canvas, silhouettes, textures and final product at native DPR. |
-| Shaders first encountered during scrolling | The old preparation missed linear-color transmission shaders, back-face variants and the final spotlight/material phase. Program counts grew during the first transition. | Prepare the actual lighting/material/output variants before publishing the product to the timeline. Subsequent forward/reverse visits do not create shader programs. |
-| Traversal-dependent precision | Three r173's `WebGLPrograms.getParameters` retains the last explicitly requested precision. `lowp` particles could change later materials with `precision === null`, creating a previously unwarmed mobile shader. | Explicit precision per material: renderer-default precision for scene materials, original effective `lowp` for product materials and particles. |
-| First GPU draw and target allocation | `compileAsync` alone did not eliminate visible-browser first-draw stalls. A controlled mobile-sized visible-browser test still recorded a 162 ms render submission without GPU draw preparation. | Prepare both product phases in bounded idle loading tasks. Each task restores the current scene before yielding, so the preparation poses are not presented. The corresponding first visible transition subsequently recorded a 3.6 ms maximum submission in that check. |
-| Excess submissions on high-refresh displays | The visible browser delivered approximately 120 Hz callbacks. Submitting a full-resolution transmission frame on each callback could saturate the GPU queue. | Cap canvas submission at 60 fps while updating scroll/motion state at display cadence. Preserve pending dirty state until it is rendered. |
-| Repeated intermediate-buffer allocation | Changing the transmission scale on one camera resizes its target when crossing each boundary. | Retain full-size and transition-size targets through two cameras with identical transforms. This uses additional buffer memory but avoids repeated allocation on reverse scrolling. |
-| Particle CPU work | The original desktop particle path decomposed/rebuilt 600 matrices each animated frame. An isolated 1,000-update sample took approximately 40 ms versus 0.4 ms after grouping. | Rotate the five particle groups instead; preserve particle counts, geometry and orbital motion. This is a component-level result, not a claim of 100× whole-page speed. |
-| Idle and invisible rendering | The original settled product rendered continuously; invisible cell components could still incur draws. | Demand-driven rendering, hidden-tab suspension, explicit visibility for zero-opacity ribbons/particles, and idle sleep. |
-| Empty shadow work | No model mesh casts or receives shadows, but the product spotlight enabled shadow rendering. | Remove the empty shadow-map setup. Ablations showed this was not the dominant transition cost. |
+| Contributor                                 | Evidence                                                                                                                                                                                                                                                                                                                                 | Change                                                                                                                                                                                                                                                                   |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Full-resolution refraction and overdraw     | Both the desktop cell shell and product cap use physical transmission. Three r173 renders an intermediate multisampled image, resolves it and generates mipmaps. At 1440 × 900 and DPR 2 this starts with 5.18 million pixels. Diagnostic removal of the product or reduction of the transmission buffer reduced GPU time substantially. | During product progress 0.3–0.7 only, render the blurred transmission backdrop at CSS-pixel resolution. Keep the canvas, silhouettes, textures and final product at native DPR.                                                                                          |
+| Shaders first encountered during scrolling  | The old preparation missed linear-color transmission shaders, back-face variants and the final spotlight/material phase. Program counts grew during the first transition.                                                                                                                                                                | Prepare the actual lighting/material/output variants before publishing the product to the timeline. Subsequent forward/reverse visits do not create shader programs.                                                                                                     |
+| Traversal-dependent precision               | Three r173's `WebGLPrograms.getParameters` retains the last explicitly requested precision. `lowp` particles could change later materials with `precision === null`, creating a previously unwarmed mobile shader.                                                                                                                       | Explicit precision per material: renderer-default precision for scene materials, original effective `lowp` for product materials and particles.                                                                                                                          |
+| First GPU draw and target allocation        | `compileAsync` alone did not eliminate visible-browser first-draw stalls. A controlled mobile-sized visible-browser test still recorded a 162 ms render submission without GPU draw preparation.                                                                                                                                         | Prepare both product phases in bounded idle loading tasks. Each task restores the current scene before yielding, so the preparation poses are not presented. The corresponding first visible transition subsequently recorded a 3.6 ms maximum submission in that check. |
+| Excess submissions on high-refresh displays | The visible browser delivered approximately 120 Hz callbacks. Submitting a full-resolution transmission frame on each callback could saturate the GPU queue.                                                                                                                                                                             | Cap canvas submission at 60 fps while updating scroll/motion state at display cadence. Preserve pending dirty state until it is rendered.                                                                                                                                |
+| Repeated intermediate-buffer allocation     | Changing the transmission scale on one camera resizes its target when crossing each boundary.                                                                                                                                                                                                                                            | Retain full-size and transition-size targets through two cameras with identical transforms. This uses additional buffer memory but avoids repeated allocation on reverse scrolling.                                                                                      |
+| Particle CPU work                           | The original desktop particle path decomposed/rebuilt 600 matrices each animated frame. An isolated 1,000-update sample took approximately 40 ms versus 0.4 ms after grouping.                                                                                                                                                           | Rotate the five particle groups instead; preserve particle counts, geometry and orbital motion. This is a component-level result, not a claim of 100× whole-page speed.                                                                                                  |
+| Idle and invisible rendering                | The original settled product rendered continuously; invisible cell components could still incur draws.                                                                                                                                                                                                                                   | Demand-driven rendering, hidden-tab suspension, explicit visibility for zero-opacity ribbons/particles, and idle sleep.                                                                                                                                                  |
+| Empty shadow work                           | No model mesh casts or receives shadows, but the product spotlight enabled shadow rendering.                                                                                                                                                                                                                                             | Remove the empty shadow-map setup. Ablations showed this was not the dominant transition cost.                                                                                                                                                                           |
 
 ## Loading versus geometry
 
@@ -38,15 +38,15 @@ The original GLB/HDR files and embedded texture bytes are unchanged. No mesh dec
 
 Desktop transition, 1440 × 900, DPR 2:
 
-| Measurement | Earlier demo | Optimized demo |
-| --- | ---: | ---: |
-| First visible sweep: maximum CPU render submission | 90.4 ms | **4.7 ms** |
-| First visible sweep: GPU time, p95 | 15.17 ms | **11.01 ms** |
-| Repeat sweep: GPU time, p95 | 13.18 ms | **9.88 ms** |
-| Repeat sweep: maximum CPU render submission | 1.9 ms | 2.2 ms |
-| First sweep: callback intervals over 25 ms, out of 150 | 1 | 0 |
-| Repeat sweep: callback intervals over 25 ms, out of 150 | 0 | 0 |
-| Observed preparation wait before the sweep | 143.3 ms | 337.6 ms |
+| Measurement                                             | Earlier demo | Optimized demo |
+| ------------------------------------------------------- | -----------: | -------------: |
+| First visible sweep: maximum CPU render submission      |      90.4 ms |     **4.7 ms** |
+| First visible sweep: GPU time, p95                      |     15.17 ms |   **11.01 ms** |
+| Repeat sweep: GPU time, p95                             |     13.18 ms |    **9.88 ms** |
+| Repeat sweep: maximum CPU render submission             |       1.9 ms |         2.2 ms |
+| First sweep: callback intervals over 25 ms, out of 150  |            1 |              0 |
+| Repeat sweep: callback intervals over 25 ms, out of 150 |            0 |              0 |
+| Observed preparation wait before the sweep              |     143.3 ms |       337.6 ms |
 
 The final isolated run reduced the first visible submission spike by approximately **95%**, and repeat-sweep p95 GPU duration by approximately **25%**. The preparation row makes the tradeoff explicit: some work now happens earlier, after the hero is available, instead of during the handoff. Local transfer/cache conditions affect that preparation measurement.
 
@@ -56,11 +56,11 @@ A separate visible-browser check at **500 × 844, DPR 2**, using actual scrollin
 
 The settled-scene benchmark uses 1440 × 900, DPR 1, and samples three seconds per scene:
 
-| Scene | Original main: script time | Optimized: script time | Original / optimized scene renders |
-| --- | ---: | ---: | ---: |
-| Hero | 148.46 ms | **102.81 ms** | 180 / 181 |
-| Microbes | 139.22 ms | **87.37 ms** | 181 / 181 |
-| Settled product | 205.94 ms | **0 ms** | 181 / **0** |
+| Scene           | Original main: script time | Optimized: script time | Original / optimized scene renders |
+| --------------- | -------------------------: | ---------------------: | ---------------------------------: |
+| Hero            |                  148.46 ms |          **102.81 ms** |                          180 / 181 |
+| Microbes        |                  139.22 ms |           **87.37 ms** |                          181 / 181 |
+| Settled product |                  205.94 ms |               **0 ms** |                        181 / **0** |
 
 The optimized product wakes on input, resize or a color change; zero idle renders does not mean frozen interaction. Raw records and screenshots are under `test-results/benchmark/`.
 
@@ -81,12 +81,12 @@ The entrance fade restores the original Webflow CSS timing (1.8 seconds, ease-ou
 The frame limiter previously reset its clock to each actual submission. That discarded the fractional interval on displays whose refresh rate is not a multiple of 60. The corrected clock carries that remainder and skips missed slots after stalls, while retaining pending dirty frames.
 
 | Simulated display refresh | Previous submissions / second | Corrected submissions / second |
-| --- | ---: | ---: |
-| 60 Hz | 60 | 60 |
-| 90 Hz | 45 | 60 |
-| 120 Hz | 60 | 60 |
-| 144 Hz | 48 | 60 |
-| 165 Hz | 55 | 60 |
+| ------------------------- | ----------------------------: | -----------------------------: |
+| 60 Hz                     |                            60 |                             60 |
+| 90 Hz                     |                            45 |                             60 |
+| 120 Hz                    |                            60 |                             60 |
+| 144 Hz                    |                            48 |                             60 |
+| 165 Hz                    |                            55 |                             60 |
 
 The scheduler also passed at 72, 75 and 240 Hz. These are controlled scheduler tests, not a guarantee that every GPU can render the scene at 60 fps. On refresh rates that do not divide evenly, presentation intervals necessarily alternate.
 
@@ -178,6 +178,16 @@ As the tilt starts, the base lowers smoothly over product chapter progress 0.70�
 All motion is evaluated from absolute scroll progress. The change adjusts existing transforms and material opacity; it introduces no new geometry, materials, groups, shaders or render passes. Desktop/mobile rendered sweeps sampled the zoom at 0.001 progress intervals; new pixel checks cover both base and seal camera crossings, forward and backward. The corrected base crossing on mobile measured a mean frame difference of about 0.095/255, compared with about 22/255 when the seated base appeared too early. These are image-continuity measurements, not frame-rate measurements.
 
 Geometry checks now verify that the cap overlaps the tube during the zoom, then confirm the deliberate separation, cap descent and final twist in sequence. Reverse seeks reproduce the same poses. Zoom captures are in `test-results/assembly-seated/`; the complete assembly sequence is in `test-results/assembly-lock/`. All 12 targeted checks passed in Chrome and WebKit, including product interaction, tab occlusion and shader/texture reuse. Build, formatting and Git whitespace checks passed; the JavaScript bundle is 688,846 bytes (179,596 gzip).
+
+### Spatial tube interior (current transition)
+
+The current transition replaces the layered CAD-interior fades described above with a purpose-built sleeve, softly shaded floor and opening backdrop. The cell occupies a fixed point inside the sleeve and shares the product's scale during the pullback. The early cell shot blends into that spatial setup before the tube becomes visible. Camera damping also refreshes the cell anchor; returning to earlier chapters restores its original position. This is a camera-relative scaling move, not independent shrinking of a cell in front of the product.
+
+The sleeve resolves over the first 40% of the zoom interval, while the colored optical streaks recede. After the camera clears the opening, the seal and wordmark resolve together over 70–90% of the zoom. The detailed exterior fades in over the final 10%, once the seal hides the internal parts. The cell and sleeve stop drawing when covered. The opening backdrop does not write depth, so it cannot cut off the rim or pull tab. The cap no longer uses an extreme transition-only refraction index. The existing tilt, separation, cap descent and locking twist remain intact.
+
+The new interior uses baked vertex colors, two basic materials (shared by the wall and floor) and three small meshes: 4,901 triangles and 146,722 bytes of geometry buffers, with no new image assets or downloads. It replaces the previous overflow mask. In a fixed-pose desktop comparison against commit `f217db0` (1440 × 900, DPR 2), total submitted draws—including transmission passes—fell from **21 to 12** at product progress 0.60. Submitted triangles there fell from 485,718 to 465,832. At progress 0.68, hiding the covered cell reduced submissions from **485,718 to 41,839 triangles**, with 13 draws instead of 21. The final pose remained at 15 draws / 41,068 triangles. Texture count stayed at seven; prepared shader programs rose from 33 to 34, with no further programs created during repeated transitions. These are renderer-work measurements, not physical-device frame-rate results.
+
+Desktop/mobile rendered sweeps sampled 421 positions through the zoom. Pixel checks cover the camera crossings, removal of the covered interior and transition into the side view. Spatial checks verify fixed cell coordinates and relative scale, monotonic projected shrinkage, camera movement, reverse seeking and restoration of the earlier chapters. Separate checks preserve pull-tab occlusion and the cap's seating/twist sequence. Final desktop/mobile product captures were pixel-identical to the previous version. Screenshots, sweep data and the before/after draw statistics are retained under `test-results/tube-interior/`. All 42 distinct checks passed in Chrome and WebKit across the final validation runs, including context recovery, reduced motion, resizing and resource reuse. Build, formatting and Git whitespace checks passed. The JavaScript bundle is 690,953 bytes (180,293 gzip), an increase of 697 gzip bytes over the previous transition.
 
 ## Tradeoffs and limits
 
