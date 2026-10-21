@@ -320,12 +320,10 @@ export class StoryTimeline {
     const rotation = clamp01((progress - 0.7) / 0.2);
     const secondHalf = clamp01((rotation - 0.5) / 0.5);
     const reveal = clamp01((progress - 0.3) / 0.4);
-    // Leave the optical cap's path unchanged during the zoom. The base
-    // meets it out of view, then both settle together as the product tilts.
-    const assemblyOffset = 1 - smoothstep(rotation);
-    this.app.product.setBaseOffset(
-      assemblyOffset * revealStage(reveal, PRODUCT_REVEAL.assembly),
-    );
+    // Hide the separation throughout the optical zoom. As the tilt begins,
+    // lower the base while holding the cap steady; the cap seats and twists
+    // only after the side view has revealed how the two parts fit together.
+    this.app.product.setBaseOffset(1 - smoothstep((progress - 0.7) / 0.06));
     if (progress <= 0.7) {
       const scale = this.mix(
         this.isMobile ? 26 : 20,
@@ -338,6 +336,7 @@ export class StoryTimeline {
       this.app.product.setRevealOpacity({
         cap: reveal,
         body: revealStage(reveal, PRODUCT_REVEAL.body),
+        base: revealStage(reveal, PRODUCT_REVEAL.base),
         seal: revealStage(reveal, PRODUCT_REVEAL.seal),
       });
       manager.renderer.toneMappingExposure =
@@ -375,7 +374,7 @@ export class StoryTimeline {
     manager.productLight.intensity = this.mix(0, 8, lightProgress);
     ambientLight.intensity = this.mix(4.6, 3.2, lightProgress);
     if (applicator && !this.app.podSelector?.isAnimating) {
-      applicator.position.y = assemblyOffset;
+      applicator.position.y = this.mix(1, 0, (progress - 0.9) / 0.05);
       applicator.rotation.y = this.mix(
         0,
         Math.PI * 0.26,

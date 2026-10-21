@@ -111,10 +111,11 @@ export class ProductModel {
       node.position.y = restY + offset;
   }
 
-  setRevealOpacity({ body, cap, seal }) {
+  setRevealOpacity({ body, base, cap, seal }) {
     this.materials.forEach((material) => {
       material.opacity = body;
     });
+    for (const { node } of this.baseParts) node.material.opacity = base;
     // The seal and branding resolve together after the camera clears them.
     // The seal's depth draw still blocks the rim beneath the pull tab.
     if (this.cap) this.cap.material.opacity = cap;

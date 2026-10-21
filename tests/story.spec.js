@@ -504,7 +504,7 @@ for (const mobile of [false, true]) {
 }
 
 for (const mobile of [false, true]) {
-  test(`base closes before the tilt and stays seated (${mobile ? "mobile" : "desktop"})`, async ({
+  test(`product stays closed during zoom, then separates, seats and locks (${mobile ? "mobile" : "desktop"})`, async ({
     page,
   }) => {
     if (mobile) await page.setViewportSize({ width: 390, height: 844 });
@@ -523,45 +523,62 @@ for (const mobile of [false, true]) {
       );
       const sample = (p) => {
         app.timeline.update(top + (height - innerHeight) * p);
+        product.root.updateMatrixWorld(true);
+        const parentInverse = product.applicator.parent.matrixWorld
+          .clone()
+          .invert();
+        const bounds = (node) =>
+          node.geometry.boundingBox
+            .clone()
+            .applyMatrix4(parentInverse.clone().multiply(node.matrixWorld));
         return {
+          physicalGap: bounds(product.cap).min.y - bounds(parts[0]).max.y,
           capY: product.applicator.position.y,
+          twist: product.applicator.rotation.y,
           baseY: parts.map((part) => part.position.y),
           spacing: parts.map(
             (part) => part.position.y - product.applicator.position.y,
           ),
           progress: p,
+          baseOpacity: parts[0].material.opacity,
         };
       };
       const final = sample(1);
       const progress = Array.from({ length: 71 }, (_, i) => 0.3 + i / 100);
       const forward = progress.map(sample);
       const reverse = [...progress].reverse().map(sample).reverse();
-      return { final, forward, reverse };
+      const poses = [0.7, 0.73, 0.82, 0.925, 0.95, 1].map(sample);
+      return { final, forward, reverse, poses };
     });
     expect(result.reverse).toEqual(result.forward);
     for (const sample of result.forward) {
-      // Moving the base while the camera is inside it causes clipping jumps.
-      if (sample.progress <= 0.6)
-        expect(sample.baseY).toEqual(result.final.baseY);
-      if (sample.progress >= 0.7) {
-        // Compare every base part against the authored assembled pose, so an
-        // exposed gap or a displaced adapter cannot pass as a seated product.
+      if (sample.progress <= 0.7 || sample.progress >= 0.95) {
+        expect(sample.physicalGap).toBeLessThanOrEqual(0);
         sample.spacing.forEach((spacing, i) =>
           expect(spacing).toBeCloseTo(result.final.spacing[i], 8),
         );
       }
+      // Crossing the seated base happens before its color fade starts.
+      if (sample.progress <= 0.5) expect(sample.baseOpacity).toBe(0);
     }
-    // The optical cap stays in place through the zoom; the whole assembly
-    // reaches its original height before the later pod twist begins.
-    expect(result.forward[0].capY).toBe(1);
-    expect(result.forward[40].capY).toBe(1);
-    expect(result.forward[60].baseY).toEqual(result.final.baseY);
-    expect(result.forward[60].capY).toBe(0);
+    const [closed, opening, apart, descending, seated, locked] = result.poses;
+    expect(closed.capY).toBe(1);
+    expect(opening.capY).toBe(1);
+    expect(opening.baseY[0]).toBeLessThan(closed.baseY[0]);
+    expect(opening.baseY[0]).toBeGreaterThan(apart.baseY[0]);
+    expect(apart.baseY).toEqual(result.final.baseY);
+    expect(apart.physicalGap).toBeGreaterThan(0);
+    expect(descending.capY).toBeGreaterThan(0);
+    expect(descending.capY).toBeLessThan(apart.capY);
+    expect(seated.capY).toBeCloseTo(0);
+    expect(seated.twist).toBeCloseTo(0);
+    expect(locked.capY).toBe(0);
+    expect(locked.twist).toBeGreaterThan(0.8);
   });
 }
 
 for (const mobile of [false, true]) {
-  test(`seal crossing preserves the optical interior (${mobile ? "mobile" : "desktop"})`, async ({
+  test(`product surfaces cross the camera without a visibility jump (${mobile ? "mobile" : "desktop"})`, async ({
     page,
   }) => {
     if (mobile) await page.setViewportSize({ width: 390, height: 844 });
@@ -596,10 +613,6 @@ for (const mobile of [false, true]) {
         ctx.drawImage(renderer.domElement, 0, 0, canvas.width, canvas.height);
         return ctx.getImageData(0, 0, canvas.width, canvas.height).data;
       };
-      const progress = mobile ? [0.569, 0.57] : [0.545, 0.546];
-      const forward = progress.map(capture);
-      capture(0.99);
-      const reverse = [...progress].reverse().map(capture).reverse();
       const difference = (a, b) => {
         let sum = 0;
         for (let i = 0; i < a.length; i += 4) {
@@ -607,18 +620,37 @@ for (const mobile of [false, true]) {
         }
         return sum / (canvas.width * canvas.height * 3);
       };
-      return {
-        forward: difference(...forward),
-        reverse: difference(...reverse),
-        revisit: forward.map((frame, i) => difference(frame, reverse[i])),
-      };
+      const intervals = [
+        [0.476, 0.477],
+        mobile ? [0.569, 0.57] : [0.545, 0.546],
+      ];
+      return intervals.map((progress) => {
+        const forward = progress.map(capture);
+        capture(0.99);
+        const reverse = [...progress].reverse().map(capture).reverse();
+        const before = capture(progress[0] - 0.001);
+        const after = capture(progress[1] + 0.001);
+        return {
+          forward: difference(...forward),
+          reverse: difference(...reverse),
+          neighboringMotion:
+            (difference(before, forward[0]) + difference(forward[1], after)) /
+            2,
+          revisit: forward.map((frame, i) => difference(frame, reverse[i])),
+        };
+      });
     }, mobile);
-    // The old depth order erased the interior in one step (>7/255).
-    // Normal optical motion across the same interval stays below 2/255.
-    expect(changes.forward).toBeLessThan(2);
-    expect(changes.reverse).toBeLessThan(2);
-    for (const difference of changes.revisit)
-      expect(difference).toBeLessThan(0.1);
+    // The old seal depth order jumped >7/255; revealing the seated base
+    // before clearing the camera jumped >21/255 on mobile. Reject both an
+    // absolute jump and a spike relative to the neighboring optical motion.
+    for (const change of changes) {
+      expect(change.forward).toBeLessThan(3);
+      expect(change.reverse).toBeLessThan(3);
+      expect(change.forward).toBeLessThan(change.neighboringMotion * 1.5);
+      expect(change.reverse).toBeLessThan(change.neighboringMotion * 1.5);
+      for (const difference of change.revisit)
+        expect(difference).toBeLessThan(0.1);
+    }
   });
 }
 
