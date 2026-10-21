@@ -169,6 +169,14 @@ A 421-position sweep from product progress 0.300 to 0.720 checked adjacent rende
 
 Rendered-pixel regressions cover the crossing in both scroll directions, including revisiting it after the final product phase. They supplement the partial-opacity tab occlusion, reveal timing, cap continuity, product interaction and Retina shader/texture reuse checks. All ten targeted checks passed in Chrome and all ten passed in WebKit. Build, formatting and Git whitespace checks passed; the JavaScript bundle is 688,482 bytes (179,458 gzip).
 
+### Assemble the product before the side reveal
+
+The base now meets the elevated cap while the camera is still looking straight down at the seal. The tube, bottom dial and adapter move together over product chapter progress 0.600–0.692, behind the resolving seal. The cap keeps its existing zoom path. During the tilt (0.7–0.9), both halves lower together to their authored positions, keeping the product assembled throughout the side reveal. Pod selection retains its intentional lift-and-reseat animation.
+
+The motion is evaluated from absolute scroll progress, so reverse scrolling and direct seeking reproduce the same pose. Original base positions are cached once; each frame changes three existing transforms. No new geometry, materials, groups, shaders or render passes are introduced.
+
+Desktop/mobile before-and-after captures confirm that the final product is pixel-identical. The optical zoom samples through progress 0.6 are also unchanged on desktop, with only isolated sub-0.00004-channel-average differences in early mobile captures. A 421-position rendered sweep on each viewport checks the handoff through progress 0.72; the original seal-crossing continuity checks still pass. Captures and sweep data are retained in `test-results/assembly/`. New desktop/mobile regressions verify that all base parts stay seated relative to the cap throughout the tilt, return to their authored final positions, and reproduce the same transforms in reverse. All 12 targeted checks passed in Chrome and WebKit, including pod interaction, occlusion and shader/texture reuse. Build, formatting and Git whitespace checks passed. The JavaScript bundle is 688,761 bytes (179,579 gzip).
+
 ## Tradeoffs and limits
 
 The refraction change is an intermediate-rendering adjustment, not mathematically identical rendering during the overlap. The full-resolution hero and final-product policy is retained. Two transmission target sizes stay resident to avoid allocation churn, so intermediate-buffer memory is higher than with a single target. GPU preparation performs bounded extra loading draws and fetches the product earlier; it does not make that work free.

@@ -319,8 +319,14 @@ export class StoryTimeline {
     // reverse scrolling never depend on visiting an earlier phase first.
     const rotation = clamp01((progress - 0.7) / 0.2);
     const secondHalf = clamp01((rotation - 0.5) / 0.5);
+    const reveal = clamp01((progress - 0.3) / 0.4);
+    // Leave the optical cap's path unchanged during the zoom. The base
+    // meets it out of view, then both settle together as the product tilts.
+    const assemblyOffset = 1 - smoothstep(rotation);
+    this.app.product.setBaseOffset(
+      assemblyOffset * revealStage(reveal, PRODUCT_REVEAL.assembly),
+    );
     if (progress <= 0.7) {
-      const reveal = clamp01((progress - 0.3) / 0.4);
       const scale = this.mix(
         this.isMobile ? 26 : 20,
         this.isMobile ? 4.8 : 4,
@@ -369,7 +375,7 @@ export class StoryTimeline {
     manager.productLight.intensity = this.mix(0, 8, lightProgress);
     ambientLight.intensity = this.mix(4.6, 3.2, lightProgress);
     if (applicator && !this.app.podSelector?.isAnimating) {
-      applicator.position.y = this.mix(1, 0, (progress - 0.9) / 0.05);
+      applicator.position.y = assemblyOffset;
       applicator.rotation.y = this.mix(
         0,
         Math.PI * 0.26,

@@ -504,6 +504,63 @@ for (const mobile of [false, true]) {
 }
 
 for (const mobile of [false, true]) {
+  test(`base closes before the tilt and stays seated (${mobile ? "mobile" : "desktop"})`, async ({
+    page,
+  }) => {
+    if (mobile) await page.setViewportSize({ width: 390, height: 844 });
+    await ready(page);
+    const result = await page.evaluate(async () => {
+      const app = window.taxaDebug.app;
+      app.preloadProduct();
+      await app.productPromise;
+      app.motionPaused = true;
+      cancelAnimationFrame(app.animationFrameId);
+      app.isInitialized = false;
+      const { top, height } = app.timeline.bounds[3];
+      const product = app.product;
+      const parts = ["tube", "bottom_dial", "dark-adapter"].map((name) =>
+        product.root.getObjectByName(name),
+      );
+      const sample = (p) => {
+        app.timeline.update(top + (height - innerHeight) * p);
+        return {
+          capY: product.applicator.position.y,
+          baseY: parts.map((part) => part.position.y),
+          spacing: parts.map(
+            (part) => part.position.y - product.applicator.position.y,
+          ),
+          progress: p,
+        };
+      };
+      const final = sample(1);
+      const progress = Array.from({ length: 71 }, (_, i) => 0.3 + i / 100);
+      const forward = progress.map(sample);
+      const reverse = [...progress].reverse().map(sample).reverse();
+      return { final, forward, reverse };
+    });
+    expect(result.reverse).toEqual(result.forward);
+    for (const sample of result.forward) {
+      // Moving the base while the camera is inside it causes clipping jumps.
+      if (sample.progress <= 0.6)
+        expect(sample.baseY).toEqual(result.final.baseY);
+      if (sample.progress >= 0.7) {
+        // Compare every base part against the authored assembled pose, so an
+        // exposed gap or a displaced adapter cannot pass as a seated product.
+        sample.spacing.forEach((spacing, i) =>
+          expect(spacing).toBeCloseTo(result.final.spacing[i], 8),
+        );
+      }
+    }
+    // The optical cap stays in place through the zoom; the whole assembly
+    // reaches its original height before the later pod twist begins.
+    expect(result.forward[0].capY).toBe(1);
+    expect(result.forward[40].capY).toBe(1);
+    expect(result.forward[60].baseY).toEqual(result.final.baseY);
+    expect(result.forward[60].capY).toBe(0);
+  });
+}
+
+for (const mobile of [false, true]) {
   test(`seal crossing preserves the optical interior (${mobile ? "mobile" : "desktop"})`, async ({
     page,
   }) => {

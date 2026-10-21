@@ -20,6 +20,10 @@ export class ProductModel {
     this.initializeMaterials();
     this.applicator = root.getObjectByName("applicator");
     if (this.applicator) this.prepareApplicator(this.applicator);
+    this.baseParts = ["bottom_dial", "tube", "dark-adapter"]
+      .map((name) => root.getObjectByName(name))
+      .filter(Boolean)
+      .map((node) => ({ node, restY: node.position.y }));
     this.cap = root.getObjectByName("outer-cap");
     this.seal = root.getObjectByName("film-cover");
     this.rim = root.getObjectByName("top-ring");
@@ -98,6 +102,13 @@ export class ProductModel {
       }
     });
     return this.materials;
+  }
+
+  setBaseOffset(offset) {
+    // These parts share the applicator's parent. Preserve their authored
+    // spacing without adding a group that would alter transparent sorting.
+    for (const { node, restY } of this.baseParts)
+      node.position.y = restY + offset;
   }
 
   setRevealOpacity({ body, cap, seal }) {
