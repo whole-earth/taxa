@@ -474,6 +474,10 @@ for (const mobile of [false, true]) {
         return {
           cap: app.product.cap.material.opacity,
           interior: app.product.interior.wall.material.opacity,
+          details: app.product.interior.details.material.opacity,
+          sharedTubeGeometry:
+            app.product.interior.details.geometry ===
+            app.product.root.getObjectByName("tube").geometry,
           detailedPartsVisible: app.product.exteriorParts.some(
             (node) => node.visible,
           ),
@@ -492,6 +496,10 @@ for (const mobile of [false, true]) {
     expect(samples.reverse).toEqual(samples.forward);
     const [optical, cameraCrossing, branding, resolved] = samples.forward;
     expect(optical.interior).toBeGreaterThan(0.9);
+    for (const sample of samples.forward) {
+      expect(sample.details).toBe(sample.interior);
+      expect(sample.sharedTubeGeometry).toBe(true);
+    }
     expect(optical.cap).toBe(0);
     expect(optical.detailedPartsVisible).toBe(false);
     expect(optical.seal).toBe(0);

@@ -33,7 +33,7 @@ export class ProductModel {
       this.cap,
       root.getObjectByName("applicator-color"),
     ].filter(Boolean);
-    this.interior = createTubeInterior();
+    this.interior = createTubeInterior(root.getObjectByName("tube"));
     this.applicator.add(this.interior.root);
     this.cellAnchor = new THREE.Object3D();
     this.cellAnchor.position.y = TUBE_INTERIOR.cellDepth;
@@ -87,7 +87,8 @@ export class ProductModel {
       if (
         node === this.interior.wall ||
         node === this.interior.floor ||
-        node === this.interior.aperture
+        node === this.interior.aperture ||
+        node === this.interior.details
       ) {
         node.visible = transitioning;
         return;
@@ -133,6 +134,7 @@ export class ProductModel {
     for (const node of this.exteriorParts) node.visible = exterior > 0;
     this.interior.root.visible = seal < 1;
     this.interior.wall.material.opacity = interior * (1 - seal);
+    this.interior.details.material.opacity = interior * (1 - seal);
     if (this.rim) this.rim.material.opacity = interior;
     // The seal and branding resolve together after the camera clears them.
     // The seal's depth draw still blocks the rim beneath the pull tab.

@@ -9,7 +9,7 @@ export const TUBE_INTERIOR = {
   cellScale: 0.05,
 };
 
-export function createTubeInterior() {
+export function createTubeInterior(tube) {
   const { radius, top, bottom } = TUBE_INTERIOR;
   const geometry = new THREE.CylinderGeometry(
     radius,
@@ -22,8 +22,8 @@ export function createTubeInterior() {
   geometry.translate(0, (top + bottom) / 2, 0);
   const positions = geometry.attributes.position;
   const colors = new Float32Array(positions.count * 3);
-  const deep = new THREE.Color("#607d7c");
-  const opening = new THREE.Color("#e4e9e3");
+  const deep = new THREE.Color("#78848a");
+  const opening = new THREE.Color("#e2e7e8");
   const color = new THREE.Color();
   for (let i = 0; i < positions.count; i++) {
     const depth = (positions.getY(i) - bottom) / (top - bottom);
@@ -52,7 +52,7 @@ export function createTubeInterior() {
   const floorColors = new Float32Array(
     floorGeometry.attributes.position.count * 3,
   );
-  new THREE.Color("#b9d0c4").toArray(floorColors, 0);
+  new THREE.Color("#b9c5c9").toArray(floorColors, 0);
   for (let i = 1; i < floorGeometry.attributes.position.count; i++) {
     const angle = Math.atan2(
       -floorGeometry.attributes.position.getY(i),
@@ -70,6 +70,29 @@ export function createTubeInterior() {
   floor.renderOrder = 1;
   floor.rotation.x = Math.PI / 2;
   floor.position.y = bottom;
+
+  // Reuse the authored locking track, ribs and stepped bore. Keep its
+  // seated pose attached to the applicator throughout the optical zoom;
+  // the exterior tube can still separate later for the assembly sequence.
+  // Shared geometry adds no buffers or downloads. A separate matte material
+  // exposes the inner surfaces without refracting stacked product shells.
+  const details = new THREE.Mesh(
+    tube.geometry,
+    new THREE.MeshStandardMaterial({
+      color: "#cbd0d2",
+      roughness: 0.65,
+      metalness: 0.1,
+      side: THREE.DoubleSide,
+      forceSinglePass: true,
+      transparent: true,
+      opacity: 0,
+    }),
+  );
+  details.name = "tube-details";
+  details.position.copy(tube.position);
+  details.quaternion.copy(tube.quaternion);
+  details.scale.copy(tube.scale);
+  details.renderOrder = 3;
 
   // Once the camera exits, the opening clips the optical background to the
   // tube. While inside, this plane sits behind the camera and covers nothing.
@@ -105,6 +128,6 @@ export function createTubeInterior() {
   const root = new THREE.Group();
   root.name = "tube-interior-rig";
   root.renderOrder = 0;
-  root.add(wall, floor, aperture);
-  return { root, wall, floor, aperture };
+  root.add(wall, floor, aperture, details);
+  return { root, wall, floor, aperture, details };
 }
