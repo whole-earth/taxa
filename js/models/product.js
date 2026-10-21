@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { POD_COLORS, PRODUCT_PHASE } from "../core/productConfig.js";
 import { loadModel } from "./loader.js";
 import { markMaterialsForUpdate } from "./materials.js";
-import { createTubeInterior, TUBE_INTERIOR } from "./tubeInterior.js";
+import { createOverflowMask } from "./overflowMask.js";
 
 export async function loadProductModel(filename, options = {}) {
   return new ProductModel(
@@ -19,25 +19,11 @@ export class ProductModel {
     root.rotation.x = Math.PI / 2;
     this.initializeMaterials();
     this.applicator = root.getObjectByName("applicator");
-    if (this.applicator) this.applicator.position.y = 0;
-    this.baseParts = ["bottom_dial", "tube", "dark-adapter"]
-      .map((name) => root.getObjectByName(name))
-      .filter(Boolean)
-      .map((node) => ({ node, restY: node.position.y }));
+    if (this.applicator) this.prepareApplicator(this.applicator);
     this.cap = root.getObjectByName("outer-cap");
     this.seal = root.getObjectByName("film-cover");
     this.rim = root.getObjectByName("top-ring");
     this.wordmark = root.getObjectByName("taxa-name");
-    this.exteriorParts = [
-      ...this.baseParts.map(({ node }) => node),
-      this.cap,
-      root.getObjectByName("applicator-color"),
-    ].filter(Boolean);
-    this.interior = createTubeInterior(root.getObjectByName("tube"));
-    this.applicator.add(this.interior.root);
-    this.cellAnchor = new THREE.Object3D();
-    this.cellAnchor.position.y = TUBE_INTERIOR.cellDepth;
-    this.applicator.add(this.cellAnchor);
     if (this.seal) {
       // The seal is solid even while the story fades it in. Resolve its
       // nearest surface before blending the seal and rim, so the rim cannot
@@ -84,15 +70,8 @@ export class ProductModel {
     this.materials = new Set();
     this.root.traverse((node) => {
       if (node !== this.root && !node.isLight) node.visible = true;
-      if (
-        node === this.interior.wall ||
-        node === this.interior.floor ||
-        node === this.interior.aperture ||
-        node === this.interior.details
-      ) {
-        node.visible = transitioning;
-        return;
-      }
+      if (node.name === "overflowMask")
+        node.visible = phase === PRODUCT_PHASE.TRANSITION;
       if (node === this.sealDepth) {
         node.visible = phase === PRODUCT_PHASE.TRANSITION;
         return;
@@ -113,31 +92,21 @@ export class ProductModel {
         }
         material.visible = true;
         material.opacity = 1;
-        if (node.name === "outer-cap") material.ior = 1.5;
+        if (node.name === "outer-cap")
+          material.ior = phase === PRODUCT_PHASE.TRANSITION ? 200 : 1.5;
         this.materials.add(material);
       }
     });
     return this.materials;
   }
 
-  setBaseOffset(offset) {
-    // These parts share the applicator's parent. Preserve their authored
-    // spacing without adding a group that would alter transparent sorting.
-    for (const { node, restY } of this.baseParts)
-      node.position.y = restY + offset;
-  }
-
-  setRevealOpacity({ interior, exterior, seal }) {
+  setRevealOpacity({ body, cap, seal }) {
     this.materials.forEach((material) => {
-      material.opacity = exterior;
+      material.opacity = body;
     });
-    for (const node of this.exteriorParts) node.visible = exterior > 0;
-    this.interior.root.visible = seal < 1;
-    this.interior.wall.material.opacity = interior * (1 - seal);
-    this.interior.details.material.opacity = interior * (1 - seal);
-    if (this.rim) this.rim.material.opacity = interior;
     // The seal and branding resolve together after the camera clears them.
     // The seal's depth draw still blocks the rim beneath the pull tab.
+    if (this.cap) this.cap.material.opacity = cap;
     if (this.seal) this.seal.material.opacity = seal;
     if (this.wordmark) this.wordmark.material.opacity = seal;
   }
@@ -183,5 +152,22 @@ export class ProductModel {
     // Batch update all materials at once
     markMaterialsForUpdate(materialsToUpdate);
     markMaterialsForUpdate(innerCapMaterials);
+  }
+
+  prepareApplicator(applicator) {
+    applicator.position.y = 0;
+    applicator.add(createOverflowMask());
+    const materialsToUpdate = [];
+    applicator.traverse((child) => {
+      if (child.isMesh) {
+        child.visible = false;
+        child.material.transparent = true;
+        child.material.opacity = 0;
+        materialsToUpdate.push(child.material);
+      }
+    });
+
+    // Batch update all materials at once
+    markMaterialsForUpdate(materialsToUpdate);
   }
 }

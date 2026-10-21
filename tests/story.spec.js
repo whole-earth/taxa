@@ -456,7 +456,7 @@ for (const mobile of [false, true]) {
 }
 
 for (const mobile of [false, true]) {
-  test(`tube interior resolves before the seal and exterior (${mobile ? "mobile" : "desktop"})`, async ({
+  test(`optical zoom precedes the seal and wordmark reveal (${mobile ? "mobile" : "desktop"})`, async ({
     page,
   }) => {
     if (mobile) await page.setViewportSize({ width: 390, height: 844 });
@@ -473,21 +473,13 @@ for (const mobile of [false, true]) {
         app.timeline.update(top + (height - innerHeight) * progress);
         return {
           cap: app.product.cap.material.opacity,
-          interior: app.product.interior.wall.material.opacity,
-          details: app.product.interior.details.material.opacity,
-          sharedTubeGeometry:
-            app.product.interior.details.geometry ===
-            app.product.root.getObjectByName("tube").geometry,
-          detailedPartsVisible: app.product.exteriorParts.some(
-            (node) => node.visible,
-          ),
           seal: app.product.seal.material.opacity,
           wordmark: app.product.wordmark.material.opacity,
           exposure: app.sceneManager.renderer.toneMappingExposure,
           rotation: app.product.root.rotation.x,
         };
       };
-      const progress = [0.45, 0.575, 0.62, 0.696];
+      const progress = [0.5, 0.575, 0.64, 0.696];
       const forward = progress.map(sample);
       sample(0.99);
       const reverse = [...progress].reverse().map(sample).reverse();
@@ -495,24 +487,15 @@ for (const mobile of [false, true]) {
     });
     expect(samples.reverse).toEqual(samples.forward);
     const [optical, cameraCrossing, branding, resolved] = samples.forward;
-    expect(optical.interior).toBeGreaterThan(0.9);
-    for (const sample of samples.forward) {
-      expect(sample.details).toBe(sample.interior);
-      expect(sample.sharedTubeGeometry).toBe(true);
-    }
-    expect(optical.cap).toBe(0);
-    expect(optical.detailedPartsVisible).toBe(false);
+    expect(optical.cap).toBeGreaterThan(0.4);
     expect(optical.seal).toBe(0);
     expect(optical.wordmark).toBe(0);
     expect(optical.exposure).toBeGreaterThan(0.9);
     expect(cameraCrossing.seal).toBe(0);
     expect(cameraCrossing.wordmark).toBe(0);
-    expect(branding.detailedPartsVisible).toBe(false);
     expect(branding.wordmark).toBeGreaterThan(0);
     expect(branding.wordmark).toBe(branding.seal);
     expect(branding.seal).toBeLessThan(0.6);
-    expect(resolved.cap).toBeGreaterThan(0.9);
-    expect(resolved.detailedPartsVisible).toBe(true);
     expect(resolved.seal).toBe(1);
     expect(resolved.wordmark).toBe(1);
     expect(resolved.rotation).toBeCloseTo(Math.PI / 2);
@@ -521,157 +504,7 @@ for (const mobile of [false, true]) {
 }
 
 for (const mobile of [false, true]) {
-  test(`cell stays anchored inside the tube during pullback (${mobile ? "mobile" : "desktop"})`, async ({
-    page,
-  }) => {
-    if (mobile) await page.setViewportSize({ width: 390, height: 844 });
-    await ready(page);
-    const result = await page.evaluate(async () => {
-      const app = window.taxaDebug.app;
-      app.preloadProduct();
-      await app.productPromise;
-      app.motionPaused = true;
-      cancelAnimationFrame(app.animationFrameId);
-      app.isInitialized = false;
-      const { top, height } = app.timeline.bounds[3];
-      const sample = (progress) => {
-        app.timeline.update(top + (height - innerHeight) * progress);
-        const cell = app.cellGroup;
-        const product = app.product;
-        const local = product.applicator.worldToLocal(cell.position.clone());
-        return {
-          local: local.toArray(),
-          relativeScale: cell.scale.x / product.root.scale.x,
-          apparentScale:
-            cell.scale.x /
-            cell.position.distanceTo(app.sceneManager.camera.position),
-          details: product.exteriorParts.some((node) => node.visible),
-          cellVisible: cell.visible,
-          interiorVisible: product.interior.root.visible,
-        };
-      };
-      const progress = [0.31, 0.4, 0.5, 0.58, 0.64];
-      const forward = progress.map(sample);
-      const covered = sample(0.67);
-      sample(0.99);
-      const reverse = [...progress].reverse().map(sample).reverse();
-      app.sceneManager.camera.position.set(20, 0, Math.sqrt(60 * 60 - 20 * 20));
-      app.sceneManager.camera.lookAt(0, 0, 0);
-      app.timeline.updateCellPose(progress[0]);
-      const afterCameraMove = app.product.applicator
-        .worldToLocal(app.cellGroup.position.clone())
-        .toArray();
-      app.timeline.update(app.timeline.bounds[2].top + 1);
-      return {
-        forward,
-        reverse,
-        covered,
-        afterCameraMove,
-        resetPosition: app.cellGroup.position.toArray(),
-      };
-    });
-    expect(result.reverse).toEqual(result.forward);
-    for (const [i, sample] of result.forward.entries()) {
-      sample.local.forEach((coordinate, axis) =>
-        expect(coordinate).toBeCloseTo(result.forward[0].local[axis], 8),
-      );
-      expect(sample.relativeScale).toBeCloseTo(
-        result.forward[0].relativeScale,
-        8,
-      );
-      expect(sample.details).toBe(false);
-      expect(sample.cellVisible).toBe(true);
-      expect(sample.interiorVisible).toBe(true);
-      if (i)
-        expect(sample.apparentScale).toBeLessThan(
-          result.forward[i - 1].apparentScale,
-        );
-    }
-    result.afterCameraMove.forEach((coordinate, axis) =>
-      expect(coordinate).toBeCloseTo(result.forward[0].local[axis], 8),
-    );
-    expect(result.covered.cellVisible).toBe(false);
-    expect(result.covered.interiorVisible).toBe(false);
-    expect(result.resetPosition).toEqual([0, 0, 0]);
-  });
-}
-
-for (const mobile of [false, true]) {
-  test(`product stays closed during zoom, then separates, seats and locks (${mobile ? "mobile" : "desktop"})`, async ({
-    page,
-  }) => {
-    if (mobile) await page.setViewportSize({ width: 390, height: 844 });
-    await ready(page);
-    const result = await page.evaluate(async () => {
-      const app = window.taxaDebug.app;
-      app.preloadProduct();
-      await app.productPromise;
-      app.motionPaused = true;
-      cancelAnimationFrame(app.animationFrameId);
-      app.isInitialized = false;
-      const { top, height } = app.timeline.bounds[3];
-      const product = app.product;
-      const parts = ["tube", "bottom_dial", "dark-adapter"].map((name) =>
-        product.root.getObjectByName(name),
-      );
-      const sample = (p) => {
-        app.timeline.update(top + (height - innerHeight) * p);
-        product.root.updateMatrixWorld(true);
-        const parentInverse = product.applicator.parent.matrixWorld
-          .clone()
-          .invert();
-        const bounds = (node) =>
-          node.geometry.boundingBox
-            .clone()
-            .applyMatrix4(parentInverse.clone().multiply(node.matrixWorld));
-        return {
-          physicalGap: bounds(product.cap).min.y - bounds(parts[0]).max.y,
-          capY: product.applicator.position.y,
-          twist: product.applicator.rotation.y,
-          baseY: parts.map((part) => part.position.y),
-          spacing: parts.map(
-            (part) => part.position.y - product.applicator.position.y,
-          ),
-          progress: p,
-          baseOpacity: parts[0].material.opacity,
-        };
-      };
-      const final = sample(1);
-      const progress = Array.from({ length: 71 }, (_, i) => 0.3 + i / 100);
-      const forward = progress.map(sample);
-      const reverse = [...progress].reverse().map(sample).reverse();
-      const poses = [0.7, 0.73, 0.82, 0.925, 0.95, 1].map(sample);
-      return { final, forward, reverse, poses };
-    });
-    expect(result.reverse).toEqual(result.forward);
-    for (const sample of result.forward) {
-      if (sample.progress <= 0.7 || sample.progress >= 0.95) {
-        expect(sample.physicalGap).toBeLessThanOrEqual(0);
-        sample.spacing.forEach((spacing, i) =>
-          expect(spacing).toBeCloseTo(result.final.spacing[i], 8),
-        );
-      }
-      // Crossing the seated base happens before its color fade starts.
-      if (sample.progress <= 0.5) expect(sample.baseOpacity).toBe(0);
-    }
-    const [closed, opening, apart, descending, seated, locked] = result.poses;
-    expect(closed.capY).toBe(1);
-    expect(opening.capY).toBe(1);
-    expect(opening.baseY[0]).toBeLessThan(closed.baseY[0]);
-    expect(opening.baseY[0]).toBeGreaterThan(apart.baseY[0]);
-    expect(apart.baseY).toEqual(result.final.baseY);
-    expect(apart.physicalGap).toBeGreaterThan(0);
-    expect(descending.capY).toBeGreaterThan(0);
-    expect(descending.capY).toBeLessThan(apart.capY);
-    expect(seated.capY).toBeCloseTo(0);
-    expect(seated.twist).toBeCloseTo(0);
-    expect(locked.capY).toBe(0);
-    expect(locked.twist).toBeGreaterThan(0.8);
-  });
-}
-
-for (const mobile of [false, true]) {
-  test(`product surfaces cross the camera without a visibility jump (${mobile ? "mobile" : "desktop"})`, async ({
+  test(`seal crossing preserves the optical interior (${mobile ? "mobile" : "desktop"})`, async ({
     page,
   }) => {
     if (mobile) await page.setViewportSize({ width: 390, height: 844 });
@@ -706,6 +539,10 @@ for (const mobile of [false, true]) {
         ctx.drawImage(renderer.domElement, 0, 0, canvas.width, canvas.height);
         return ctx.getImageData(0, 0, canvas.width, canvas.height).data;
       };
+      const progress = mobile ? [0.569, 0.57] : [0.545, 0.546];
+      const forward = progress.map(capture);
+      capture(0.99);
+      const reverse = [...progress].reverse().map(capture).reverse();
       const difference = (a, b) => {
         let sum = 0;
         for (let i = 0; i < a.length; i += 4) {
@@ -713,46 +550,18 @@ for (const mobile of [false, true]) {
         }
         return sum / (canvas.width * canvas.height * 3);
       };
-      const intervals = [
-        [0.476, 0.477],
-        mobile ? [0.569, 0.57] : [0.545, 0.546],
-        [0.6599, 0.6601],
-        [0.6999, 0.7001],
-      ];
-      return intervals.map((progress) => {
-        const forward = progress.map(capture);
-        capture(0.99);
-        const reverse = [...progress].reverse().map(capture).reverse();
-        const before = capture(progress[0] - 0.001);
-        const after = capture(progress[1] + 0.001);
-        return {
-          progress,
-          forward: difference(...forward),
-          reverse: difference(...reverse),
-          neighboringMotion:
-            (difference(before, forward[0]) + difference(forward[1], after)) /
-            2,
-          revisit: forward.map((frame, i) => difference(frame, reverse[i])),
-        };
-      });
+      return {
+        forward: difference(...forward),
+        reverse: difference(...reverse),
+        revisit: forward.map((frame, i) => difference(frame, reverse[i])),
+      };
     }, mobile);
-    // The old seal depth order jumped >7/255; revealing the seated base
-    // before clearing the camera jumped >21/255 on mobile. Reject both an
-    // absolute jump and a spike relative to the neighboring optical motion.
-    for (const change of changes) {
-      expect(change.forward).toBeLessThan(3);
-      expect(change.reverse).toBeLessThan(3);
-      // At an easing endpoint the neighboring motion approaches zero;
-      // allow a quarter-channel average for browser raster differences when
-      // switching the settled product into its opaque rendering phase.
-      const continuityLimit = Math.max(0.25, change.neighboringMotion * 1.5);
-      expect(change.forward, `Crossing ${change.progress}`).toBeLessThan(
-        continuityLimit,
-      );
-      expect(change.reverse).toBeLessThan(continuityLimit);
-      for (const difference of change.revisit)
-        expect(difference).toBeLessThan(0.1);
-    }
+    // The old depth order erased the interior in one step (>7/255).
+    // Normal optical motion across the same interval stays below 2/255.
+    expect(changes.forward).toBeLessThan(2);
+    expect(changes.reverse).toBeLessThan(2);
+    for (const difference of changes.revisit)
+      expect(difference).toBeLessThan(0.1);
   });
 }
 
@@ -779,7 +588,7 @@ test("cap fades continuously through half opacity in both scroll directions", as
     canvas.height = renderer.domElement.height;
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     const { top, height } = app.timeline.bounds[3];
-    const frames = [0.6799, 0.6801, 0.6799].map((progress) => {
+    const frames = [0.4999, 0.5001, 0.4999].map((progress) => {
       app.timeline.update(top + (height - innerHeight) * progress);
       app.ribbons.root.visible = false;
       app.speckles.meshes.forEach((mesh) => (mesh.visible = false));

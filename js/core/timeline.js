@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import { PRODUCT_PHASE, PRODUCT_REVEAL } from "./productConfig.js";
-import { TUBE_INTERIOR } from "../models/tubeInterior.js";
 import { Tween, Easing } from "tween";
 import {
   MOBILIZED_GREEN,
@@ -235,13 +234,9 @@ export class StoryTimeline {
       this.productPhase = null;
     }
 
-    cellGroup.visible =
-      index !== 3 ||
-      progress < (this.app.product ? 0.3 + 0.4 * PRODUCT_REVEAL.seal.end : 0.7);
-    starField.visible = index === 3 && progress < 0.56;
+    cellGroup.visible = index !== 3 || progress <= 0.7;
+    starField.visible = index === 3 && progress <= 0.7;
     if (starField.visible) starField.updateProgress(progress * 1.66);
-    starField.linesMesh.material.uniforms.opacity.value =
-      index === 3 ? 1 - smoothstep((progress - 0.4) / 0.16) : 1;
     manager.controls.autoRotate =
       !this.app.motionPaused &&
       !this.app.reducedMotion &&
@@ -267,7 +262,6 @@ export class StoryTimeline {
 
     if (index === 0) cellGroup.scale.setScalar(this.mix(1, 1.6, progress));
     else if (index < 3) cellGroup.scale.setScalar(1.6);
-    if (index < 3) cellGroup.position.set(0, 0, 0);
 
     if (index === 1) {
       const topic = Math.min(2, Math.floor(progress * 3));
@@ -296,36 +290,19 @@ export class StoryTimeline {
     const product = this.app.product?.root;
     if (product) product.visible = index === 3 && progress > 0.3;
     if (index === 3) {
+      cellGroup.scale.setScalar(
+        this.mix(1.6, this.isMobile ? 0.05 : 0.016, progress / 0.7),
+      );
       this.setText(progress > 0.95 ? 3 : progress > 0.4 ? -1 : 2);
-      if (product) {
-        this.updateProduct(product, progress);
-        this.updateCellPose(progress);
-      } else {
-        cellGroup.scale.setScalar(
-          this.mix(1.6, this.isMobile ? 0.05 : 0.016, progress / 0.7),
-        );
-        if (!this.app.productError)
-          this.app.loadingStatus.show("Preparing the product…");
+      if (product) this.updateProduct(product, progress);
+      else if (!this.app.productError) {
+        this.app.loadingStatus.show("Preparing the product…");
       }
     }
     if (index < 3 && !this.app.productError) this.app.loadingStatus.hide();
     // Once the reader enters the story, prepare the later product while there
     // is still a full chapter of scrolling available for decode/compilation.
     if (index >= 1) this.app.preloadProduct();
-  }
-
-  updateCellPose(progress) {
-    const { product, productAnchor, cellGroup, sceneManager } = this.app;
-    if (!product || !cellGroup.visible) return;
-    // Scaling the whole tube is a camera-relative pullback. The cell shares
-    // its scale and a fixed point inside it. Refresh after camera damping too.
-    productAnchor.lookAt(sceneManager.camera.position);
-    product.cellAnchor.getWorldPosition(cellGroup.position);
-    const enter = smoothstep(progress / 0.3);
-    cellGroup.position.multiplyScalar(enter);
-    cellGroup.scale.setScalar(
-      1.6 + (product.root.scale.x * TUBE_INTERIOR.cellScale - 1.6) * enter,
-    );
   }
 
   updateProduct(product, progress) {
@@ -342,12 +319,8 @@ export class StoryTimeline {
     // reverse scrolling never depend on visiting an earlier phase first.
     const rotation = clamp01((progress - 0.7) / 0.2);
     const secondHalf = clamp01((rotation - 0.5) / 0.5);
-    const reveal = clamp01((progress - 0.3) / 0.4);
-    // Hide the separation throughout the optical zoom. As the tilt begins,
-    // lower the base while holding the cap steady; the cap seats and twists
-    // only after the side view has revealed how the two parts fit together.
-    this.app.product.setBaseOffset(1 - smoothstep((progress - 0.7) / 0.06));
     if (progress <= 0.7) {
+      const reveal = clamp01((progress - 0.3) / 0.4);
       const scale = this.mix(
         this.isMobile ? 26 : 20,
         this.isMobile ? 4.8 : 4,
@@ -357,8 +330,8 @@ export class StoryTimeline {
       product.rotation.set(Math.PI / 2, 0, 0);
       product.scale.setScalar(scale);
       this.app.product.setRevealOpacity({
-        interior: revealStage(reveal, PRODUCT_REVEAL.interior),
-        exterior: revealStage(reveal, PRODUCT_REVEAL.exterior),
+        cap: reveal,
+        body: revealStage(reveal, PRODUCT_REVEAL.body),
         seal: revealStage(reveal, PRODUCT_REVEAL.seal),
       });
       manager.renderer.toneMappingExposure =
