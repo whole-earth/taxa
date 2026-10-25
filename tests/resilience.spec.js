@@ -82,7 +82,7 @@ test("page teardown during initial loading prevents late initialization", async 
 test("failed product preparation releases resources and can retry", async ({
   page,
 }) => {
-  const release = await gateRequest(page, "**/swap.glb");
+  const release = await gateRequest(page, "**/swap.glb*");
   await ready(page);
   await page.evaluate(() => {
     const manager = window.taxaDebug.app.sceneManager;
@@ -217,10 +217,11 @@ test("intentional sleep is excluded from frame samples", async ({ page }) => {
 test("delayed product loading keeps navigation usable and finishes at the current pose", async ({
   page,
 }) => {
-  const release = await gateRequest(page, "**/swap.glb");
+  const release = await gateRequest(page, "**/swap.glb*");
   const requests = [];
   page.on("request", (request) => {
-    if (request.url().endsWith("swap.glb")) requests.push(request.url());
+    if (/\/swap\.glb(?:\.gz)?$/.test(request.url()))
+      requests.push(request.url());
   });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await ready(page);
@@ -339,7 +340,7 @@ for (const interrupt of ["dispose", "context"]) {
   test(`shader preparation tolerates ${interrupt}`, async ({ page }) => {
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    const release = await gateRequest(page, "**/swap.glb");
+    const release = await gateRequest(page, "**/swap.glb*");
     await ready(page);
     await page.evaluate((interrupt) => {
       const app = window.taxaDebug.app;
@@ -382,3 +383,71 @@ for (const interrupt of ["dispose", "context"]) {
     expect(errors).toEqual([]);
   });
 }
+
+test("product downloads after cell assets without waiting for the hero GPU or idle time", async ({
+  page,
+}) => {
+  const releaseCell = await gateRequest(page, "**/blob-inner.glb");
+  const products = [];
+  page.on("request", (request) => {
+    if (/\/swap\.glb(?:\.gz)?$/.test(request.url()))
+      products.push(request.url());
+  });
+  await page.goto("/?perf", { waitUntil: "domcontentloaded" });
+  await page.waitForFunction(
+    () => window.taxaDebug?.app.cellGroup.children.length === 2,
+  );
+  expect(products).toHaveLength(0);
+  await page.evaluate(() => {
+    const app = window.taxaDebug.app;
+    const manager = app.sceneManager;
+    const warm = manager.warmMaterials.bind(manager);
+    const gate = new Promise((resolve) => (window.releaseHeroWarm = resolve));
+    manager.warmMaterials = async (...args) => {
+      await gate;
+      return warm(...args);
+    };
+    const productWarm = manager.warmProduct.bind(manager);
+    window.productWarmStates = [];
+    manager.warmProduct = (...args) => {
+      window.productWarmStates.push(!!app.sceneRevealed);
+      return productWarm(...args);
+    };
+  });
+  const download = page.waitForResponse("**/swap.glb.gz");
+  releaseCell();
+  await (await download).finished();
+  expect(
+    await page.evaluate(() => ({
+      hero: !!window.taxaDebug.app.sceneRevealed,
+      product: !!window.taxaDebug.app.product,
+      warmed: window.productWarmStates,
+    })),
+  ).toEqual({ hero: false, product: false, warmed: [] });
+  await page.evaluate(() => window.releaseHeroWarm());
+  await page.waitForFunction(() => !!window.taxaDebug.app.product);
+  expect(await page.evaluate(() => window.productWarmStates)).toEqual([true]);
+  expect(products).toHaveLength(1);
+  expect(products[0]).toMatch(/swap\.glb\.gz$/);
+});
+
+test("product uses the original GLB when native gzip decompression is unavailable", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    window.DecompressionStream = undefined;
+  });
+  const products = [];
+  page.on("request", (request) => {
+    if (/\/swap\.glb(?:\.gz)?$/.test(request.url()))
+      products.push(request.url());
+  });
+  await ready(page);
+  await page.waitForFunction(() => !!window.taxaDebug.app.product);
+  await seek(page, "product", 0.99);
+  expect(
+    await page.evaluate(() => window.taxaDebug.app.product.root.visible),
+  ).toBe(true);
+  expect(products).toHaveLength(1);
+  expect(products[0]).toMatch(/swap\.glb$/);
+});

@@ -23,6 +23,9 @@ export class StoryApp {
     this.overlayActive = false;
     this.loadingStatus = new LoadingStatus();
     this.events = new AbortController();
+    this.firstFrame = new Promise((resolve) => {
+      this.resolveFirstFrame = resolve;
+    });
     this.animationFrameId = null;
     this.lastFrameTime = null;
     this.lastRenderSlot = null;
@@ -121,6 +124,9 @@ export class StoryApp {
     if (this.sceneManager.environmentError)
       throw this.sceneManager.environmentError;
     if (this.disposed) return;
+    // Cell downloads are finished. Fetch the product while the GPU prepares
+    // the hero, but defer parsing and product GPU work until its first frame.
+    this.preloadProduct();
     // Warm shader programs before the first visible frame. This uses parallel
     // GPU compilation where supported, with the environment already available.
     await this.sceneManager.warmMaterials(this.sceneManager.scene);
@@ -145,20 +151,17 @@ export class StoryApp {
     const chapter = ["splash", "zoom", "pitch", "product"].indexOf(hash);
     if (chapter >= 0) this.timeline.goTo(chapter);
     this.invalidate(true);
-    // Start low-priority preparation after the hero is available, so first
-    // product use need not allocate GPU resources during the scroll handoff.
-    const prepare = () => {
-      if (!this.disposed) this.preloadProduct();
-    };
-    if (window.requestIdleCallback)
-      window.requestIdleCallback(prepare, { timeout: 1500 });
-    else setTimeout(prepare, 300);
   }
 
   preloadProduct() {
-    if (this.productPromise || this.productError) return;
+    if (this.disposed || this.productPromise || this.productError) return;
     // One shared promise prevents scroll bursts from starting duplicate loads.
-    this.productPromise = loadProductModel("swap.glb", { renderOrder: 200 })
+    this.productPromise = loadProductModel("swap.glb", {
+      renderOrder: 200,
+      compressed: true,
+      parseAfter: this.firstFrame,
+      signal: this.events.signal,
+    })
       .then(async (product) => {
         try {
           if (this.disposed) return;
@@ -182,7 +185,9 @@ export class StoryApp {
           }
         }
       })
-      .catch((error) => {
+      .catch(async (error) => {
+        // A background product failure must not replace the hero's loading UI.
+        await this.firstFrame;
         if (this.disposed) return;
         this.productError = error;
         this.productPromise = null;
@@ -276,6 +281,8 @@ export class StoryApp {
         // a temporary shader-warming pose. CSS handles the original fade.
         this.sceneRevealed = true;
         document.body.classList.add("scene-ready");
+        // Yield a task so product parsing cannot run inside this first RAF.
+        setTimeout(() => this.resolveFirstFrame?.(), 0);
       }
       performanceMonitor.recordFrame(time, this.sceneManager.renderer.info);
     }
@@ -431,6 +438,7 @@ export class StoryApp {
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    this.resolveFirstFrame();
     cancelAnimationFrame(this.animationFrameId);
     this.events.abort();
     this.scroller?.destroy();

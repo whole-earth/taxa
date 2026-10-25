@@ -187,7 +187,9 @@ test("story seeks forward and backward, loads one product, and preserves GPU res
   await expect(page.locator("#splash .story-panel")).toHaveClass(/active/);
   await seek(page, "product", 0.99);
   await page.waitForTimeout(1800);
-  expect(requests.filter((url) => url.endsWith("/swap.glb"))).toHaveLength(1);
+  expect(
+    requests.filter((url) => /\/swap\.glb(?:\.gz)?$/.test(url)),
+  ).toHaveLength(1);
   expect(
     requests
       .filter((url) => /^https?:/.test(url))
@@ -261,7 +263,7 @@ test("failed product request can be retried without losing scroll position", asy
   page,
 }) => {
   let first = true;
-  await page.route("**/swap.glb", (route) => {
+  await page.route("**/swap.glb*", (route) => {
     if (first) {
       first = false;
       return route.abort();

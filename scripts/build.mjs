@@ -18,6 +18,13 @@ await cp(
   "dist/assets/draco",
   { recursive: true },
 );
+async function compressProduct() {
+  await writeFile(
+    "dist/assets/product/swap.glb.gz",
+    gzipSync(await readFile("assets/product/swap.glb"), { level: 9 }),
+  );
+}
+await compressProduct();
 const options = {
   entryPoints: { "js/main": "js/main.js", style: "style.css" },
   outdir: "dist",
@@ -59,6 +66,7 @@ if (serve) {
       await cp(`assets/${filename}`, `dist/assets/${filename}`, {
         recursive: true,
       });
+      if (filename === "product/swap.glb") await compressProduct();
     } catch (error) {
       if (error.code !== "ENOENT") console.error(error);
     }
