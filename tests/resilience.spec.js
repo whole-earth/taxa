@@ -451,3 +451,71 @@ test("product uses the original GLB when native gzip decompression is unavailabl
   expect(products).toHaveLength(1);
   expect(products[0]).toMatch(/swap\.glb$/);
 });
+
+for (const mobile of [false, true]) {
+  test(`late product keeps the cell, previews the final pose, and hands off without scrolling (${mobile ? "mobile" : "desktop"})`, async ({
+    page,
+  }, testInfo) => {
+    if (mobile) await page.setViewportSize({ width: 390, height: 844 });
+    const release = await gateRequest(page, "**/swap.glb*");
+    const previews = [];
+    page.on("request", (request) => {
+      if (request.url().includes("product-preview-"))
+        previews.push(request.url());
+    });
+    await ready(page);
+    await seek(page, "product", 0.6);
+    expect(
+      await page.evaluate(() => window.taxaDebug.app.cellGroup.visible),
+    ).toBe(true);
+    expect(previews).toHaveLength(0);
+    await expect(page.locator(".product-fallback")).not.toHaveClass(/visible/);
+    await seek(page, "product", 1);
+    await expect(page.locator(".product-fallback")).toHaveCSS("opacity", "1");
+    expect(previews).toHaveLength(1);
+    expect(previews[0]).toContain(mobile ? "mobile.webp" : "desktop.webp");
+    await page.screenshot({ path: testInfo.outputPath("preview.png") });
+    const y = await page.evaluate(() => scrollY);
+    release();
+    await page.waitForFunction(
+      () => !!window.taxaDebug.app.product?.root.visible,
+    );
+    await expect(page.locator(".product-fallback")).toHaveCSS("opacity", "0");
+    expect(await page.evaluate(() => scrollY)).toBe(y);
+    await page.screenshot({ path: testInfo.outputPath("ready.png") });
+    expect(
+      await page.evaluate(() => window.taxaDebug.app.cellGroup.visible),
+    ).toBe(false);
+    await seek(page, "zoom", 0.5);
+    await seek(page, "product", 1);
+    expect(previews).toHaveLength(1);
+    await expect(page.locator(".product-fallback")).not.toHaveClass(/visible/);
+  });
+}
+
+test("ready product never downloads a preview; missing preview retains the cell", async ({
+  page,
+}) => {
+  const previews = [];
+  page.on("request", (request) => {
+    if (request.url().includes("product-preview-"))
+      previews.push(request.url());
+  });
+  await ready(page);
+  await page.waitForFunction(() => !!window.taxaDebug.app.product);
+  await seek(page, "product", 1);
+  expect(previews).toHaveLength(0);
+  const release = await gateRequest(page, "**/swap.glb*");
+  await page.route("**/product-preview-*.webp", (route) => route.abort());
+  await ready(page);
+  await seek(page, "product", 1);
+  await expect.poll(() => previews.length).toBe(1);
+  expect(
+    await page.evaluate(() => window.taxaDebug.app.cellGroup.visible),
+  ).toBe(true);
+  await expect(page.locator(".product-fallback")).not.toHaveClass(/visible/);
+  await seek(page, "zoom", 0.5);
+  release();
+  await page.waitForFunction(() => !!window.taxaDebug.app.product);
+  await expect(page.locator(".product-fallback")).not.toHaveClass(/visible/);
+});

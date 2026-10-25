@@ -161,6 +161,27 @@ body::-webkit-scrollbar {
   display: block;
   touch-action: pan-y !important;
 }
+.product-fallback {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--taxa-cream);
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+  pointer-events: none;
+}
+.product-fallback.visible {
+  opacity: 1;
+}
+.product-fallback img {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  height: 100%;
+  width: auto;
+  max-width: none;
+  transform: translateX(-50%);
+}
 .main {
   max-width: var(--max-width);
   margin: auto;

@@ -13,6 +13,7 @@ import { StoryTimeline } from "./timeline.js";
 import { disposeScene } from "../utils/dispose.js";
 import { performanceMonitor } from "../utils/performance.js";
 import { LoadingStatus } from "../ui/loadingStatus.js";
+import { ProductFallback } from "../ui/productFallback.js";
 
 export class StoryApp {
   constructor() {
@@ -62,6 +63,7 @@ export class StoryApp {
     );
     this.cellGroup = new THREE.Group();
     this.sceneManager.scene.add(this.cellGroup);
+    this.productFallback = new ProductFallback(this);
     this.setupEvents();
   }
 
@@ -276,6 +278,7 @@ export class StoryApp {
         this.resetFrameClock();
         return;
       }
+      this.productFallback.onFrame();
       if (!this.sceneRevealed) {
         // Reveal only after the first story frame, never an empty canvas or
         // a temporary shader-warming pose. CSS handles the original fade.
@@ -444,6 +447,7 @@ export class StoryApp {
     this.scroller?.destroy();
     this.tweens.removeAll();
     this.timeline?.dispose();
+    this.productFallback.dispose();
     disposeModelLoader();
     this.sceneManager.dispose();
   }

@@ -234,22 +234,27 @@ export class StoryTimeline {
       this.productPhase = null;
     }
 
-    cellGroup.visible = index !== 3 || progress <= 0.7;
-    starField.visible = index === 3 && progress <= 0.7;
-    if (starField.visible) starField.updateProgress(progress * 1.66);
+    const waitingForProduct = index === 3 && !this.app.product;
+    const visualProgress = waitingForProduct
+      ? Math.min(progress, 0.3)
+      : progress;
+    this.app.productFallback.update(waitingForProduct, progress, this.isMobile);
+    cellGroup.visible = index !== 3 || visualProgress <= 0.7;
+    starField.visible = index === 3 && visualProgress <= 0.7;
+    if (starField.visible) starField.updateProgress(visualProgress * 1.66);
     manager.controls.autoRotate =
       !this.app.motionPaused &&
       !this.app.reducedMotion &&
       (index < 3 || progress <= 0.22);
     manager.controls.enableRotate = index < 3 && !this.isMobile;
-    manager.productLight.visible = index === 3 && progress > 0.7;
+    manager.productLight.visible = index === 3 && visualProgress > 0.7;
     // The frosted transition samples a blurred background. Rendering that
     // intermediate buffer at CSS-pixel resolution avoids a Retina-sized
     // multisample resolve/mipmap chain. Silhouettes, labels and the canvas
     // retain native DPR; the hero and final product use full-resolution
     // transmission. No geometry, texture, or material values are reduced.
     manager.renderer.transmissionResolutionScale =
-      index === 3 && progress > 0.3 && progress <= 0.7
+      index === 3 && visualProgress > 0.3 && visualProgress <= 0.7
         ? Math.min(1, 1 / manager.renderer.getPixelRatio())
         : 1;
     const clearNav = index === 3 && progress > 0.22;
@@ -291,7 +296,7 @@ export class StoryTimeline {
     if (product) product.visible = index === 3 && progress > 0.3;
     if (index === 3) {
       cellGroup.scale.setScalar(
-        this.mix(1.6, this.isMobile ? 0.05 : 0.016, progress / 0.7),
+        this.mix(1.6, this.isMobile ? 0.05 : 0.016, visualProgress / 0.7),
       );
       this.setText(progress > 0.95 ? 3 : progress > 0.4 ? -1 : 2);
       if (product) this.updateProduct(product, progress);
