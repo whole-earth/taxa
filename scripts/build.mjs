@@ -2,6 +2,7 @@ import { build, context } from "esbuild";
 import { cp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { watch } from "node:fs";
 import { gzipSync, brotliCompressSync } from "node:zlib";
+import { prepareModel } from "./prepare-model.mjs";
 
 const serve = process.argv.includes("--serve");
 await rm("dist", { recursive: true, force: true });
@@ -17,13 +18,25 @@ await cp(
   "dist/assets/draco",
   { recursive: true },
 );
-async function compressProduct() {
+async function prepareProduct() {
+  const product = prepareModel(
+    await readFile("assets/product/swap.glb"),
+    "product",
+  );
+  await writeFile("dist/assets/product/swap.glb", product);
   await writeFile(
     "dist/assets/product/swap.glb.gz",
-    gzipSync(await readFile("assets/product/swap.glb"), { level: 9 }),
+    gzipSync(product, { level: 9 }),
   );
 }
-await compressProduct();
+async function prepareRibbons() {
+  await writeFile(
+    "dist/assets/cell/ribbons.glb",
+    prepareModel(await readFile("assets/cell/ribbons.glb"), "ribbons"),
+  );
+}
+await prepareProduct();
+await prepareRibbons();
 async function compressReflections() {
   await writeFile(
     "dist/assets/cell/reflections.bin.gz",
@@ -72,7 +85,8 @@ if (serve) {
       await cp(`assets/${filename}`, `dist/assets/${filename}`, {
         recursive: true,
       });
-      if (filename === "product/swap.glb") await compressProduct();
+      if (filename === "product/swap.glb") await prepareProduct();
+      if (filename === "cell/ribbons.glb") await prepareRibbons();
       if (filename === "cell/reflections.bin") await compressReflections();
     } catch (error) {
       if (error.code !== "ENOENT") console.error(error);

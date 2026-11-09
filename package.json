@@ -6,6 +6,7 @@
     "build": "node scripts/build.mjs",
     "bake:reflections": "node scripts/bake-reflections.mjs",
     "test": "playwright test",
+    "test:assets": "node scripts/check-models.mjs",
     "benchmark": "node scripts/benchmark.mjs",
     "benchmark:transition": "node scripts/transition-benchmark.mjs",
     "compare:transmission": "node scripts/compare-transmission.mjs",

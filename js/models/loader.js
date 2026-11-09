@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
+import { compactIndices } from "./geometry.js";
 
 const dracoLoader = new DRACOLoader();
 dracoLoader.setDecoderPath(new URL("assets/draco/", document.baseURI).href);
@@ -57,6 +58,9 @@ export async function loadModel(
     if (disposed && pendingLoads === 0) dracoLoader.dispose();
   }
   const root = gltf.scene;
+  root.traverse((node) => {
+    if (node.isMesh) compactIndices(node.geometry);
+  });
   root.position.set(0, 0, 0);
   root.name = path.split("/").pop();
   const center = new THREE.Box3()
