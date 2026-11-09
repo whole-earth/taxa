@@ -1,6 +1,6 @@
 // Loading UI changes only when its state changes, never on every scroll tick.
 export class LoadingStatus {
-  constructor() {
+  constructor({ onRetry, signal }) {
     this.element = document.querySelector(".load-progress");
     this.label = document.getElementById("loadProgressCount");
     this.retry = document.getElementById("retry-load");
@@ -11,6 +11,7 @@ export class LoadingStatus {
       this.retry.hidden = true;
       this.element.append(this.retry);
     }
+    this.retry.addEventListener("click", onRetry, { signal });
   }
 
   show(message, retry = false) {

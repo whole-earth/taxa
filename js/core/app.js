@@ -21,16 +21,25 @@ export class StoryApp {
   constructor({
     assetBase = new URL("assets/", document.baseURI),
     webflow = false,
+    onFirstFrame = () => {},
   } = {}) {
     this.assetBase = assetBase;
     this.webflow = webflow;
+    this.onFirstFrame = onFirstFrame;
     this.isMobile = window.innerWidth < 768;
     this.motionQuery = matchMedia("(prefers-reduced-motion: reduce)");
     this.reducedMotion = this.motionQuery.matches;
     this.motionPaused = false;
     this.overlayActive = false;
-    this.loadingStatus = new LoadingStatus();
     this.events = new AbortController();
+    this.loadingStatus = new LoadingStatus({
+      signal: this.events.signal,
+      onRetry: () => {
+        this.productError = null;
+        this.loadingStatus.hide();
+        this.prepareProduct();
+      },
+    });
     this.firstFrame = new Promise((resolve) => {
       this.resolveFirstFrame = resolve;
     });
@@ -292,11 +301,7 @@ export class StoryApp {
         // Reveal only after the first story frame, never an empty canvas or
         // a temporary shader-warming pose. CSS handles the original fade.
         this.sceneRevealed = true;
-        document.body.classList.add("scene-ready");
-        if (this.webflow) {
-          document.body.classList.add("completing");
-          document.body.classList.remove("loading");
-        }
+        this.onFirstFrame();
         // Yield a task so product parsing cannot run inside this first RAF.
         setTimeout(() => this.resolveFirstFrame?.(), 0);
       }
@@ -398,30 +403,6 @@ export class StoryApp {
     this.motionQuery.addEventListener(
       "change",
       () => this.updateMotionPreference(),
-      { signal },
-    );
-    document.getElementById("motion-toggle")?.addEventListener(
-      "click",
-      (event) => {
-        this.motionPaused = !this.motionPaused;
-        event.currentTarget.textContent = this.motionPaused
-          ? "Resume motion"
-          : "Pause motion";
-        event.currentTarget.setAttribute(
-          "aria-pressed",
-          String(this.motionPaused),
-        );
-        this.invalidate(true);
-      },
-      { signal },
-    );
-    document.getElementById("retry-load").addEventListener(
-      "click",
-      () => {
-        this.productError = null;
-        this.loadingStatus.hide();
-        this.prepareProduct();
-      },
       { signal },
     );
     this.sceneManager.renderer.domElement.addEventListener(

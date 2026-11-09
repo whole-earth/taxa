@@ -40,6 +40,10 @@ export function installWebflowUI() {
     });
   window.addEventListener("resize", sync);
   return {
+    reveal() {
+      document.body.classList.add("scene-ready", "completing");
+      document.body.classList.remove("loading");
+    },
     connect(value) {
       app = value;
       sync();

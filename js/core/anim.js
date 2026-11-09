@@ -21,6 +21,7 @@ window.addEventListener("pagehide", (event) => {
 try {
   app = new StoryApp({
     webflow: true,
+    onFirstFrame: () => ui.reveal(),
     assetBase: new URL("../../assets/", import.meta.url),
   });
   ui.connect(app);

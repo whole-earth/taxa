@@ -12,7 +12,7 @@ window.addEventListener("pagehide", (event) => {
 });
 
 try {
-  app = new StoryApp();
+  app = new StoryApp({ onFirstFrame: () => page.reveal() });
   page.connect(app);
   if (performanceMonitor.enabled)
     window.taxaDebug = { app, performanceMonitor };

@@ -84,6 +84,15 @@ try {
       "Assets must resolve against the animation host",
     );
     assert.equal(await page.locator(".load-progress").isVisible(), false);
+    assert.equal(await page.locator("#motion-toggle").count(), 0);
+    assert.deepEqual(
+      await page.locator("body").evaluate((body) => ({
+        ready: body.classList.contains("scene-ready"),
+        completing: body.classList.contains("completing"),
+        loading: body.classList.contains("loading"),
+      })),
+      { ready: true, completing: true, loading: false },
+    );
     const colors = await page
       .locator(".zoom-child-elem")
       .evaluateAll((elements) =>

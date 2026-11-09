@@ -3,6 +3,22 @@ export class PageUI {
   constructor() {
     this.events = new AbortController();
     const signal = this.events.signal;
+    document.getElementById("motion-toggle").addEventListener(
+      "click",
+      (event) => {
+        if (!this.app) return;
+        this.app.motionPaused = !this.app.motionPaused;
+        event.currentTarget.textContent = this.app.motionPaused
+          ? "Resume motion"
+          : "Pause motion";
+        event.currentTarget.setAttribute(
+          "aria-pressed",
+          String(this.app.motionPaused),
+        );
+        this.app.invalidate();
+      },
+      { signal },
+    );
     this.menu = document.getElementById("nav-links");
     this.toggle = document.querySelector(".menu-toggle");
     this.dialog = document.getElementById("contact-dialog");
@@ -112,6 +128,10 @@ export class PageUI {
       },
       { signal },
     );
+  }
+
+  reveal() {
+    document.body.classList.add("scene-ready");
   }
 
   connect(app) {
