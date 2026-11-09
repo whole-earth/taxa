@@ -11,7 +11,7 @@ import {
   MOBILIZED_BLUE_MOBILE,
 } from "./cellMaterials.js";
 
-const { zoom, tilt, turn, capDescent, capLock, mobileLighting } =
+const { zoom, tilt, turn, baseReveal, capDescent, capLock, mobileLighting } =
   PRODUCT_TIMING;
 
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
@@ -341,7 +341,11 @@ export class StoryTimeline {
     const { sceneManager: manager, ambientLight } = this.app;
     const applicator = this.app.product?.applicator;
     const phase =
-      progress <= zoom.end ? PRODUCT_PHASE.TRANSITION : PRODUCT_PHASE.DISPLAY;
+      progress <= zoom.end
+        ? PRODUCT_PHASE.TRANSITION
+        : progress < baseReveal.end
+          ? PRODUCT_PHASE.TURN
+          : PRODUCT_PHASE.DISPLAY;
     if (phase !== this.productPhase || this.productObject !== product) {
       this.productPhase = phase;
       this.productObject = product;
@@ -393,6 +397,7 @@ export class StoryTimeline {
       );
       product.scale.setScalar(this.mix(4, 5.5, turnProgress));
     }
+    this.app.product.setBaseOpacity(revealStage(progress, baseReveal));
     if (progress > zoom.end)
       manager.renderer.toneMappingExposure = this.mix(0.6, 0.36, tiltProgress);
     const lightProgress = this.isMobile

@@ -27,6 +27,9 @@ export class ProductModel {
     this.seal = root.getObjectByName("film-cover");
     this.rim = root.getObjectByName("top-ring");
     this.wordmark = root.getObjectByName("taxa-name");
+    this.baseMeshes = ["tube", "bottom_dial", "dark-adapter"].map((name) =>
+      root.getObjectByName(name),
+    );
     if (this.applicator) {
       this.applicator.position.y = 0;
       this.overflowMask = createOverflowMask();
@@ -119,7 +122,10 @@ export class ProductModel {
     if (this.wordmark) this.wordmark.renderOrder = transitioning ? 4 : 0;
     for (const [mesh, materials] of this.meshMaterials) {
       const transparent =
-        transitioning || mesh === this.seal || mesh === this.wordmark;
+        transitioning ||
+        (phase === PRODUCT_PHASE.TURN && this.baseMeshes.includes(mesh)) ||
+        mesh === this.seal ||
+        mesh === this.wordmark;
       for (const material of materials) {
         if (material.transparent !== transparent) {
           material.transparent = transparent;
@@ -140,5 +146,15 @@ export class ProductModel {
     if (this.cap) this.cap.material.opacity = cap;
     if (this.seal) this.seal.material.opacity = seal;
     if (this.wordmark) this.wordmark.material.opacity = seal;
+  }
+
+  setBaseOpacity(opacity) {
+    // A zero-alpha surface can still write depth. Skip the base entirely
+    // while looking through the opening; reveal it only as the view turns.
+    for (const mesh of this.baseMeshes) {
+      mesh.visible = opacity > 0;
+      for (const material of this.meshMaterials.get(mesh))
+        material.opacity = opacity;
+    }
   }
 }

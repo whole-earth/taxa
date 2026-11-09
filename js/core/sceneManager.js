@@ -290,9 +290,9 @@ export class SceneManager {
     const spot = this.productLight.clone();
     spot.visible = false;
     lighting.add(spot);
-    for (const phase of [PRODUCT_PHASE.TRANSITION, PRODUCT_PHASE.DISPLAY]) {
+    for (const phase of Object.values(PRODUCT_PHASE)) {
       product.setMaterialPhase(phase);
-      spot.visible = phase === PRODUCT_PHASE.DISPLAY;
+      spot.visible = phase !== PRODUCT_PHASE.TRANSITION;
       await this.warmMaterials(product.root, lighting);
       if (this.disposed) return;
     }
@@ -311,7 +311,7 @@ export class SceneManager {
     // creation, buffer uploads and transmission-target allocation until a draw.
     // Prepare those during loading, one phase per idle task. Restore the real
     // scene in the same task, before the browser can present the warm-up pose.
-    for (const phase of [PRODUCT_PHASE.TRANSITION, PRODUCT_PHASE.DISPLAY]) {
+    for (const phase of Object.values(PRODUCT_PHASE)) {
       await new Promise((resolve) => {
         if (window.requestIdleCallback)
           window.requestIdleCallback(resolve, { timeout: 500 });
@@ -332,7 +332,7 @@ export class SceneManager {
         product.setMaterialPhase(phase);
         cell.visible = phase === PRODUCT_PHASE.TRANSITION && saved.cell;
         zoomStreaks.visible = phase === PRODUCT_PHASE.TRANSITION;
-        this.productLight.visible = phase === PRODUCT_PHASE.DISPLAY;
+        this.productLight.visible = phase !== PRODUCT_PHASE.TRANSITION;
         this.renderer.transmissionResolutionScale =
           phase === PRODUCT_PHASE.TRANSITION
             ? Math.min(1, 1 / this.renderer.getPixelRatio())

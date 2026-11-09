@@ -11,6 +11,7 @@ export const POD_LABELS = {
 
 export const PRODUCT_PHASE = {
   TRANSITION: "transition",
+  TURN: "turn",
   DISPLAY: "display",
 };
 
@@ -19,6 +20,7 @@ export const PRODUCT_PHASE = {
 export const PRODUCT_TIMING = {
   zoom: { start: 0.3, end: 0.7, duration: 0.4 },
   tilt: { start: 0.7, duration: 0.2 },
+  baseReveal: { start: 0.7, end: 0.85 },
   turn: { start: 0.5, duration: 0.5 },
   capDescent: { start: 0.9, duration: 0.05 },
   capLock: { start: 0.95, duration: 0.05 },
