@@ -1,3 +1,4 @@
+import { previewUrl } from "./preview.mjs";
 // Compare source and prepared geometry in the same renderer. Separate WebGL
 // contexts can differ at triangle edges even when loading the identical build.
 // First save the pre-change dist at test-results/geometry-baseline/site.
@@ -62,9 +63,7 @@ try {
         ),
       });
     });
-    await page.goto(
-      `${process.env.PREVIEW_URL || "http://127.0.0.1:4175"}/?perf`,
-    );
+    await page.goto(previewUrl());
     await page.waitForFunction(() => !!window.taxaDebug?.app.product);
     await page.evaluate(() => {
       const iframe = document.createElement("iframe");

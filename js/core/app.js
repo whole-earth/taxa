@@ -7,7 +7,7 @@ import { loadCellModel } from "../models/cell.js";
 import { loadProductModel } from "../models/product.js";
 import { disposeModelLoader } from "../models/loader.js";
 import { SpeckleSystem } from "../effects/speckles.js";
-import { StarField, starfieldParams } from "../effects/starfield.js";
+import { ZoomStreaks, zoomStreakConfig } from "../effects/zoomStreaks.js";
 import { PodSelector } from "../effects/podSelector.js";
 import { StoryTimeline } from "./timeline.js";
 import { disposeScene } from "../utils/dispose.js";
@@ -123,10 +123,10 @@ export class StoryApp {
       Math.max(size.x, size.y, size.z) * 0.48,
       this.cellGroup,
     );
-    this.starField = new StarField(starfieldParams);
-    this.starField.visible = false;
-    this.starField.position.set(0, 0, -20);
-    this.sceneManager.camera.add(this.starField);
+    this.zoomStreaks = new ZoomStreaks(zoomStreakConfig);
+    this.zoomStreaks.visible = false;
+    this.zoomStreaks.position.set(0, 0, -20);
+    this.sceneManager.camera.add(this.zoomStreaks);
     this.sceneManager.scene.add(this.sceneManager.camera);
     await this.sceneManager.environmentReady;
     if (this.sceneManager.environmentError)
@@ -134,7 +134,7 @@ export class StoryApp {
     if (this.disposed) return;
     // Cell downloads are finished. Fetch the product while the GPU prepares
     // the hero, but defer parsing and product GPU work until its first frame.
-    this.preloadProduct();
+    this.prepareProduct();
     // Warm shader programs before the first visible frame. This uses parallel
     // GPU compilation where supported, with the environment already available.
     await this.sceneManager.warmMaterials(this.sceneManager.scene);
@@ -161,7 +161,7 @@ export class StoryApp {
     this.invalidate(true);
   }
 
-  preloadProduct() {
+  prepareProduct() {
     if (this.disposed || this.productPromise || this.productError) return;
     // One shared promise prevents scroll bursts from starting duplicate loads.
     this.productPromise = loadProductModel("swap.glb", {
@@ -179,7 +179,7 @@ export class StoryApp {
           const anchor = await this.sceneManager.warmProductFrames(
             product,
             this.cellGroup,
-            this.starField,
+            this.zoomStreaks,
           );
           if (this.disposed) return;
           this.product = product;
@@ -418,7 +418,7 @@ export class StoryApp {
       () => {
         this.productError = null;
         this.loadingStatus.hide();
-        this.preloadProduct();
+        this.prepareProduct();
       },
       { signal },
     );

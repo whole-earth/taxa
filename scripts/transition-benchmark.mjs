@@ -1,3 +1,4 @@
+import { previewUrl } from "./preview.mjs";
 import { chromium } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 
@@ -11,7 +12,7 @@ const page = await browser.newPage({
   deviceScaleFactor: mobile ? 3 : 2,
   hasTouch: mobile,
 });
-await page.goto(process.env.BENCH_URL || "http://127.0.0.1:4173/?perf");
+await page.goto(process.env.BENCH_URL || previewUrl());
 await page.waitForFunction(() => window.taxaDebug?.app.isInitialized);
 const result = await page.evaluate(
   async ({ ablations, gpuTimers }) => {
@@ -21,7 +22,7 @@ const result = await page.evaluate(
     const ext = gpuTimers && gl.getExtension("EXT_disjoint_timer_query_webgl2");
     const debug = gl.getExtension("WEBGL_debug_renderer_info");
     const started = performance.now();
-    a.preloadProduct();
+    (a.prepareProduct ?? a.preloadProduct).call(a);
     await a.productPromise;
     const loadMs = performance.now() - started;
     // Frozen comparison builds predate the model/property naming cleanup.
@@ -74,7 +75,7 @@ const result = await page.evaluate(
           "cold",
           "warm",
           "no-shadows",
-          "no-stars",
+          "no-streaks",
           "no-cell",
           "no-product",
           "transmission-half",
@@ -100,7 +101,8 @@ const result = await page.evaluate(
         speckleMeshes.forEach((mesh) => (mesh.visible = false));
         if (variant === "no-cell") cellGroup.visible = false;
         if (variant === "no-product") productRoot.visible = false;
-        if (variant === "no-stars") a.starField.visible = false;
+        if (variant === "no-streaks")
+          (a.zoomStreaks ?? a.starField).visible = false;
         let query;
         if (ext) {
           query = gl.createQuery();

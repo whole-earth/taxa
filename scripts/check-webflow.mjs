@@ -1,3 +1,4 @@
+import { previewBase } from "./preview.mjs";
 // Run after npm run build && node scripts/preview-webflow.mjs, with dist served.
 // Tests the real captured Webflow DOM with the animation on a different origin.
 import assert from "node:assert/strict";
@@ -5,7 +6,7 @@ import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { chromium, webkit } from "@playwright/test";
 
 const origin = "https://animation-preview.invalid";
-const base = process.env.PREVIEW_URL || "http://127.0.0.1:4175";
+const base = previewBase;
 const engine = process.env.BROWSER === "webkit" ? webkit : chromium;
 const browser = await engine.launch(
   engine === chromium ? { channel: "chrome" } : {},

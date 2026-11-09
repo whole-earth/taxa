@@ -40,11 +40,8 @@ export class PodSelector {
     selectedButton.classList.add("progress-loading");
     const initialY = applicator.position.y;
     const initialRotation = applicator.rotation.y;
-    const materials = new Set();
-    this.app.product.root.getObjectByName("inner-cap")?.traverse((node) => {
-      if (node.material) materials.add(node.material);
-    });
-    const first = [...materials][0];
+    const materials = this.app.product.podMaterials;
+    const [first] = materials;
     const currentColor =
       first?.color.clone() ?? new THREE.Color(POD_COLORS[this.currentPod]);
     const targetColor = new THREE.Color(POD_COLORS[podId]);

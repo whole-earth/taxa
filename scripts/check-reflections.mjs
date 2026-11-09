@@ -1,3 +1,4 @@
+import { previewUrl } from "./preview.mjs";
 // Compare the shipped map against production's original HDR processing at
 // several poses. No production files or material parameters are modified.
 import { build } from "esbuild";
@@ -34,7 +35,7 @@ try {
     await page.route("**/reference.hdr", (route) =>
       route.fulfill({ contentType: "application/octet-stream", body: hdr }),
     );
-    await page.goto(`http://127.0.0.1:${process.env.PORT || 4173}/?perf`);
+    await page.goto(previewUrl());
     await page.waitForFunction(() => !!window.taxaDebug?.app.product);
     await page.addScriptTag({ content: bundle.outputFiles[0].text });
     const comparisons = await page.evaluate(async () => {

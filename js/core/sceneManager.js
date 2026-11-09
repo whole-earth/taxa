@@ -299,7 +299,7 @@ export class SceneManager {
     product.setMaterialPhase(PRODUCT_PHASE.TRANSITION);
   }
 
-  async warmProductFrames(product, cell, starField) {
+  async warmProductFrames(product, cell, zoomStreaks) {
     const root = product.root;
     const anchor = new THREE.Group();
     anchor.add(root);
@@ -321,7 +321,7 @@ export class SceneManager {
       if (this.disposed) return anchor;
       const saved = {
         cell: cell.visible,
-        stars: starField.visible,
+        streaks: zoomStreaks.visible,
         light: this.productLight.visible,
         scale: this.renderer.transmissionResolutionScale,
       };
@@ -331,7 +331,7 @@ export class SceneManager {
         root.visible = true;
         product.setMaterialPhase(phase);
         cell.visible = phase === PRODUCT_PHASE.TRANSITION && saved.cell;
-        starField.visible = phase === PRODUCT_PHASE.TRANSITION;
+        zoomStreaks.visible = phase === PRODUCT_PHASE.TRANSITION;
         this.productLight.visible = phase === PRODUCT_PHASE.DISPLAY;
         this.renderer.transmissionResolutionScale =
           phase === PRODUCT_PHASE.TRANSITION
@@ -342,7 +342,7 @@ export class SceneManager {
         root.visible = false;
         this.scene.remove(anchor);
         cell.visible = saved.cell;
-        starField.visible = saved.stars;
+        zoomStreaks.visible = saved.streaks;
         this.productLight.visible = saved.light;
         this.renderer.transmissionResolutionScale = saved.scale;
         this.render();

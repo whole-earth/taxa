@@ -1,11 +1,18 @@
 import * as THREE from "three";
-import { PRODUCT_PHASE, PRODUCT_REVEAL } from "./productConfig.js";
+import {
+  PRODUCT_PHASE,
+  PRODUCT_REVEAL,
+  PRODUCT_TIMING,
+} from "./productConfig.js";
 import { Tween, Easing } from "tween";
 import {
   MOBILIZED_GREEN,
   MOBILIZED_BLUE,
   MOBILIZED_BLUE_MOBILE,
 } from "./cellMaterials.js";
+
+const { zoom, tilt, turn, capDescent, capLock, mobileLighting } =
+  PRODUCT_TIMING;
 
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
 const smoothstep = (value) => {
@@ -186,8 +193,8 @@ export class StoryTimeline {
     const {
       sceneManager: manager,
       cellGroup,
-      speckles: speckles,
-      starField,
+      speckles,
+      zoomStreaks,
     } = this.app;
     const index =
       y < this.bounds[1].top
@@ -243,28 +250,28 @@ export class StoryTimeline {
 
     const waitingForProduct = index === 3 && !this.app.product;
     const visualProgress = waitingForProduct
-      ? Math.min(progress, 0.3)
+      ? Math.min(progress, zoom.start)
       : progress;
     this.app.productFallback.update(waitingForProduct, progress, this.isMobile);
-    cellGroup.visible = index !== 3 || visualProgress <= 0.7;
-    starField.visible = index === 3 && visualProgress <= 0.7;
-    if (starField.visible) starField.updateProgress(visualProgress * 1.66);
+    cellGroup.visible = index !== 3 || visualProgress <= zoom.end;
+    zoomStreaks.visible = index === 3 && visualProgress <= zoom.end;
+    if (zoomStreaks.visible) zoomStreaks.updateProgress(visualProgress * 1.66);
     manager.controls.autoRotate =
       !this.app.motionPaused &&
       !this.app.reducedMotion &&
-      (index < 3 || progress <= 0.22);
+      (index < 3 || progress <= PRODUCT_TIMING.interactionEnd);
     manager.controls.enableRotate = index < 3 && !this.isMobile;
-    manager.productLight.visible = index === 3 && visualProgress > 0.7;
+    manager.productLight.visible = index === 3 && visualProgress > zoom.end;
     // The frosted transition samples a blurred background. Rendering that
     // intermediate buffer at CSS-pixel resolution avoids a Retina-sized
     // multisample resolve/mipmap chain. Silhouettes, labels and the canvas
     // retain native DPR; the hero and final product use full-resolution
     // transmission. No geometry, texture, or material values are reduced.
     manager.renderer.transmissionResolutionScale =
-      index === 3 && visualProgress > 0.3 && visualProgress <= 0.7
+      index === 3 && visualProgress > zoom.start && visualProgress <= zoom.end
         ? Math.min(1, 1 / manager.renderer.getPixelRatio())
         : 1;
-    const clearNav = index === 3 && progress > 0.22;
+    const clearNav = index === 3 && progress > PRODUCT_TIMING.interactionEnd;
     if (clearNav !== this.clearNav) {
       this.clearNav = clearNav;
       this.nav.classList.toggle("clear", clearNav);
@@ -300,28 +307,34 @@ export class StoryTimeline {
     }
 
     const product = this.app.product?.root;
-    if (product) product.visible = index === 3 && progress > 0.3;
+    if (product) product.visible = index === 3 && progress > zoom.start;
     if (index === 3) {
       cellGroup.scale.setScalar(
-        this.mix(1.6, this.isMobile ? 0.05 : 0.016, visualProgress / 0.7),
+        this.mix(1.6, this.isMobile ? 0.05 : 0.016, visualProgress / zoom.end),
       );
-      this.setText(progress > 0.95 ? 3 : progress > 0.4 ? -1 : 2);
+      this.setText(
+        progress > PRODUCT_TIMING.textEnter
+          ? 3
+          : progress > PRODUCT_TIMING.textExit
+            ? -1
+            : 2,
+      );
       if (product) this.updateProduct(product, progress);
       else if (!this.app.productError) {
         this.app.loadingStatus.show("Preparing the product…");
       }
     }
     if (index < 3 && !this.app.productError) this.app.loadingStatus.hide();
-    // Once the reader enters the story, prepare the later product while there
-    // is still a full chapter of scrolling available for decode/compilation.
-    if (index >= 1) this.app.preloadProduct();
+    // Initialization already starts preparation after the cell downloads.
+    // This idempotent call also covers direct seeks into later chapters.
+    if (index >= 1) this.app.prepareProduct();
   }
 
   updateProduct(product, progress) {
     const { sceneManager: manager, ambientLight } = this.app;
     const applicator = this.app.product?.applicator;
     const phase =
-      progress <= 0.7 ? PRODUCT_PHASE.TRANSITION : PRODUCT_PHASE.DISPLAY;
+      progress <= zoom.end ? PRODUCT_PHASE.TRANSITION : PRODUCT_PHASE.DISPLAY;
     if (phase !== this.productPhase || this.productObject !== product) {
       this.productPhase = phase;
       this.productObject = product;
@@ -329,10 +342,10 @@ export class StoryTimeline {
     }
     // Evaluate every transform from absolute progress. Seeking, resizing and
     // reverse scrolling never depend on visiting an earlier phase first.
-    const rotation = clamp01((progress - 0.7) / 0.2);
-    const secondHalf = clamp01((rotation - 0.5) / 0.5);
-    if (progress <= 0.7) {
-      const reveal = clamp01((progress - 0.3) / 0.4);
+    const tiltProgress = clamp01((progress - tilt.start) / tilt.duration);
+    const turnProgress = clamp01((tiltProgress - turn.start) / turn.duration);
+    if (progress <= zoom.end) {
+      const reveal = clamp01((progress - zoom.start) / zoom.duration);
       const scale = this.mix(
         this.isMobile ? 26 : 20,
         this.isMobile ? 4.8 : 4,
@@ -350,42 +363,46 @@ export class StoryTimeline {
         1 - 0.4 * revealStage(reveal, PRODUCT_REVEAL.lighting);
     } else if (this.isMobile) {
       product.rotation.set(
-        this.mix(Math.PI / 2, Math.PI / 7, rotation),
-        this.mix(0, Math.PI / 5, rotation),
-        this.mix(0, -Math.PI / 6, rotation),
+        this.mix(Math.PI / 2, Math.PI / 7, tiltProgress),
+        this.mix(0, Math.PI / 5, tiltProgress),
+        this.mix(0, -Math.PI / 6, tiltProgress),
       );
       product.position.set(
-        this.mix(0, -3, rotation),
-        this.mix(0, 5.4, rotation),
+        this.mix(0, -3, tiltProgress),
+        this.mix(0, 5.4, tiltProgress),
         0,
       );
-      product.scale.setScalar(this.mix(4.8, 5.2, rotation));
+      product.scale.setScalar(this.mix(4.8, 5.2, tiltProgress));
     } else {
       product.rotation.set(
-        this.mix(Math.PI / 2, Math.PI / 12, rotation),
-        this.mix(0, Math.PI / 3.6, secondHalf),
-        this.mix(0, -Math.PI / 8, secondHalf),
+        this.mix(Math.PI / 2, Math.PI / 12, tiltProgress),
+        this.mix(0, Math.PI / 3.6, turnProgress),
+        this.mix(0, -Math.PI / 8, turnProgress),
       );
       product.position.set(
-        this.mix(0, -20, secondHalf),
-        this.mix(0, -16, secondHalf),
+        this.mix(0, -20, turnProgress),
+        this.mix(0, -16, turnProgress),
         0,
       );
-      product.scale.setScalar(this.mix(4, 5.5, secondHalf));
+      product.scale.setScalar(this.mix(4, 5.5, turnProgress));
     }
-    if (progress > 0.7)
-      manager.renderer.toneMappingExposure = this.mix(0.6, 0.36, rotation);
+    if (progress > zoom.end)
+      manager.renderer.toneMappingExposure = this.mix(0.6, 0.36, tiltProgress);
     const lightProgress = this.isMobile
-      ? clamp01((progress - 0.85) / 0.05)
-      : secondHalf;
+      ? clamp01((progress - mobileLighting.start) / mobileLighting.duration)
+      : turnProgress;
     manager.productLight.intensity = this.mix(0, 8, lightProgress);
     ambientLight.intensity = this.mix(4.6, 3.2, lightProgress);
     if (applicator && !this.app.podSelector?.isAnimating) {
-      applicator.position.y = this.mix(1, 0, (progress - 0.9) / 0.05);
+      applicator.position.y = this.mix(
+        1,
+        0,
+        (progress - capDescent.start) / capDescent.duration,
+      );
       applicator.rotation.y = this.mix(
         0,
         Math.PI * 0.26,
-        (progress - 0.95) / 0.05,
+        (progress - capLock.start) / capLock.duration,
       );
     }
   }

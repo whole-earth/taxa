@@ -1,3 +1,4 @@
+import { previewUrl } from "./preview.mjs";
 import { chromium } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 
@@ -9,7 +10,7 @@ const page = await browser.newPage({
   deviceScaleFactor: mobile ? 3 : 2,
   hasTouch: mobile,
 });
-await page.goto("http://127.0.0.1:4173/?perf");
+await page.goto(previewUrl());
 await page.waitForFunction(() => window.taxaDebug?.app.isInitialized);
 await page.addStyleTag({
   content:
@@ -17,7 +18,7 @@ await page.addStyleTag({
 });
 await page.evaluate(async () => {
   const a = window.taxaDebug.app;
-  a.preloadProduct();
+  a.prepareProduct();
   await a.productPromise;
   window.scrollTo(0, a.timeline.bounds[2].top + 1);
   a.invalidate(true);

@@ -1,5 +1,5 @@
 import { defineConfig } from "@playwright/test";
-const baseURL = `http://127.0.0.1:${process.env.PORT || 4173}`;
+import { previewBase as baseURL } from "./scripts/preview.mjs";
 export default defineConfig({
   testDir: "./tests",
   outputDir: "./test-results/playwright",
@@ -13,9 +13,11 @@ export default defineConfig({
     viewport: { width: 1440, height: 900 },
     screenshot: "only-on-failure",
   },
-  webServer: {
-    command: "npm run dev",
-    url: baseURL,
-    reuseExistingServer: true,
-  },
+  webServer: process.env.PREVIEW_URL
+    ? undefined
+    : {
+        command: "npm run dev",
+        url: baseURL,
+        reuseExistingServer: true,
+      },
 });

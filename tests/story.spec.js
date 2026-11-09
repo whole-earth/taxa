@@ -393,7 +393,7 @@ for (const mobile of [false, true]) {
     await ready(page);
     await page.evaluate(async () => {
       const app = window.taxaDebug.app;
-      app.preloadProduct();
+      app.prepareProduct();
       await app.productPromise;
     });
     const samples = await page.evaluate((mobile) => {
@@ -465,7 +465,7 @@ for (const mobile of [false, true]) {
     await ready(page);
     const samples = await page.evaluate(async () => {
       const app = window.taxaDebug.app;
-      app.preloadProduct();
+      app.prepareProduct();
       await app.productPromise;
       app.motionPaused = true;
       cancelAnimationFrame(app.animationFrameId);
@@ -513,7 +513,7 @@ for (const mobile of [false, true]) {
     await ready(page);
     await page.evaluate(async () => {
       const app = window.taxaDebug.app;
-      app.preloadProduct();
+      app.prepareProduct();
       await app.productPromise;
     });
     await seek(page, "pitch", 0.1);
@@ -579,7 +579,7 @@ test("cap fades continuously through half opacity in both scroll directions", as
   await ready(page);
   await page.evaluate(async () => {
     const app = window.taxaDebug.app;
-    app.preloadProduct();
+    app.prepareProduct();
     await app.productPromise;
   });
   await seek(page, "pitch", 0.1);

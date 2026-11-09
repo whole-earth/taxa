@@ -1,9 +1,10 @@
+import { previewUrl } from "./preview.mjs";
 import { chromium } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 
 // Optional comparison: BASELINE_URL must serve main's original animation with
 // the same HTML, CSS, assets, viewport and DPR. Never measures production traffic.
-const targets = [["optimized", "http://127.0.0.1:4173/?perf"]];
+const targets = [["optimized", previewUrl()]];
 if (process.env.BASELINE_URL)
   targets.unshift(["baseline", process.env.BASELINE_URL]);
 const browser = await chromium.launch({ channel: "chrome", headless: true });

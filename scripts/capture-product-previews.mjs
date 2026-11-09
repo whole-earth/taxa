@@ -1,3 +1,4 @@
+import { previewUrl } from "./preview.mjs";
 // Regenerate the optional late-loading previews from the actual final 3D pose.
 // Run against npm run dev after changing product geometry, materials or framing.
 import { chromium } from "@playwright/test";
@@ -18,7 +19,7 @@ for (const mobile of [false, true]) {
       : { width: 1440, height: 900 },
     deviceScaleFactor: 2,
   });
-  await page.goto(`http://127.0.0.1:${process.env.PORT || 4173}/?perf`);
+  await page.goto(previewUrl());
   await page.waitForFunction(() => !!window.taxaDebug?.app.product);
   const data = await page.evaluate(() => {
     const app = window.taxaDebug.app;

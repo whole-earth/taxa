@@ -1,23 +1,21 @@
 import * as THREE from "three";
 
-const DEVICE = {
-  isMobile: window.innerWidth < 768,
-};
+const isMobile = window.innerWidth < 768;
 
-export const starfieldParams = {
+export const zoomStreakConfig = {
   geometry: {
     start: {
       z: -10, // Starting depth position
-      diameter: 50, // Starting diameter of the starfield circle
+      diameter: 50, // Starting diameter of the streak ring
     },
     end: {
       z: 60, // Ending depth position
-      diameter: 10, // Final diameter of the starfield circle
+      diameter: 10, // Final diameter of the streak ring
     },
   },
   lines: {
-    count: DEVICE.isMobile ? 7 : 14,
-    thickness: DEVICE.isMobile ? 16 : 11.2,
+    count: isMobile ? 7 : 14,
+    thickness: isMobile ? 16 : 11.2,
     opacity: 1.0,
     basePattern: ["gray", "blue", "gray", "green", "gray", "blue", "purple"],
   },
@@ -78,29 +76,25 @@ const SHADERS = {
     `,
 };
 
-export class StarField extends THREE.Group {
-  constructor(params = starfieldParams) {
+export class ZoomStreaks extends THREE.Group {
+  constructor(params = zoomStreakConfig) {
     super();
     this.config = params;
 
-    this._setupInitialState();
-    this._createStarField();
+    this.rotation.set(0, Math.PI, 0);
+    this.createMesh();
     this.lastProgress = -1;
   }
 
   updateProgress(progress, isInActiveArea = true) {
     const value =
-      this.visible && isInActiveArea ? this._calculateProgress(progress) : 0;
+      this.visible && isInActiveArea ? this.easeProgress(progress) : 0;
     if (value === this.lastProgress) return;
     this.lastProgress = value;
     this.linesMesh.material.uniforms.progress.value = value;
   }
 
-  _setupInitialState() {
-    this.rotation.set(0, Math.PI, 0);
-  }
-
-  _generateUniformPoints(count) {
+  createPoints(count) {
     const points = [];
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2;
@@ -109,14 +103,14 @@ export class StarField extends THREE.Group {
     return points;
   }
 
-  _getColorForIndex(index) {
+  colorAt(index) {
     const { basePattern } = this.config.lines;
     return basePattern[index % basePattern.length];
   }
 
-  _createStarField() {
+  createMesh() {
     const { lines } = this.config;
-    const points = this._generateUniformPoints(lines.count);
+    const points = this.createPoints(lines.count);
 
     const lineGeometry = new THREE.BufferGeometry();
     const positions = new Float32Array([
@@ -129,9 +123,9 @@ export class StarField extends THREE.Group {
     );
     lineGeometry.setIndex(new THREE.BufferAttribute(indices, 1));
 
-    this._setupInstanceAttributes(lineGeometry, points);
+    this.setInstanceAttributes(lineGeometry, points);
 
-    const material = this._createShaderMaterial();
+    const material = this.createMaterial();
 
     this.linesMesh = new THREE.InstancedMesh(
       lineGeometry,
@@ -143,7 +137,7 @@ export class StarField extends THREE.Group {
     this.add(this.linesMesh);
   }
 
-  _setupInstanceAttributes(geometry, points) {
+  setInstanceAttributes(geometry, points) {
     const { lines, geometry: geo } = this.config;
     const startPositions = new Float32Array(lines.count * 3);
     const endPositions = new Float32Array(lines.count * 3);
@@ -162,9 +156,7 @@ export class StarField extends THREE.Group {
       endPositions[idx + 1] = points[i].y * endRadius;
       endPositions[idx + 2] = geo.end.z;
 
-      const color = new THREE.Color(
-        this.config.colors[this._getColorForIndex(i)],
-      );
+      const color = new THREE.Color(this.config.colors[this.colorAt(i)]);
       colors[idx] = color.r;
       colors[idx + 1] = color.g;
       colors[idx + 2] = color.b;
@@ -184,16 +176,13 @@ export class StarField extends THREE.Group {
     );
   }
 
-  _createShaderMaterial() {
+  createMaterial() {
     const { lines } = this.config;
     return new THREE.ShaderMaterial({
       uniforms: {
         progress: { value: 0 },
         thickness: { value: lines.thickness },
         opacity: { value: lines.opacity },
-        resolution: {
-          value: new THREE.Vector2(window.innerWidth, window.innerHeight),
-        },
       },
       vertexShader: SHADERS.vertex,
       fragmentShader: SHADERS.fragment,
@@ -204,7 +193,7 @@ export class StarField extends THREE.Group {
     });
   }
 
-  _calculateProgress(progress) {
+  easeProgress(progress) {
     const easedProgress =
       progress < 0.5
         ? 2 * progress * progress // Ease in
