@@ -15,7 +15,7 @@ export class PageUI {
           "aria-pressed",
           String(this.app.motionPaused),
         );
-        this.app.invalidate();
+        this.app.invalidate(true);
       },
       { signal },
     );

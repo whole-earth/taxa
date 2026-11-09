@@ -8,6 +8,7 @@ import { loadProductModel } from "../models/product.js";
 import { disposeModelLoader } from "../models/loader.js";
 import { SpeckleSystem } from "../effects/speckles.js";
 import { ZoomStreaks } from "../effects/zoomStreaks.js";
+import { CELL_ROTATION } from "../effects/cellRotation.js";
 import { PodSelector } from "../effects/podSelector.js";
 import { StoryTimeline } from "./timeline.js";
 import { disposeScene } from "../utils/dispose.js";
@@ -70,7 +71,7 @@ export class StoryApp {
         },
         controls: {
           dampingFactor: 0.03,
-          autoRotateSpeed: 0.4,
+          autoRotateSpeed: CELL_ROTATION.baseline,
           rotateSpeed: 0.8,
         },
         assets: { envMap: new URL("cell/reflections.bin", assetBase).href },
@@ -252,16 +253,20 @@ export class StoryApp {
       for (const tween of playing)
         if (!tween.isPlaying()) this.tweens.remove(tween);
     }
-    this.timeline.tick(delta);
     this.ribbons.root.visible = this.timeline.ribbonMaterial.opacity > 0;
     for (const mesh of this.speckles.meshes)
       mesh.visible = mesh.material.opacity > 0;
     const idle = time - this.lastActivity > IDLE_TIMEOUT;
     const continuous =
       !idle && !this.motionPaused && !this.reducedMotion && !this.overlayActive;
+    this.timeline.tick(delta, continuous);
     const controls = this.sceneManager.controls;
     const configuredRotation = controls.autoRotate;
     controls.autoRotate = configuredRotation && continuous;
+    // Keep the existing 60 Hz drag feel, with the same damping time on
+    // high-refresh screens instead of consuming inertia once per frame.
+    controls.dampingFactor =
+      1 - (1 - this.sceneManager.config.controls.dampingFactor) ** (delta * 60);
     const cameraChanged = controls.update(delta);
     controls.autoRotate = configuredRotation;
     const particles = continuous && this.speckles.canAnimate;
@@ -321,6 +326,7 @@ export class StoryApp {
 
   resetFrameClock() {
     this.lastFrameTime = null;
+    this.timeline?.rotation.reset(window.scrollY);
     performanceMonitor.resetClock();
   }
 

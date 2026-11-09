@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { CellRotation } from "../effects/cellRotation.js";
 import {
   PRODUCT_PHASE,
   PRODUCT_REVEAL,
@@ -50,8 +51,8 @@ export class StoryTimeline {
     this.chapter = -1;
     this.topic = -1;
     this.productPhase = null;
-    this.rotationBoost = 0;
     this.lastScrollY = window.scrollY;
+    this.rotation = new CellRotation(this.lastScrollY);
     this.ribbons = app.ribbons.root;
     this.innerCell = app.innerCell.root;
     this.cellShell = app.cellShell.root;
@@ -212,21 +213,7 @@ export class StoryTimeline {
             ? 2
             : 3;
     const progress = this.progress(index, y);
-    const delta = y - this.lastScrollY;
     this.lastScrollY = y;
-    if (delta)
-      this.rotationBoost +=
-        (delta *
-          (delta > 0
-            ? this.isMobile
-              ? 0.1
-              : 0.2
-            : this.isMobile
-              ? 0.06
-              : 0.12) -
-          this.rotationBoost) *
-        (this.isMobile ? 0.05 : 0.2);
-    this.rotationBoost = Math.max(-12, Math.min(12, this.rotationBoost));
 
     if (index !== this.chapter) {
       const previous = this.chapter;
@@ -419,9 +406,13 @@ export class StoryTimeline {
     }
   }
 
-  tick(delta) {
-    this.rotationBoost *= Math.exp(-delta * (this.isMobile ? 3 : 12));
-    if (Math.abs(this.rotationBoost) < 0.001) this.rotationBoost = 0;
-    this.app.sceneManager.controls.autoRotateSpeed = 0.4 + this.rotationBoost;
+  tick(delta, active) {
+    const controls = this.app.sceneManager.controls;
+    controls.autoRotateSpeed = this.rotation.update(
+      this.lastScrollY,
+      delta,
+      this.viewportHeight,
+      active && controls.autoRotate,
+    );
   }
 }
