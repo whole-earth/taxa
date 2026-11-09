@@ -2,7 +2,7 @@ import * as THREE from "three";
 
 const isMobile = window.innerWidth < 768;
 
-export const zoomStreakConfig = {
+const zoomStreakConfig = {
   geometry: {
     start: {
       z: -10, // Starting depth position
@@ -86,9 +86,8 @@ export class ZoomStreaks extends THREE.Group {
     this.lastProgress = -1;
   }
 
-  updateProgress(progress, isInActiveArea = true) {
-    const value =
-      this.visible && isInActiveArea ? this.easeProgress(progress) : 0;
+  updateProgress(progress) {
+    const value = this.visible ? this.easeProgress(progress) : 0;
     if (value === this.lastProgress) return;
     this.lastProgress = value;
     this.linesMesh.material.uniforms.progress.value = value;

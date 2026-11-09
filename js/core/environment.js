@@ -1,17 +1,11 @@
 import * as THREE from "three";
+import { loadBinary } from "../utils/loadBinary.js";
 
 // TXRF v1: 16-byte little-endian header followed by linear RGBA16F texels.
 // The CubeUV atlas layout is tied to the pinned Three revision, not a display
 // image format: no tone mapping, sRGB conversion or mip generation on upload.
 export async function loadEnvironment(url, signal) {
-  const compressed = typeof DecompressionStream === "function";
-  const response = await fetch(compressed ? `${url}.gz` : url, { signal });
-  if (!response.ok)
-    throw new Error(`Reflection map request failed (${response.status})`);
-  const body = compressed
-    ? new Response(response.body.pipeThrough(new DecompressionStream("gzip")))
-    : response;
-  const buffer = await body.arrayBuffer();
+  const buffer = await loadBinary(url, signal);
   if (buffer.byteLength < 16) throw new Error("Incomplete reflection map");
   const header = new DataView(buffer);
   if (

@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { compactIndices } from "./geometry.js";
+import { loadBinary } from "../utils/loadBinary.js";
 
 const dracoLoader = new DRACOLoader();
 dracoLoader.setDecoderPath(new URL("assets/draco/", document.baseURI).href);
@@ -29,18 +30,7 @@ export async function loadModel(
   let gltf;
   try {
     if (compressed) {
-      // The built product has a lossless gzip companion. Decompress natively,
-      // with the original GLB as the compatibility path for older browsers.
-      const useGzip = typeof DecompressionStream === "function";
-      const response = await fetch(useGzip ? `${path}.gz` : path, { signal });
-      if (!response.ok)
-        throw new Error(`Model request failed (${response.status}): ${path}`);
-      const body = useGzip
-        ? new Response(
-            response.body.pipeThrough(new DecompressionStream("gzip")),
-          )
-        : response;
-      const data = await body.arrayBuffer();
+      const data = await loadBinary(path, signal);
       await parseAfter;
       if (disposed || signal?.aborted)
         throw new Error("Model loading cancelled.");

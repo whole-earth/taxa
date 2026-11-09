@@ -59,7 +59,18 @@ export class StoryTimeline {
     this.outerMaterial = this.firstMaterial(this.cellShell);
     this.ribbonMaterial = this.firstMaterial(this.ribbons);
     this.originalInnerColor = this.innerMaterial.color.clone();
-    this.originalShellMaterial = this.outerMaterial.clone();
+    // Only these values change during mobilization; retain their originals
+    // without cloning a renderer material and its unrelated properties.
+    const shell = this.outerMaterial;
+    this.originalShell = {
+      color: shell.color.clone(),
+      roughness: shell.roughness,
+      metalness: shell.metalness,
+      envMapIntensity: shell.envMapIntensity,
+      opacity: shell.opacity,
+      transmission: shell.transmission,
+      reflectivity: shell.reflectivity,
+    };
     this.materialTweens = new Map();
     this.measure();
     this.chapterButtons.forEach((dot, index) =>
@@ -163,7 +174,7 @@ export class StoryTimeline {
       ? this.isMobile
         ? MOBILIZED_BLUE_MOBILE
         : MOBILIZED_BLUE
-      : this.originalShellMaterial.color;
+      : this.originalShell.color;
     this.tween(
       "outer-color",
       this.outerMaterial.color,
@@ -173,18 +184,14 @@ export class StoryTimeline {
     const values = active
       ? { roughness: 0.4, metalness: 0, envMapIntensity: 0.6, opacity: 1 }
       : {
-          roughness: this.originalShellMaterial.roughness,
-          metalness: this.originalShellMaterial.metalness,
-          envMapIntensity: this.originalShellMaterial.envMapIntensity,
-          opacity: this.originalShellMaterial.opacity,
+          roughness: this.originalShell.roughness,
+          metalness: this.originalShell.metalness,
+          envMapIntensity: this.originalShell.envMapIntensity,
+          opacity: this.originalShell.opacity,
         };
     if (this.outerMaterial.isMeshPhysicalMaterial) {
-      values.transmission = active
-        ? 0.6
-        : this.originalShellMaterial.transmission;
-      values.reflectivity = active
-        ? 0.4
-        : this.originalShellMaterial.reflectivity;
+      values.transmission = active ? 0.6 : this.originalShell.transmission;
+      values.reflectivity = active ? 0.4 : this.originalShell.reflectivity;
     }
     this.tween("outer-surface", this.outerMaterial, values, 1120);
   }
@@ -411,9 +418,5 @@ export class StoryTimeline {
     this.rotationBoost *= Math.exp(-delta * (this.isMobile ? 3 : 12));
     if (Math.abs(this.rotationBoost) < 0.001) this.rotationBoost = 0;
     this.app.sceneManager.controls.autoRotateSpeed = 0.4 + this.rotationBoost;
-  }
-
-  dispose() {
-    this.originalShellMaterial.dispose();
   }
 }

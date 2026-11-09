@@ -276,3 +276,14 @@ A frozen copy of commit `b541085` was compared with the cleanup build at 390 × 
 The first verification run exposed a test synchronization race: WebKit may apply `scrollTo` asynchronously, and the old helper could accept the previous position when both seeks stayed in one chapter. The helper now waits for the requested, document-clamped position and timeline update before asserting animation state. This changes test synchronization only. The complete `npm run verify` rerun passed: 46 browser tests in each engine (92 total), desktop/mobile Webflow integration in both engines, build, prepared-asset integrity and source formatting. Git whitespace checks also passed.
 
 The Webflow bundle is 685,284 bytes / 178,399 gzip, 70 gzip bytes above the geometry-cleanup build. This pass improves maintainability and avoids repeated collection/traversal work; it does not establish a new frame-rate improvement. No source assets, section heights, visual parameters or loading order changed. Nothing was published or pushed.
+
+
+## Follow-up cleanup — November 9, 2026
+
+Product and reflection downloads now use one `loadBinary` helper for raw/gzip selection, response validation, native decompression and abort propagation. HTTP errors consistently include the failed asset URL and status; the existing retry/fallback UI is unchanged. Product parsing still waits for the first story frame, and reflection validation/upload stays in the environment loader.
+
+The timeline now snapshots only the original shell color and six surface values instead of cloning a full renderer material. This removes the associated disposal method while preserving the desktop physical-material and mobile standard-material paths. The idle threshold and particle explosion delays are named constants. Zoom streaks use their existing default configuration directly; an unused update argument and redundant configuration export are removed. Rendering parameters, assets, section heights, animation curves and loading order are unchanged.
+
+The Webflow bundle is 685,125 bytes / 178,330 gzip, down 159 raw bytes / 69 gzip bytes from `7f9f40f`. This is a small maintainability/allocation improvement, not a measured frame-rate gain. Changes remain local to `optimize/story-demo`.
+
+`npm run verify` passed all 92 browser tests, desktop/mobile Webflow integration in Chrome and WebKit, asset integrity, build and formatting checks. Comparison against the frozen `7f9f40f` build matched all 684 animation/material/lighting states exactly across forward/reverse scrolling and desktop/mobile layouts. The 36 selected image pairs had maximum mean RGBA differences of 0.0000604/255 in Chrome and 0.0000563/255 in WebKit, consistent with the earlier isolated rasterization differences. Evidence is retained in `test-results/cleanup/`; the baseline is in `test-results/cleanup-baseline/site`. Physical-device testing remains separate.

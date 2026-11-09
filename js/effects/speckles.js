@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { Tween, Easing } from "tween";
 
 const SIZES = [0.06, 0.1, 0.14, 0.18, 0.2];
+const EXPLOSION_DELAYS = [16, 320, 720, 1120, 1440];
 const ROTATIONS = [
   [-1, 0.08],
   [-Math.PI / 2, 0.06],
@@ -174,7 +175,7 @@ export class SpeckleSystem {
   explode() {
     this.cancelTweens();
     this.meshes.forEach((mesh, index) => {
-      const delay = this.isMobile ? 0 : [16, 320, 720, 1120, 1440][index];
+      const delay = this.isMobile ? 0 : EXPLOSION_DELAYS[index];
       const duration = this.isMobile ? 2112 : 1600 - delay;
       this.startTween(
         mesh.scale,

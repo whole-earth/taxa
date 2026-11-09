@@ -7,13 +7,15 @@ import { loadCellModel } from "../models/cell.js";
 import { loadProductModel } from "../models/product.js";
 import { disposeModelLoader } from "../models/loader.js";
 import { SpeckleSystem } from "../effects/speckles.js";
-import { ZoomStreaks, zoomStreakConfig } from "../effects/zoomStreaks.js";
+import { ZoomStreaks } from "../effects/zoomStreaks.js";
 import { PodSelector } from "../effects/podSelector.js";
 import { StoryTimeline } from "./timeline.js";
 import { disposeScene } from "../utils/dispose.js";
 import { performanceMonitor } from "../utils/performance.js";
 import { LoadingStatus } from "../ui/loadingStatus.js";
 import { ProductFallback } from "../ui/productFallback.js";
+
+const IDLE_TIMEOUT = 40000;
 
 export class StoryApp {
   constructor({
@@ -123,7 +125,7 @@ export class StoryApp {
       Math.max(size.x, size.y, size.z) * 0.48,
       this.cellGroup,
     );
-    this.zoomStreaks = new ZoomStreaks(zoomStreakConfig);
+    this.zoomStreaks = new ZoomStreaks();
     this.zoomStreaks.visible = false;
     this.zoomStreaks.position.set(0, 0, -20);
     this.sceneManager.camera.add(this.zoomStreaks);
@@ -245,7 +247,7 @@ export class StoryApp {
     this.ribbons.root.visible = this.timeline.ribbonMaterial.opacity > 0;
     for (const mesh of this.speckles.meshes)
       mesh.visible = mesh.material.opacity > 0;
-    const idle = time - this.lastActivity > 40000;
+    const idle = time - this.lastActivity > IDLE_TIMEOUT;
     const continuous =
       !idle && !this.motionPaused && !this.reducedMotion && !this.overlayActive;
     const controls = this.sceneManager.controls;
@@ -347,7 +349,7 @@ export class StoryApp {
     const signal = this.events.signal;
     const activity = (event) => {
       const now = performance.now();
-      const wasIdle = now - this.lastActivity > 40000;
+      const wasIdle = now - this.lastActivity > IDLE_TIMEOUT;
       this.lastActivity = now;
       // Mouse movement over a static product changes nothing on the canvas.
       // Wheel/touch must wake Lenis even when no native scroll has fired yet.
@@ -457,7 +459,6 @@ export class StoryApp {
     this.events.abort();
     this.scroller?.destroy();
     this.tweens.removeAll();
-    this.timeline?.dispose();
     this.productFallback.dispose();
     disposeModelLoader();
     this.sceneManager.dispose();
