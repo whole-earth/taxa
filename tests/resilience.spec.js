@@ -253,7 +253,7 @@ for (const duringLoad of [false, true]) {
       release = await gateRequest(page, "**/blob-inner.glb");
       await page.goto("/?perf", { waitUntil: "domcontentloaded" });
       await page.waitForFunction(
-        () => !!window.taxaDebug?.app.sceneManager.environmentTarget,
+        () => !!window.taxaDebug?.app.sceneManager.environmentTexture,
       );
     } else {
       await ready(page);
@@ -283,7 +283,8 @@ for (const duringLoad of [false, true]) {
     const before = await page.evaluate(() => ({
       frames: window.taxaDebug.performanceMonitor.frames,
       y: scrollY,
-      texture: window.taxaDebug.app.sceneManager.environmentTarget.texture.uuid,
+      texture: window.taxaDebug.app.sceneManager.environmentTexture.uuid,
+      version: window.taxaDebug.app.sceneManager.environmentTexture.version,
     }));
     await page.evaluate(() =>
       window.taxaDebug.app.sceneManager.renderer.forceContextLoss(),
@@ -307,9 +308,14 @@ for (const duringLoad of [false, true]) {
     );
     expect(
       await page.evaluate(
-        () => window.taxaDebug.app.sceneManager.environmentTarget.texture.uuid,
+        () => window.taxaDebug.app.sceneManager.environmentTexture.uuid,
       ),
-    ).not.toBe(before.texture);
+    ).toBe(before.texture);
+    expect(
+      await page.evaluate(
+        () => window.taxaDebug.app.sceneManager.environmentTexture.version,
+      ),
+    ).toBeGreaterThan(before.version);
     expect(await page.evaluate(() => scrollY)).toBe(before.y);
     await page.waitForFunction(
       (frames) => window.taxaDebug.performanceMonitor.frames > frames,

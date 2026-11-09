@@ -22,13 +22,13 @@ npm run compare:transmission # Pixel comparisons with full-resolution refraction
 npm run format      # Format maintained source files
 ```
 
-The build copies only runtime assets. It excludes the full-resolution HDR source, the original TTF, the exploratory `blobs.html` page, tests, and dependencies that are not part of the bundle. `node_modules` is installed from the lockfile instead of tracked in Git. Bundle analysis is written to `test-results/build-meta.json`.
+The build copies only runtime assets. It excludes both offline HDR sources, the original TTF, the exploratory `blobs.html` page, tests, and dependencies that are not part of the bundle. `node_modules` is installed from the lockfile instead of tracked in Git. Bundle analysis is written to `test-results/build-meta.json`.
 
-The HTML is the source template. Serve the build with `npm run dev` rather than opening `index.html` as a file: glTF, HDR, font and Draco loading require HTTP and the decoder files are copied by the build.
+The HTML is the source template. Serve the build with `npm run dev` rather than opening `index.html` as a file: glTF, reflection-map, font and Draco loading require HTTP and the decoder files are copied by the build.
 
 ## Visual reference and scope
 
-The demo reproduces the navigation, cream background, Manrope variable font, section copy, scientific citations, desktop/mobile section lengths, product card and three pod colors. It retains the original models, embedded textures and HDR lighting assets, including the separate mobile material treatment, with one deliberate geometry repair: the peel seal's old cut-through SWAP lettering is replaced with a smooth center beneath the Taxa mark. There is no general mesh decimation, texture recompression, or canvas device-pixel-ratio reduction. During the cell/product overlap only, the blurred transmission backdrop uses CSS-pixel resolution; the hero and final product keep full-resolution transmission. See the measured image differences and reproducible asset repair in [PERFORMANCE.md](PERFORMANCE.md).
+The demo reproduces the navigation, cream background, Manrope variable font, section copy, scientific citations, desktop/mobile section lengths, product card and three pod colors. It retains the original models, embedded textures and production reflection appearance, including the separate mobile material treatment. The HDR reflection treatment is prepared offline in linear half-float format to avoid per-visit filtering. One deliberate geometry repair remains: the peel seal's old cut-through SWAP lettering is replaced with a smooth center beneath the Taxa mark. There is no general mesh decimation, texture recompression, or canvas device-pixel-ratio reduction. During the cell/product overlap only, the blurred transmission backdrop uses CSS-pixel resolution; the hero and final product keep full-resolution transmission. See the measured image differences and reproducible asset repair in [PERFORMANCE.md](PERFORMANCE.md).
 
 The small brand mark is a static local image. The story has a keyboard-accessible chapter navigator, a pause control, a mobile menu, a contact dialog and reduced-motion support. Contact uses the existing email address. People, Science, legal pages and the waitlist link lead to the existing public site; this demo does not implement Webflow's form submission backend or its regional signup flow. No analytics or production form requests run in the preview.
 
@@ -59,9 +59,9 @@ The render clock carries fractional time between submissions, maintaining the 60
 
 ## Validation and measurements
 
-The 31-test browser suite covers story seeks in both directions, chapter-button navigation, cell/dot fades, all pod colors, load deduplication, same-origin requests, static-frame suspension, mobile and short-screen layouts, reduced motion, contact/menu focus behavior, overlay suspension, resize poses, repeated-visit GPU geometry and shader counts, product retry, a readable fallback after a failed cell download, scroll DOM mutations and frame pacing from 60 to 240 Hz. All 31 checks passed in both Chrome and WebKit. PERFORMANCE.md records the results, the stock Safari smoke check and the limits of device emulation.
+The 46-test browser suite covers story seeks in both directions, chapter-button navigation, cell/dot fades, all pod colors, load deduplication, same-origin requests, static-frame suspension, mobile and short-screen layouts, reduced motion, contact/menu focus behavior, overlay suspension, resize poses, repeated-visit GPU geometry and shader counts, product retry, a readable fallback after a failed cell download, scroll DOM mutations and frame pacing from 60 to 240 Hz. All 46 checks passed in both Chrome and WebKit across the full runs and focused reruns documented in PERFORMANCE.md. PERFORMANCE.md records the results, the stock Safari smoke check and the limits of device emulation.
 
-Reliability checks also cover failed and late model loads, teardown during loading or shader preparation, product-preparation cleanup/retry, live reduced-motion changes, idle timing, delayed product delivery, and GPU context loss during loading, compilation and the settled product. Before/after context-recovery screenshots are saved with the test output. The environment source retains 1 MiB of decoded CPU data so generated lighting can be rebuilt without another download; its temporary GPU upload is released after conversion.
+Reliability checks also cover failed and late model loads, teardown during loading or shader preparation, product-preparation cleanup/retry, live reduced-motion changes, idle timing, delayed product delivery, and GPU context loss during loading, compilation and the settled product. Before/after context-recovery screenshots are saved with the test output. The prepared reflection map retains 688,128 bytes of CPU texels for reupload after context loss, without another download or GPU filtering pass. Damaged reflection data falls back to readable page content.
 
 Run the same suite against WebKit locally:
 
@@ -86,11 +86,19 @@ The transition benchmark instead sweeps 150 frames through product progress 0.2â
 
 The live Webflow site and remote `main` remain unchanged. The standalone demo was published to here.now on October 25; the November 9 integration changes are local only.
 
+## Preparing reflections
+
+`assets/cell/reflections.bin` preserves the production renderâ€™s rippled highlights. Production filtered the HDR into a CubeUV atlas, then treated that atlas as equirectangular and filtered it again. The bake reproduces that appearance without performing either filtering step at runtime. The texture stays linear RGBA16F; no exposure, tone mapping, material color or saturation is baked into it. Materials still reflect it dynamically as the cell rotates.
+
+Run `npm run bake:reflections` after changing `assets/cell/aloe.hdr` or upgrading the pinned Three.js version, then rebuild. Baking uses installed Chrome via Playwright; normal builds use the checked-in asset and need no browser. The binary header validates its format, dimensions and Three revision because the CubeUV layout belongs to that renderer version. The build supplies a lossless gzip transfer and the raw file for browsers without native decompression.
+
+Run `PORT=4175 node scripts/check-reflections.mjs` against a built preview to compare the prepared map with the original production processing at three viewport widths and seven poses. Use `BROWSER=webkit` for WebKit. Images and pixel differences are saved under `test-results/reflections/`. After changing the reflection asset, regenerate product fallback images with `PORT=4175 node scripts/capture-product-previews.mjs` and rebuild. Keep the HDR source for future bakes; it is excluded from the runtime build.
+
 ## Webflow integration preview
 
 The production-compatible entry is `js/core/anim.js`; the build emits the self-contained ES module at `dist/js/core/anim.js`. It binds to Webflow's existing `.main > .splash/.zoom/.pitch/.product`, `.child`, `.zoom-child`, pod IDs and CTA module. Webflow retains ownership of navigation, form handlers, tag fills, progress-dot styling, footer behavior and all section heights. Demo-only page controls are not initialized in this entry. The animation supplies only its loading/retry and late-product fallback behavior.
 
-The script resolves assets relative to its own URL, not the Webflow page. A release must include `dist/js/core/anim.js` **and the generated `dist/assets/` directory**, preserving the `../../assets/` relationship. This includes the compressed GLB, repaired product, Draco decoder and optional previews. Replacing the JavaScript without these companion files is not a complete deployment. No Webflow HTML/CSS edits or additional script tags are needed when the existing module embed points at the replacement location. Cross-origin hosting must allow CORS for the module and assets. Do not load the old and new animation entries together.
+The script resolves assets relative to its own URL, not the Webflow page. A release must include `dist/js/core/anim.js` **and the generated `dist/assets/` directory**, preserving the `../../assets/` relationship. This includes the compressed GLB, repaired product, prepared reflection map (both reflections.bin and reflections.bin.gz), Draco decoder and optional previews. Replacing the JavaScript without these companion files is not a complete deployment. No Webflow HTML/CSS edits or additional script tags are needed when the existing module embed points at the replacement location. Cross-origin hosting must allow CORS for the module and assets. Do not load the old and new animation entries together.
 
 For a local copy of the current production page with only the animation embed substituted:
 

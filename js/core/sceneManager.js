@@ -1,8 +1,7 @@
 import * as THREE from "three";
 import { PRODUCT_PHASE } from "./productConfig.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
-import { PMREMGenerator } from "three";
+import { loadEnvironment } from "./environment.js";
 import { disposeScene } from "../utils/dispose.js";
 
 /**
@@ -122,20 +121,22 @@ export class SceneManager {
     this.productLight = spotLight;
     this.productLightRig = productLightRig;
 
-    // Load environment map
-    this.environmentReady = new RGBELoader()
-      .loadAsync(this.config.assets.envMap)
+    // Upload the production reflection treatment, prepared once offline.
+    this.environmentAbort = new AbortController();
+    this.environmentReady = loadEnvironment(
+      this.config.assets.envMap,
+      this.environmentAbort.signal,
+    )
       .then(async (texture) => {
         if (this.disposed) {
           texture.dispose();
           return;
         }
-        // Retain the decoded HDR on the CPU so context recovery needs no
-        // network request. The temporary GPU upload is released after PMREM.
-        this.environmentSource = texture;
+        // Retain the small CPU buffer for reupload after graphics context loss.
+        this.environmentTexture = texture;
         await this.waitForContext();
         if (this.disposed) return;
-        if (!this.environmentTarget) this.rebuildEnvironment();
+        this.restoreEnvironment();
         this.invalidate();
       })
       .catch((error) => {
@@ -145,21 +146,11 @@ export class SceneManager {
     return ambientLight;
   }
 
-  rebuildEnvironment() {
-    if (!this.environmentSource || this.disposed) return;
-    const generator = new PMREMGenerator(this.renderer);
-    try {
-      this.environmentTarget?.dispose();
-      this.environmentSource.needsUpdate = true;
-      this.environmentTarget = generator.fromEquirectangular(
-        this.environmentSource,
-      );
-      this.scene.environment = this.environmentTarget.texture;
-      this.scene.environmentIntensity = this.config.lighting.envMapIntensity;
-    } finally {
-      this.environmentSource.dispose();
-      generator.dispose();
-    }
+  restoreEnvironment() {
+    if (!this.environmentTexture || this.disposed) return;
+    this.environmentTexture.needsUpdate = true;
+    this.scene.environment = this.environmentTexture;
+    this.scene.environmentIntensity = this.config.lighting.envMapIntensity;
   }
 
   loseContext() {
@@ -179,7 +170,7 @@ export class SceneManager {
 
   restoreContext() {
     if (this.disposed) return;
-    this.rebuildEnvironment();
+    this.restoreEnvironment();
     // Three's async readiness checks consult the current renderer cache.
     // Recreate pending programs before those checks resume after restoration.
     for (const { object, lightingScene } of this.compilations.values()) {
@@ -363,16 +354,17 @@ export class SceneManager {
 
   dispose() {
     this.disposed = true;
+    this.environmentAbort?.abort();
     this.resolveContext?.();
     this.resolveContext = null;
     window.removeEventListener("resize", this.onResize);
     this.controls.dispose();
     this.renderer.domElement.remove();
     const release = () => {
-      this.environmentSource?.dispose();
-      this.environmentSource = null;
+      this.environmentTexture?.dispose();
+      this.environmentTexture = null;
+      this.scene.environment = null;
       disposeScene(this.scene);
-      this.environmentTarget?.dispose();
       this.renderer.dispose();
     };
     // Do not destroy program caches underneath Three's pending readiness polls.

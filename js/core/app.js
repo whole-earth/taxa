@@ -62,7 +62,7 @@ export class StoryApp {
           autoRotateSpeed: 0.4,
           rotateSpeed: 0.8,
         },
-        assets: { envMap: new URL("cell/aloe.hdr", assetBase).href },
+        assets: { envMap: new URL("cell/reflections.bin", assetBase).href },
       },
       () => this.invalidate(true),
     );

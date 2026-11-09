@@ -4,6 +4,7 @@
   "scripts": {
     "dev": "node scripts/build.mjs --serve",
     "build": "node scripts/build.mjs",
+    "bake:reflections": "node scripts/bake-reflections.mjs",
     "test": "playwright test",
     "benchmark": "node scripts/benchmark.mjs",
     "benchmark:transition": "node scripts/transition-benchmark.mjs",

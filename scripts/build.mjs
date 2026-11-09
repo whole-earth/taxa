@@ -9,8 +9,7 @@ await mkdir("dist", { recursive: true });
 for (const directory of ["cell", "product", "site"]) {
   await cp(`assets/${directory}`, `dist/assets/${directory}`, {
     recursive: true,
-    filter: (path) =>
-      !path.endsWith("aloe-fullres.hdr") && !path.endsWith(".ttf"),
+    filter: (path) => !path.endsWith(".hdr") && !path.endsWith(".ttf"),
   });
 }
 await cp(
@@ -25,6 +24,13 @@ async function compressProduct() {
   );
 }
 await compressProduct();
+async function compressReflections() {
+  await writeFile(
+    "dist/assets/cell/reflections.bin.gz",
+    gzipSync(await readFile("assets/cell/reflections.bin"), { level: 9 }),
+  );
+}
+await compressReflections();
 const options = {
   entryPoints: {
     "js/main": "js/main.js",
@@ -60,17 +66,14 @@ if (serve) {
     if (filename === "index.html") copyHtml().catch(console.error);
   });
   watch("assets", { recursive: true }, async (_, filename) => {
-    if (
-      !filename ||
-      filename.endsWith(".ttf") ||
-      filename.endsWith("aloe-fullres.hdr")
-    )
+    if (!filename || filename.endsWith(".ttf") || filename.endsWith(".hdr"))
       return;
     try {
       await cp(`assets/${filename}`, `dist/assets/${filename}`, {
         recursive: true,
       });
       if (filename === "product/swap.glb") await compressProduct();
+      if (filename === "cell/reflections.bin") await compressReflections();
     } catch (error) {
       if (error.code !== "ENOENT") console.error(error);
     }

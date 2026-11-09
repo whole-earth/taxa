@@ -553,15 +553,21 @@ for (const mobile of [false, true]) {
         return sum / (canvas.width * canvas.height * 3);
       };
       return {
+        adjacent: [
+          difference(capture(progress[0] - 0.001), capture(progress[0])),
+          difference(capture(progress[1]), capture(progress[1] + 0.001)),
+        ],
         forward: difference(...forward),
         reverse: difference(...reverse),
         revisit: forward.map((frame, i) => difference(frame, reverse[i])),
       };
     }, mobile);
-    // The old depth order erased the interior in one step (>7/255).
-    // Normal optical motion across the same interval stays below 2/255.
-    expect(changes.forward).toBeLessThan(2);
-    expect(changes.reverse).toBeLessThan(2);
+    // Compare equal scroll increments around the crossing, so stronger
+    // reflections do not count as a visibility jump. Restoring the broken
+    // depth order produces >40/255 here versus roughly 2/255 next to it.
+    const continuityLimit = Math.max(...changes.adjacent) * 1.5 + 0.1;
+    expect(changes.forward).toBeLessThan(continuityLimit);
+    expect(changes.reverse).toBeLessThan(continuityLimit);
     for (const difference of changes.revisit)
       expect(difference).toBeLessThan(0.1);
   });
