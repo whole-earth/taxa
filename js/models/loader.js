@@ -13,9 +13,17 @@ let disposed = false;
 // One decoder pool serves every model; loading is explicit, never a constructor side effect.
 export async function loadModel(
   path,
-  { renderOrder = 1, onProgress, compressed = false, parseAfter, signal } = {},
+  {
+    renderOrder = 1,
+    onProgress,
+    compressed = false,
+    parseAfter,
+    signal,
+    decoderPath,
+  } = {},
 ) {
   if (disposed) throw new Error("The model loader has been disposed.");
+  if (decoderPath) dracoLoader.setDecoderPath(decoderPath);
   pendingLoads++;
   let gltf;
   try {

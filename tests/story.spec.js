@@ -193,7 +193,7 @@ test("story seeks forward and backward, loads one product, and preserves GPU res
   expect(
     requests
       .filter((url) => /^https?:/.test(url))
-      .every((url) => url.startsWith("http://127.0.0.1:4173/")),
+      .every((url) => new URL(url).origin === new URL(page.url()).origin),
   ).toBe(true);
   expect(errors).toEqual([]);
 });
@@ -624,9 +624,10 @@ for (const [name, width, height, dpr] of [
 ]) {
   test(`${name} Retina transitions reuse warmed shaders and transmission targets`, async ({
     browser,
+    baseURL,
   }) => {
     const context = await browser.newContext({
-      baseURL: "http://127.0.0.1:4173",
+      baseURL,
       viewport: { width, height },
       deviceScaleFactor: dpr,
       hasTouch: name === "mobile",

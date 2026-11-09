@@ -3,9 +3,15 @@ import { loadModel } from "./loader.js";
 
 export async function loadCellModel(
   filename,
-  { material, renderOrder, onProgress },
+  {
+    material,
+    renderOrder,
+    onProgress,
+    assetBase = new URL("assets/", document.baseURI),
+  },
 ) {
-  const root = await loadModel(`assets/cell/${filename}`, {
+  const root = await loadModel(new URL(`cell/${filename}`, assetBase).href, {
+    decoderPath: new URL("draco/", assetBase).href,
     renderOrder,
     onProgress,
   });

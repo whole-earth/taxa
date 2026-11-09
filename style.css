@@ -141,6 +141,7 @@ body::-webkit-scrollbar {
   color: #b7cfff;
 }
 .contact-mobile,
+.menu-legal,
 .menu-toggle {
   display: none;
 }
@@ -270,6 +271,22 @@ body::-webkit-scrollbar {
   padding: 8px 20px;
   border-radius: 16px;
   backdrop-filter: blur(8px);
+  transition: background-color 0.8s;
+}
+#topic-odor {
+  --topic-color: 255, 212, 156;
+}
+#topic-uv {
+  --topic-color: 255, 247, 156;
+}
+#topic-mosquitoes {
+  --topic-color: 210, 236, 191;
+}
+.topic-link {
+  background-color: rgba(var(--topic-color), 0.5);
+}
+.topic-link:hover {
+  background-color: rgba(var(--topic-color), 1);
 }
 .topic-title {
   position: relative;
@@ -305,15 +322,16 @@ body::-webkit-scrollbar {
   width: 10px;
   height: 10px;
   left: 17px;
-  top: 17px;
-  border-radius: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-radius: 5px;
   background: #4e4e4e80;
   transition:
-    transform 0.3s,
+    height 0.3s,
     background-color 0.3s;
 }
 .scroll-dot.active:before {
-  transform: scaleY(3.4);
+  height: 48px;
   background: var(--taxa-blue);
 }
 .product-details {
@@ -612,7 +630,8 @@ html.lenis body {
   .nav .contact-desktop {
     display: none;
   }
-  .nav .contact-mobile {
+  .nav .contact-mobile,
+  .nav .menu-legal {
     display: block;
   }
   .menu-toggle {
@@ -665,10 +684,7 @@ html.lenis body {
     width: 7px;
     height: 7px;
     left: 18.5px;
-    top: 18.5px;
-  }
-  .scroll-dot.active:before {
-    transform: scaleY(4);
+    border-radius: 3.5px;
   }
   .product-details {
     top: auto;
@@ -722,7 +738,7 @@ html.lenis body {
     bottom: 8px;
   }
   .taxa-legal-footer {
-    padding-bottom: 40px;
+    display: none;
   }
 }
 /* Keep the complete product card reachable on laptops and landscape phones.

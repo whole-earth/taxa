@@ -21,7 +21,10 @@ export class ProductFallback {
       image.decoding = "async";
       entry = { image, ready: false };
       this.images.set(variant, entry);
-      image.src = `assets/site/product-preview-${variant}.webp`;
+      image.src = new URL(
+        `site/product-preview-${variant}.webp`,
+        this.app.assetBase,
+      ).href;
       image
         .decode()
         .then(() => {

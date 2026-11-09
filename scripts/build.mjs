@@ -26,7 +26,11 @@ async function compressProduct() {
 }
 await compressProduct();
 const options = {
-  entryPoints: { "js/main": "js/main.js", style: "style.css" },
+  entryPoints: {
+    "js/main": "js/main.js",
+    "js/core/anim": "js/core/anim.js",
+    style: "style.css",
+  },
   outdir: "dist",
   bundle: true,
   format: "esm",
@@ -50,7 +54,7 @@ if (serve) {
   const server = await ctx.serve({
     servedir: "dist",
     host: "127.0.0.1",
-    port: 4173,
+    port: Number(process.env.PORT || 4173),
   });
   watch(".", (_, filename) => {
     if (filename === "index.html") copyHtml().catch(console.error);

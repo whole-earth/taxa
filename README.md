@@ -84,4 +84,30 @@ The transition benchmark instead sweeps 150 frames through product progress 0.2â
 
 `compare:transmission` compares the current policy against full-resolution transmission at eight fixed poses, with motion frozen. It writes PNG pairs and per-channel differences under `test-results/transition/visual/`; `MOBILE=1` writes `visual-mobile/`. Playwright outputs live in `test-results/playwright/` so running tests does not erase performance evidence.
 
-The live Webflow site and remote `main` remain unchanged. This branch is for local review; nothing has been deployed or pushed.
+The live Webflow site and remote `main` remain unchanged. The standalone demo was published to here.now on October 25; the November 9 integration changes are local only.
+
+## Webflow integration preview
+
+The production-compatible entry is `js/core/anim.js`; the build emits the self-contained ES module at `dist/js/core/anim.js`. It binds to Webflow's existing `.main > .splash/.zoom/.pitch/.product`, `.child`, `.zoom-child`, pod IDs and CTA module. Webflow retains ownership of navigation, form handlers, tag fills, progress-dot styling, footer behavior and all section heights. Demo-only page controls are not initialized in this entry. The animation supplies only its loading/retry and late-product fallback behavior.
+
+The script resolves assets relative to its own URL, not the Webflow page. A release must include `dist/js/core/anim.js` **and the generated `dist/assets/` directory**, preserving the `../../assets/` relationship. This includes the compressed GLB, repaired product, Draco decoder and optional previews. Replacing the JavaScript without these companion files is not a complete deployment. No Webflow HTML/CSS edits or additional script tags are needed when the existing module embed points at the replacement location. Cross-origin hosting must allow CORS for the module and assets. Do not load the old and new animation entries together.
+
+For a local copy of the current production page with only the animation embed substituted:
+
+```sh
+npm run build
+node scripts/preview-webflow.mjs
+python3 -m http.server 4175 --bind 127.0.0.1 --directory dist
+```
+
+Open <http://127.0.0.1:4175/webflow.html?perf>. The snapshot retains production markup, CSS, Webflow navigation and CTA interactions. It removes analytics and blocks form submissions for local review. It still needs internet access for the existing Webflow/CDN assets. It is generated into ignored `dist/` and must not be deployed. Rebuilding clears it; rerun the snapshot command after a build. The original capture is in `test-results/webflow/production.html`.
+
+```sh
+node scripts/check-webflow.mjs
+BROWSER=webkit node scripts/check-webflow.mjs
+PORT=4175 npm test
+```
+
+The integration check uses the captured production page and an independently hosted animation origin, verifies unchanged section dimensions/IDs, asset resolution, tag fills, chapter navigation, reverse seeking, final cap pose, pod labels/CTA tint and mobile menu/footer behavior. Reports and screenshots are written to `test-results/webflow/`. `PREVIEW_URL` overrides its default local origin. `PORT` also selects the development-server/test port when 4173 is occupied.
+
+The November 9 compatibility work deliberately retains the current animation phase boundaries and section heights. The next pacing review should redistribute progress within the existing product section, preserving absolute-progress evaluation and reverse scrolling. The current mobile zoom starts at scale 26 (live original: 18); this remains unchanged pending a visual decision.

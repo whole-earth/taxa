@@ -14,7 +14,9 @@ export class PodSelector {
       "productTypeSubtitle",
       "waitlistLabel",
       "showingLabel",
-    ].map((id) => document.getElementById(id));
+    ]
+      .map((id) => document.getElementById(id))
+      .filter(Boolean);
     this.buttons.forEach((button) =>
       button.addEventListener(
         "click",
@@ -95,8 +97,10 @@ export class PodSelector {
       if (!this.app.reducedMotion)
         element.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 500 });
     });
-    const link = document.getElementById("waitlist-link");
-    link.classList.remove("orange", "green", "yellow");
-    link.classList.add(podId);
+    const link = this.app.webflow
+      ? document.querySelector(".product-card-section.module")
+      : document.getElementById("waitlist-link");
+    link?.classList.remove("orange", "green", "yellow");
+    link?.classList.add(podId);
   }
 }

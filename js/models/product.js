@@ -4,9 +4,15 @@ import { loadModel } from "./loader.js";
 import { markMaterialsForUpdate } from "./materials.js";
 import { createOverflowMask } from "./overflowMask.js";
 
-export async function loadProductModel(filename, options = {}) {
+export async function loadProductModel(
+  filename,
+  { assetBase = new URL("assets/", document.baseURI), ...options } = {},
+) {
   return new ProductModel(
-    await loadModel(`assets/product/${filename}`, options),
+    await loadModel(new URL(`product/${filename}`, assetBase).href, {
+      ...options,
+      decoderPath: new URL("draco/", assetBase).href,
+    }),
   );
 }
 

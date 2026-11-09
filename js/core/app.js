@@ -16,7 +16,12 @@ import { LoadingStatus } from "../ui/loadingStatus.js";
 import { ProductFallback } from "../ui/productFallback.js";
 
 export class StoryApp {
-  constructor() {
+  constructor({
+    assetBase = new URL("assets/", document.baseURI),
+    webflow = false,
+  } = {}) {
+    this.assetBase = assetBase;
+    this.webflow = webflow;
     this.isMobile = window.innerWidth < 768;
     this.motionQuery = matchMedia("(prefers-reduced-motion: reduce)");
     this.reducedMotion = this.motionQuery.matches;
@@ -57,7 +62,7 @@ export class StoryApp {
           autoRotateSpeed: 0.4,
           rotateSpeed: 0.8,
         },
-        assets: { envMap: "assets/cell/aloe.hdr" },
+        assets: { envMap: new URL("cell/aloe.hdr", assetBase).href },
       },
       () => this.invalidate(true),
     );
@@ -89,6 +94,7 @@ export class StoryApp {
         let model;
         try {
           model = await loadCellModel(file, {
+            assetBase: this.assetBase,
             material,
             renderOrder: order,
             onProgress: (event) => updateProgress(file, event),
@@ -159,6 +165,7 @@ export class StoryApp {
     if (this.disposed || this.productPromise || this.productError) return;
     // One shared promise prevents scroll bursts from starting duplicate loads.
     this.productPromise = loadProductModel("swap.glb", {
+      assetBase: this.assetBase,
       renderOrder: 200,
       compressed: true,
       parseAfter: this.firstFrame,
@@ -284,6 +291,10 @@ export class StoryApp {
         // a temporary shader-warming pose. CSS handles the original fade.
         this.sceneRevealed = true;
         document.body.classList.add("scene-ready");
+        if (this.webflow) {
+          document.body.classList.add("completing");
+          document.body.classList.remove("loading");
+        }
         // Yield a task so product parsing cannot run inside this first RAF.
         setTimeout(() => this.resolveFirstFrame?.(), 0);
       }
@@ -387,7 +398,7 @@ export class StoryApp {
       () => this.updateMotionPreference(),
       { signal },
     );
-    document.getElementById("motion-toggle").addEventListener(
+    document.getElementById("motion-toggle")?.addEventListener(
       "click",
       (event) => {
         this.motionPaused = !this.motionPaused;

@@ -24,13 +24,20 @@ export class StoryTimeline {
     this.app = app;
     this.isMobile = app.isMobile;
     this.ease = this.isMobile ? easeInOutQuad : smoothstep;
-    this.sections = ["splash", "zoom", "pitch", "product"].map((id) =>
-      document.getElementById(id),
+    this.sectionNames = ["splash", "zoom", "pitch", "product"];
+    this.sections = this.sectionNames.map((id) =>
+      app.webflow
+        ? document.querySelector(`.main > .${id}`)
+        : document.getElementById(id),
     );
     this.chapterPanels = this.sections.map((section) =>
-      section.querySelector(".story-panel"),
+      section.querySelector(app.webflow ? ":scope > .child" : ".story-panel"),
     );
-    this.topicPanels = [...document.querySelectorAll(".topic-panel")];
+    this.topicPanels = [
+      ...document.querySelectorAll(
+        app.webflow ? ".zoom-child" : ".topic-panel",
+      ),
+    ];
     this.chapterButtons = [...document.querySelectorAll(".scroll-dot")];
     this.nav = document.querySelector(".nav");
     this.chapter = -1;
@@ -210,7 +217,7 @@ export class StoryTimeline {
     if (index !== this.chapter) {
       const previous = this.chapter;
       this.chapter = index;
-      document.body.dataset.chapter = this.sections[index].id;
+      document.body.dataset.chapter = this.sectionNames[index];
       this.chapterButtons.forEach((dot, i) => {
         dot.classList.toggle("active", i === index);
         if (i === index) dot.setAttribute("aria-current", "step");
