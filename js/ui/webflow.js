@@ -19,16 +19,19 @@ export function installWebflowUI() {
   ];
   const sync = () => {
     if (!app) return;
-    app.overlayActive = overlays.some((element) => {
+    const active = overlays.some((element) => {
       if (element.matches(".nav-body") && innerWidth >= 768) return false;
+      // Pause throughout CSS fades, including their initial zero-opacity frame.
+      // Webflow hides closed overlays with display:none.
       const css = getComputedStyle(element);
       return (
         css.display !== "none" &&
         css.visibility !== "hidden" &&
-        Number(css.opacity) > 0 &&
         element.getClientRects().length > 0
       );
     });
+    if (app.overlayActive === active) return;
+    app.overlayActive = active;
     app.lastActivity = performance.now();
     app.invalidate();
   };

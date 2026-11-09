@@ -124,6 +124,7 @@ export class StoryTimeline {
         ? 0
         : Math.min(3.6, 1.2 + Math.abs(index - this.chapter) * 0.6),
       immediate,
+      userData: { storyTarget: target },
     });
     this.app.invalidate(true);
   }

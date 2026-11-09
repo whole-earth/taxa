@@ -103,6 +103,59 @@ try {
       "rgba(255, 247, 156, 0.5)",
       "rgba(210, 236, 191, 0.5)",
     ]);
+    await page.evaluate(() => {
+      const app = window.taxaDebug.app;
+      app.lastActivity = performance.now() - 41000;
+      app.invalidate();
+    });
+    await page.waitForSelector(".inactivity-overlay.active");
+    await page.locator(".inactivity-play-button").dispatchEvent("click");
+    await page.waitForFunction(
+      () => !window.taxaDebug.app.inactivityOverlay.visible,
+    );
+    const assertSleeping = async () => {
+      await page.waitForFunction(() => window.taxaDebug.app.overlayActive);
+      await page.waitForFunction(
+        () => window.taxaDebug.app.animationFrameId === null,
+        null,
+        { timeout: 10000 },
+      );
+      const frames = await page.evaluate(
+        () => window.taxaDebug.performanceMonitor.frames,
+      );
+      await page.waitForTimeout(200);
+      assert.equal(
+        await page.evaluate(() => window.taxaDebug.performanceMonitor.frames),
+        frames,
+      );
+    };
+    const assertAwake = async () => {
+      await page.waitForFunction(() => !window.taxaDebug.app.overlayActive);
+      const frames = await page.evaluate(
+        () => window.taxaDebug.performanceMonitor.frames,
+      );
+      await page.waitForFunction(
+        (frames) => window.taxaDebug.performanceMonitor.frames > frames,
+        frames,
+      );
+    };
+    if (mobile) {
+      await page.locator(".nav-btn").click();
+      await assertSleeping();
+    }
+    await page.locator("#scienceTrigger").click();
+    await assertSleeping();
+    await page.locator("#exitScience").click();
+    if (mobile) await page.locator(".nav-btn").click();
+    await assertAwake();
+    if (mobile) await page.locator(".nav-btn").click();
+    await page
+      .locator(mobile ? "a.contact-mobile" : "a.contact-desktop")
+      .click();
+    await assertSleeping();
+    await page.locator("#contactCloseBtn").click();
+    await assertAwake();
+
     const poses = [];
     for (const progress of [0.4, 0.7, 0.8, 0.9, 0.95, 1, 0.6]) {
       await page.evaluate((progress) => {

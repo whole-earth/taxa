@@ -14,6 +14,7 @@ import { StoryTimeline } from "./timeline.js";
 import { disposeScene } from "../utils/dispose.js";
 import { performanceMonitor } from "../utils/performance.js";
 import { LoadingStatus } from "../ui/loadingStatus.js";
+import { InactivityOverlay } from "../ui/inactivityOverlay.js";
 import { ProductFallback } from "../ui/productFallback.js";
 
 const IDLE_TIMEOUT = 40000;
@@ -48,6 +49,11 @@ export class StoryApp {
     this.lastFrameTime = null;
     this.lastRenderSlot = null;
     this.lastActivity = performance.now();
+    this.idleTimer = null;
+    this.inactivityOverlay = new InactivityOverlay(() => {
+      this.lastActivity = performance.now();
+      this.invalidate();
+    }, this.events.signal);
     this.needsRender = true;
     this.needsTimelineUpdate = true;
     this.disposed = false;
@@ -256,7 +262,18 @@ export class StoryApp {
     this.ribbons.root.visible = this.timeline.ribbonMaterial.opacity > 0;
     for (const mesh of this.speckles.meshes)
       mesh.visible = mesh.material.opacity > 0;
-    const idle = time - this.lastActivity > IDLE_TIMEOUT;
+    const idle = time - this.lastActivity >= IDLE_TIMEOUT;
+    if (!idle) this.scheduleIdleCheck();
+    const nearBottom =
+      idle &&
+      document.documentElement.scrollHeight - scrollY - innerHeight <= 40;
+    this.inactivityOverlay.setVisible(
+      idle &&
+        !nearBottom &&
+        !this.overlayActive &&
+        !this.motionPaused &&
+        !this.reducedMotion,
+    );
     const continuous =
       !idle && !this.motionPaused && !this.reducedMotion && !this.overlayActive;
     this.timeline.tick(delta, continuous);
@@ -316,12 +333,29 @@ export class StoryApp {
     if (
       moving ||
       !this.tweens.allStopped() ||
-      this.scroller.isScrolling ||
+      // Native scrolling supplies its own events. Lenis 1.3 can retain its
+      // "native" flag after a zero-distance event; that must not keep drawing.
+      this.scroller.isScrolling === "smooth" ||
       cameraChanged ||
       this.needsRender
     )
       this.invalidate();
     else this.resetFrameClock();
+  }
+
+  scheduleIdleCheck() {
+    if (this.idleTimer !== null) return;
+    // One deadline wakes even a static scene; activity does not churn timers.
+    this.idleTimer = setTimeout(
+      () => {
+        this.idleTimer = null;
+        if (this.disposed || document.hidden) return;
+        if (performance.now() - this.lastActivity < IDLE_TIMEOUT)
+          this.scheduleIdleCheck();
+        else this.invalidate();
+      },
+      Math.max(0, IDLE_TIMEOUT - (performance.now() - this.lastActivity)),
+    );
   }
 
   resetFrameClock() {
@@ -334,11 +368,21 @@ export class StoryApp {
     this.reducedMotion = this.motionQuery.matches;
     if (this.scroller) {
       this.scroller.options.smoothWheel = !this.reducedMotion;
-      if (this.reducedMotion)
-        this.scroller.scrollTo(this.scroller.targetScroll, {
-          immediate: true,
-          force: true,
-        });
+      if (this.reducedMotion) {
+        const scroller = this.scroller;
+        // Lenis 1.3 updates targetScroll to each intermediate programmatic
+        // position. Preserve our chapter destination; native scrolling should
+        // retain the actual position rather than a stale cached target.
+        const target =
+          scroller.isScrolling === "smooth"
+            ? (scroller.userData?.storyTarget ?? scroller.targetScroll)
+            : scroller.actualScroll;
+        const wasStopped = scroller.isStopped;
+        scroller.stop();
+        if (!wasStopped) scroller.start();
+        scroller.scrollTo(target, { immediate: true, force: true });
+        this.timeline?.update(scroller.animatedScroll);
+      }
     }
     if (this.reducedMotion) {
       // Complete chains in order, including the dot reveal queued by fade-out.
@@ -346,7 +390,9 @@ export class StoryApp {
       while (!this.tweens.allStopped()) {
         for (const tween of this.tweens.getAll()) {
           if (!tween.isPlaying()) continue;
-          tween.end();
+          // end() can round (start + duration) - start below duration,
+          // skipping completion callbacks. These finite tweens must finish.
+          tween.update(Infinity);
           this.tweens.remove(tween);
         }
       }
@@ -444,6 +490,8 @@ export class StoryApp {
     this.resolveFirstFrame();
     cancelAnimationFrame(this.animationFrameId);
     this.events.abort();
+    clearTimeout(this.idleTimer);
+    this.inactivityOverlay.dispose();
     this.scroller?.destroy();
     this.tweens.removeAll();
     this.productFallback.dispose();

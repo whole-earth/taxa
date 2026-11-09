@@ -138,12 +138,15 @@ test("live reduced motion settles scrolling, dot fades and the complete pod chai
   await seek(page, "zoom", 0.45);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.waitForFunction(() => window.taxaDebug.app.reducedMotion);
+  const dots = await page.evaluate(() =>
+    window.taxaDebug.app.speckles.materials.map((m) => ({
+      opacity: m.opacity,
+      color: m.color.getHexString(),
+    })),
+  );
   expect(
-    await page.evaluate(() =>
-      window.taxaDebug.app.speckles.materials.every(
-        (m) => m.opacity === 1 && m.color.getHexString() === "f1ff00",
-      ),
-    ),
+    dots.every((m) => m.opacity === 1 && m.color === "f1ff00"),
+    JSON.stringify(dots),
   ).toBe(true);
   await seek(page, "pitch", 0.2);
   expect(
@@ -186,9 +189,23 @@ test("live reduced motion settles scrolling, dot fades and the complete pod chai
   await page.waitForFunction(() => !!window.taxaDebug.app.scroller.isScrolling);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
+  // Assert stopped motion rather than Lenis's native-event bookkeeping:
+  // its "native" flag can survive a duplicate, zero-distance scroll event.
   expect(
-    await page.evaluate(() => !!window.taxaDebug.app.scroller.isScrolling),
-  ).toBe(false);
+    await page.evaluate(() => window.taxaDebug.app.scroller.isScrolling),
+  ).not.toBe("smooth");
+  await page.waitForFunction(
+    () => window.taxaDebug.app.animationFrameId === null,
+    null,
+    { timeout: 10000 },
+  );
+  const frames = await page.evaluate(
+    () => window.taxaDebug.performanceMonitor.frames,
+  );
+  await page.waitForTimeout(200);
+  expect(
+    await page.evaluate(() => window.taxaDebug.performanceMonitor.frames),
+  ).toBe(frames);
 });
 
 test("intentional sleep is excluded from frame samples", async ({ page }) => {
