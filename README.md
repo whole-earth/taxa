@@ -89,7 +89,7 @@ The transition benchmark instead sweeps 150 frames through product progress 0.2â
 
 `compare:transmission` compares the current policy against full-resolution transmission at eight fixed poses, with motion frozen. It writes PNG pairs and per-channel differences under `test-results/transition/visual/`; `MOBILE=1` writes `visual-mobile/`. Playwright outputs live in `test-results/playwright/` so running tests does not erase performance evidence.
 
-The live Webflow site and remote `main` remain unchanged. The latest standalone demo (code commit `b5c3b18`) was published on November 9 to the existing permanent [Taxa review site](https://waxen-thistle-f2av.here.now/), including the integration, reflection, geometry, cleanup and base-reveal timing updates. Its here.now version is `01M70JG053BRNRJR0S6SJX6SQF`. All 26 published file hashes matched the local build; a live browser check confirmed product loading, the hidden base during zoom, its fade through the turn and the final closed cap pose. The custom `taxa.here.now` address is not configured on this account.
+The live Webflow site and remote `main` remain unchanged. The latest standalone demo (code commit `57cb90c`) was published on November 9 to the existing permanent [Taxa review site](https://waxen-thistle-f2av.here.now/), including the integration, reflection, geometry, cleanup, base-reveal timing and UI-ownership updates. Its here.now version is `01M70NK93XCMNMDRGYDC22M5JH`. All 26 published file hashes matched the local build; a live WebKit check at a 390 Ã— 844 mobile viewport confirmed product loading, the hidden base during zoom, its fade through the turn and the final closed cap pose. The custom `taxa.here.now` address is not configured on this account.
 
 ## Preparing reflections
 
