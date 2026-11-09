@@ -89,7 +89,7 @@ The transition benchmark instead sweeps 150 frames through product progress 0.2â
 
 `compare:transmission` compares the current policy against full-resolution transmission at eight fixed poses, with motion frozen. It writes PNG pairs and per-channel differences under `test-results/transition/visual/`; `MOBILE=1` writes `visual-mobile/`. Playwright outputs live in `test-results/playwright/` so running tests does not erase performance evidence.
 
-The live Webflow site and remote `main` remain unchanged. The standalone demo was published to here.now on October 25; the November 9 integration changes are local only.
+The live Webflow site and remote `main` remain unchanged. The latest standalone demo (code commit `8c2b6e0`) was published on November 9 to the existing permanent [Taxa review site](https://waxen-thistle-f2av.here.now/), including the integration, reflection, geometry and cleanup updates. Its here.now version is `01M70DBTBEPBA2XYN6D1ZXR6GP`. The custom `taxa.here.now` address is not configured on this account.
 
 ## Preparing reflections
 

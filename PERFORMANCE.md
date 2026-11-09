@@ -287,3 +287,12 @@ The timeline now snapshots only the original shell color and six surface values 
 The Webflow bundle is 685,125 bytes / 178,330 gzip, down 159 raw bytes / 69 gzip bytes from `7f9f40f`. This is a small maintainability/allocation improvement, not a measured frame-rate gain. Changes remain local to `optimize/story-demo`.
 
 `npm run verify` passed all 92 browser tests, desktop/mobile Webflow integration in Chrome and WebKit, asset integrity, build and formatting checks. Comparison against the frozen `7f9f40f` build matched all 684 animation/material/lighting states exactly across forward/reverse scrolling and desktop/mobile layouts. The 36 selected image pairs had maximum mean RGBA differences of 0.0000604/255 in Chrome and 0.0000563/255 in WebKit, consistent with the earlier isolated rasterization differences. Evidence is retained in `test-results/cleanup/`; the baseline is in `test-results/cleanup-baseline/site`. Physical-device testing remains separate.
+
+
+## Demo publication — November 9, 2026
+
+Code commit `8c2b6e0` was rebuilt and published to the existing permanent Taxa demo at https://waxen-thistle-f2av.here.now/, version `01M70DBTBEPBA2XYN6D1ZXR6GP`. The saved prior version matched the live version before publishing; the update used stale-base protection. No account upgrade or URL/access changes were made. `taxa.here.now` is not assigned to this account. Production Webflow and remote `main` remain unchanged.
+
+All 26 publishable files match the local build by SHA-256; the publishing helper excludes local Finder metadata. A fresh build removed the local-only Webflow snapshot before upload. Hosted Chrome and WebKit checks passed at 1440 × 900 and 390 × 900, DPR 2: hero/product loading, forward and reverse story seeks, and all three pod selections, with no page errors, HTTP failures or failed requests. These checks used reduced motion for deterministic seeks; the full local 92-test run covered normal animation behavior before publication. Screenshots, manifest and results are in `test-results/deployment/`.
+
+The publisher repeated its generic WebAssembly isolation notice. The existing Draco decoder does not use shared-memory threads; decoding succeeded in all four hosted checks with the current isolation setting. The site remains permanent on the existing account.
