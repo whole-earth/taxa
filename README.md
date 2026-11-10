@@ -1,6 +1,16 @@
 # Taxa story demo
 
-A standalone recreation of the Webflow homepage at [taxa.tech](https://taxa.tech), which redirects to [taxatech.com](https://www.taxatech.com/). The reference was inspected on October 20, 2026. Work is isolated on `optimize/story-demo`, based on `main` at `66063d1637e8c24ee600ea7f3c663f44856068c6`.
+A standalone recreation of the Webflow homepage at [taxa.tech](https://taxa.tech), which redirects to [taxatech.com](https://www.taxatech.com/). The reference was inspected on October 20, 2026. Editable source lives on `optimize/story-demo`, originally based on `main` at `66063d1637e8c24ee600ea7f3c663f44856068c6`. Production `main` contains the deployable tree; do not merge source modules over its retained legacy runtime files.
+
+## Current production release — November 10, 2026
+
+The optimized animation is live on [Taxa](https://taxa.tech). GitHub Pages successfully deployed [`829db57`](https://github.com/whole-earth/taxa/commit/829db5789e43d16bf1e84d33439f062bd7b70ce9) from `main`. The original deployed revision is preserved on [`pre-optimization`](https://github.com/whole-earth/taxa/tree/pre-optimization) at `66063d1637e8c24ee600ea7f3c663f44856068c6`. The editable source is preserved on [`optimize/story-demo`](https://github.com/whole-earth/taxa/tree/optimize/story-demo); release code corresponds to `65e2324`.
+
+Webflow still loads `https://whole-earth.github.io/taxa/js/core/anim.js`; no Webflow configuration was edited. New runtime assets are under `assets/releases/b87d78fcfce1e4128993/`, including both late-product preview images. All 1,131 legacy supporting files were preserved byte-for-byte. The final package excludes macOS metadata and the unused Draco encoder from the new asset folder. The public entry and all 12 versioned assets returned HTTP 200, matching SHA-256 hashes and cross-origin access headers. The entry SHA-256 is `4c61785426325dfee2015d9a811429889d8861417f279049facea1c0392af3b9`.
+
+The final staged package passed Chrome/WebKit desktop/mobile Webflow integration, including deliberately delayed product loading and fallback-image handoff. Live-page tests then passed section geometry, feature colors, forward/reverse product movement, cap closure, pod selection, inactivity pause/resume and Science-overlay behavior in Chrome and WebKit at both sizes. No animation assets were intercepted during the live tests; test-only guards blocked analytics and form submission. The initial accelerated WebKit idle check timed out immediately after an instantaneous chapter jump; allowing native scroll events to settle before advancing the test clock produced passing desktop/mobile reruns. A subsequent live mobile WebKit check used the actual timeout without advancing the clock: it paused at about 40.1 seconds, stopped rendering, and resumed on touch. These automated browser checks do not substitute for the user's physical-phone review.
+
+Deployment records, manifest, rollback/source archives, live hashes, reports and screenshots are retained under `test-results/release/`. To roll back, restore the entry from `pre-optimization` in a new deployment commit while retaining the versioned assets for browsers that cached the optimized entry. The public entry advertises a 10-minute cache lifetime, so test a fresh/private tab if a device still shows the earlier animation. The here.now demo has not been updated by this production release.
 
 ## Local preview
 
@@ -90,7 +100,7 @@ The transition benchmark instead sweeps 150 frames through product progress 0.2�
 
 `compare:transmission` compares the current policy against full-resolution transmission at eight fixed poses, with motion frozen. It writes PNG pairs and per-channel differences under `test-results/transition/visual/`; `MOBILE=1` writes `visual-mobile/`. Playwright outputs live in `test-results/playwright/` so running tests does not erase performance evidence.
 
-The live Webflow site and remote `main` remain unchanged. The latest standalone demo (code commit `57cb90c`) was published on November 9 to the existing permanent [Taxa review site](https://waxen-thistle-f2av.here.now/), including the integration, reflection, geometry, cleanup, base-reveal timing and UI-ownership updates. Its here.now version is `01M70NK93XCMNMDRGYDC22M5JH`. All 26 published file hashes matched the local build; a live WebKit check at a 390 × 844 mobile viewport confirmed product loading, the hidden base during zoom, its fade through the turn and the final closed cap pose. The custom `taxa.here.now` address is not configured on this account.
+Before the production cutover recorded above, the latest standalone demo (code commit `57cb90c`) was published on November 9 to the existing permanent [Taxa review site](https://waxen-thistle-f2av.here.now/), including the integration, reflection, geometry, cleanup, base-reveal timing and UI-ownership updates. Its here.now version is `01M70NK93XCMNMDRGYDC22M5JH`. All 26 published file hashes matched the local build; a live WebKit check at a 390 × 844 mobile viewport confirmed product loading, the hidden base during zoom, its fade through the turn and the final closed cap pose. The custom `taxa.here.now` address is not configured on this account.
 
 ## Preparing reflections
 
