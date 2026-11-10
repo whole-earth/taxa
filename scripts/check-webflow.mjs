@@ -41,6 +41,8 @@ async function checkMobileFooter(page, viewport) {
     return {
       footer: footer.getBoundingClientRect().toJSON(),
       legalText: footer.querySelector("a").getBoundingClientRect().toJSON(),
+      legalRight: footer.querySelector("a:last-child").getBoundingClientRect()
+        .right,
       opacity: Number(getComputedStyle(footer).opacity),
       inert: footer.inert,
       card: card.getBoundingClientRect().toJSON(),
@@ -78,6 +80,11 @@ async function checkMobileFooter(page, viewport) {
         .opacity === "1",
   );
   const end = await page.evaluate(inspect);
+  assert(
+    Math.abs((end.legalText.left + end.legalRight) / 2 - viewport.width / 2) <
+      1,
+    "Mobile legal links must be centered within the viewport",
+  );
   assert(
     end.card.bottom + end.footer.height <= viewport.height + 1,
     "Card must reserve space for the footer",
