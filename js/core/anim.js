@@ -1,8 +1,13 @@
-// Webflow entry point. Bundle to js/core/anim.js and host with ../../assets/.
+// Webflow entry point. The release build supplies a versioned asset path.
 // Webflow keeps ownership of its styles, navigation, forms and section heights.
 import { StoryApp } from "./app.js";
 import { performanceMonitor } from "../utils/performance.js";
 import { installWebflowUI } from "../ui/webflow.js";
+
+const assetPath =
+  typeof __TAXA_ASSET_PATH__ === "undefined"
+    ? "../../assets/"
+    : __TAXA_ASSET_PATH__;
 
 if (document.readyState === "loading") {
   await new Promise((resolve) =>
@@ -22,7 +27,7 @@ try {
   app = new StoryApp({
     webflow: true,
     onFirstFrame: () => ui.reveal(),
-    assetBase: new URL("../../assets/", import.meta.url),
+    assetBase: new URL(assetPath, import.meta.url),
   });
   ui.connect(app);
   if (performanceMonitor.enabled)

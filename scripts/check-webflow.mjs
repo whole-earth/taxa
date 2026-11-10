@@ -5,7 +5,18 @@ import assert from "node:assert/strict";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { chromium, webkit } from "@playwright/test";
 
-const origin = "https://animation-preview.invalid";
+const releaseDir = process.env.RELEASE_DIR;
+const release = releaseDir
+  ? JSON.parse(await readFile(`${releaseDir}/manifest.json`, "utf8"))
+  : null;
+const origin = release
+  ? "https://whole-earth.github.io/taxa"
+  : "https://animation-preview.invalid";
+const animationDirectory = release ? `${releaseDir}/site` : "dist";
+const assetPrefix = `${origin}/${release?.assetDirectory ?? "assets"}/`;
+const resultsDirectory = release
+  ? `${releaseDir}/checks`
+  : "test-results/webflow";
 const base = previewBase;
 const engine = process.env.BROWSER === "webkit" ? webkit : chromium;
 const browser = await engine.launch(
@@ -31,10 +42,12 @@ try {
       release = resolve;
     });
     await page.route(`${origin}/**`, async (route) => {
-      const path = new URL(route.request().url()).pathname;
+      const path = new URL(route.request().url()).pathname.slice(
+        new URL(origin).pathname.replace(/\/$/, "").length,
+      );
       if (path.endsWith("/anim.js")) await gate;
       await route.fulfill({
-        body: await readFile(`dist${path}`),
+        body: await readFile(`${animationDirectory}${path}`),
         headers: { "Access-Control-Allow-Origin": "*" },
         contentType: path.endsWith(".js")
           ? "text/javascript"
@@ -80,7 +93,7 @@ try {
       "Animation changed Webflow section geometry/IDs",
     );
     assert(
-      assets.length >= 5 && assets.every((url) => url.startsWith(origin)),
+      assets.length >= 5 && assets.every((url) => url.startsWith(assetPrefix)),
       "Assets must resolve against the animation host",
     );
     assert.equal(await page.locator(".load-progress").isVisible(), false);
@@ -210,15 +223,15 @@ try {
       await page.waitForFunction(() => !window.taxaDebug.app.overlayActive);
     }
     assert.deepEqual(errors, []);
-    await mkdir("test-results/webflow", { recursive: true });
+    await mkdir(resultsDirectory, { recursive: true });
     await page.screenshot({
-      path: `test-results/webflow/${engine.name()}-${mobile ? "mobile" : "desktop"}.png`,
+      path: `${resultsDirectory}/${engine.name()}-${mobile ? "mobile" : "desktop"}.png`,
     });
     results.push({ viewport, sections: before, colors, poses, assets, errors });
     await page.close();
   }
   await writeFile(
-    `test-results/webflow/${engine.name()}.json`,
+    `${resultsDirectory}/${engine.name()}.json`,
     JSON.stringify(results, null, 2),
   );
   console.log(

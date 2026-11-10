@@ -11,7 +11,9 @@
     "benchmark": "node scripts/benchmark.mjs",
     "benchmark:transition": "node scripts/transition-benchmark.mjs",
     "compare:transmission": "node scripts/compare-transmission.mjs",
-    "format": "prettier --write index.html style.css js scripts tests playwright.config.js"
+    "format": "prettier --write index.html style.css js scripts tests playwright.config.js",
+    "stage:release": "node scripts/stage-release.mjs",
+    "check:release": "node scripts/check-release.mjs"
   },
   "repository": {
     "type": "git",

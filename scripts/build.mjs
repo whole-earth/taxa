@@ -3,6 +3,7 @@ import { cp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { watch } from "node:fs";
 import { gzipSync, brotliCompressSync } from "node:zlib";
 import { prepareModel } from "./prepare-model.mjs";
+import { bundleOptions } from "./bundle-options.mjs";
 
 const serve = process.argv.includes("--serve");
 await rm("dist", { recursive: true, force: true });
@@ -45,21 +46,14 @@ async function compressReflections() {
 }
 await compressReflections();
 const options = {
+  ...bundleOptions,
   entryPoints: {
     "js/main": "js/main.js",
     "js/core/anim": "js/core/anim.js",
     style: "style.css",
   },
   outdir: "dist",
-  bundle: true,
-  format: "esm",
-  target: ["es2022"],
-  minify: true,
-  alias: { tween: "@tweenjs/tween.js" },
-  external: ["*.woff2"],
-  assetNames: "assets/[name]-[hash]",
-  entryNames: "[dir]/[name]",
-  metafile: true,
+  define: { __TAXA_ASSET_PATH__: JSON.stringify("../../assets/") },
 };
 async function copyHtml() {
   let html = await readFile("index.html", "utf8");
