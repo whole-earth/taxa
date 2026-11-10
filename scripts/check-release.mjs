@@ -67,6 +67,13 @@ for (const path of inventory.keys())
       path.startsWith(`${manifest.assetDirectory}/`),
     `Unexpected published file: ${path}`,
   );
+for (const variant of ["desktop", "mobile"])
+  assert(
+    inventory.has(
+      `${manifest.assetDirectory}/site/product-preview-${variant}.webp`,
+    ),
+    "Missing late-product preview",
+  );
 const bundle = await readFile(`${root}/site/${manifest.entry}`, "utf8");
 assert(
   bundle.includes(`../../${manifest.assetDirectory}/`),

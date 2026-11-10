@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { dirname } from "node:path";
 import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { build } from "esbuild";
 import { bundleOptions } from "./bundle-options.mjs";
@@ -51,12 +52,17 @@ const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const assets = [];
 for (const directory of ["cell", "product", "draco"])
   for (const path of await files(`dist/assets/${directory}`)) {
+    if (path.endsWith(".DS_Store") || path === "draco_encoder.js") continue;
     const name = `${directory}/${path}`;
     assets.push({
       path: name,
       sha256: hash(await readFile(`dist/assets/${name}`)),
     });
   }
+for (const variant of ["desktop", "mobile"]) {
+  const path = `site/product-preview-${variant}.webp`;
+  assets.push({ path, sha256: hash(await readFile(`dist/assets/${path}`)) });
+}
 const assetDirectory = `assets/releases/${hash(JSON.stringify(assets)).slice(0, 20)}`;
 // Fail rather than overwrite a legacy path, even on an unexpected baseline.
 assert(
@@ -65,12 +71,11 @@ assert(
   ),
   "Release asset directory already exists in the baseline",
 );
-for (const directory of ["cell", "product", "draco"])
-  await cp(
-    `dist/assets/${directory}`,
-    `${root}/site/${assetDirectory}/${directory}`,
-    { recursive: true },
-  );
+for (const { path } of assets) {
+  const destination = `${root}/site/${assetDirectory}/${path}`;
+  await mkdir(dirname(destination), { recursive: true });
+  await cp(`dist/assets/${path}`, destination);
+}
 
 await build({
   ...bundleOptions,

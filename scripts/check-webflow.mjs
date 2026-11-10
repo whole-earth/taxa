@@ -41,11 +41,16 @@ try {
     const gate = new Promise((resolve) => {
       release = resolve;
     });
+    let releaseProduct;
+    const productGate = new Promise((resolve) => {
+      releaseProduct = resolve;
+    });
     await page.route(`${origin}/**`, async (route) => {
       const path = new URL(route.request().url()).pathname.slice(
         new URL(origin).pathname.replace(/\/$/, "").length,
       );
       if (path.endsWith("/anim.js")) await gate;
+      if (releaseDir && /\/swap\.glb(?:\.gz)?$/.test(path)) await productGate;
       await route.fulfill({
         body: await readFile(`${animationDirectory}${path}`),
         headers: { "Access-Control-Allow-Origin": "*" },
@@ -84,9 +89,33 @@ try {
       });
     const before = await page.evaluate(measure);
     release();
+    if (releaseDir) {
+      await page.waitForFunction(() => window.taxaDebug?.app.isInitialized);
+      await page.evaluate(() => window.taxaDebug.app.timeline.goTo(3, true));
+      await page.waitForFunction(
+        () => window.taxaDebug.app.productFallback.visible,
+      );
+      const preview = await page
+        .locator(".product-fallback img")
+        .getAttribute("src");
+      assert.equal(
+        preview,
+        `${assetPrefix}site/product-preview-${mobile ? "mobile" : "desktop"}.webp`,
+      );
+      releaseProduct();
+    }
     await page.waitForFunction(() => !!window.taxaDebug?.app.product, null, {
       timeout: 60000,
     });
+    if (releaseDir) {
+      await page.waitForFunction(
+        () => !window.taxaDebug.app.productFallback.visible,
+      );
+      await page.evaluate(() => window.taxaDebug.app.timeline.goTo(0, true));
+      await page.waitForFunction(
+        () => scrollY === 0 && window.taxaDebug.app.timeline.lastScrollY === 0,
+      );
+    }
     assert.deepEqual(
       await page.evaluate(measure),
       before,
