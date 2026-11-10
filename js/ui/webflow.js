@@ -13,10 +13,12 @@ export function installWebflowUI() {
     @media(prefers-reduced-motion:reduce) {
       #three > .product-fallback { transition:none; }
     }
+    html[data-wf-page="6799d21f9d3e7d527d28c511"].taxa-footer-enabled .taxa-legal-footer {
+      justify-content:center;
+    }
     @media(max-width:767px) {
       html[data-wf-page="6799d21f9d3e7d527d28c511"].taxa-footer-enabled .taxa-legal-footer {
         display:flex;
-        justify-content:center;
       }
       html[data-wf-page="6799d21f9d3e7d527d28c511"].taxa-footer-enabled .main > .product > .child .cell-child_right {
         translate:0 calc(-1 * var(--taxa-footer-clearance, 0px));

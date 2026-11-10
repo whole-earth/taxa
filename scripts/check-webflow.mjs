@@ -386,6 +386,19 @@ try {
       "none",
     );
     const footerChecks = [];
+    const footerCenter = await page
+      .locator(".taxa-legal-footer")
+      .evaluate((footer) => {
+        const first = footer.querySelector("a").getBoundingClientRect();
+        const last = footer
+          .querySelector("a:last-child")
+          .getBoundingClientRect();
+        return (first.left + last.right) / 2;
+      });
+    assert(
+      Math.abs(footerCenter - viewport.width / 2) < 1,
+      "Legal links must be centered on desktop and mobile",
+    );
     if (mobile) {
       assert.equal(await page.locator(".taxa-legal-footer").isVisible(), true);
       await page.waitForFunction(
