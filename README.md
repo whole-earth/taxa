@@ -4,9 +4,15 @@ A standalone recreation of the Webflow homepage at [taxa.tech](https://taxa.tech
 
 ## Current production release — November 10, 2026
 
+The legal footer is centered on both desktop and mobile in live release [`69c09df`](https://github.com/whole-earth/taxa/commit/69c09df2cccee366cf5ae1b239a12b897d370d58), built from source `a08aadb` and deployed by [Pages run 42872342805](https://github.com/whole-earth/taxa/actions/runs/42872342805). The only bundle change from `15589c7` extends the existing centering declaration to every viewport width. Desktop keeps its normal scroll-in behavior; mobile keeps the fixed card, footer fade and 16px gaps. Lenis settings, story timing, assets and the public script URL are unchanged.
+
+Chrome and WebKit release integrations passed, including explicit desktop/mobile centering assertions. Live checks in both engines verified a horizontal link-group center of 720px at a 1440px desktop width and 195px at a 390px mobile width, with clickable links and no browser errors. The entry SHA-256 is `956b20b41bea2e54426c8df3d355a64e5715d48874388291807a5a894cfa6081`. Current evidence is in `test-results/release/`; the previous release is archived at `test-results/release-before-desktop-centering-15589c7/`. Restoring the entry from `15589c7` would undo only the desktop centering change.
+
+### Previous mobile-only centering release
+
 The mobile footer is now explicitly centered in Webflow, matching the approved standalone demo. The live release is [`15589c7`](https://github.com/whole-earth/taxa/commit/15589c7ade7d219903bfc90325ec0fbc60526581), source `2844dfc`, deployed by [Pages run 42870450804](https://github.com/whole-earth/taxa/actions/runs/42870450804). Its bundle differs from `8ce33de` only by `justify-content:center` in the mobile footer rule. Both release integration checks now measure horizontal centering at five mobile sizes. Live Chrome/WebKit checks confirmed centered links, 16px vertical gaps and unchanged desktop behavior, with no browser errors. The current entry SHA-256 is `6f2ef1ed7be98d718f3626bbbfcb82a5e4046304478596243203b4ace90987e2`.
 
-Current evidence is in `test-results/release/`; the preceding footer release is archived at `test-results/release-before-centering-8ce33de/`. Restoring the entry from `8ce33de` would undo only the alignment correction. All supporting files and the Webflow script URL remain unchanged.
+Mobile-only centering evidence is in `test-results/release-before-desktop-centering-15589c7/`; the preceding footer release is archived at `test-results/release-before-centering-8ce33de/`. Restoring the entry from `8ce33de` would undo only the alignment correction. All supporting files and the Webflow script URL remain unchanged.
 
 ### Mobile-footer release before alignment correction
 
