@@ -64,15 +64,27 @@ for (const variant of ["desktop", "mobile"]) {
   assets.push({ path, sha256: hash(await readFile(`dist/assets/${path}`)) });
 }
 const assetDirectory = `assets/releases/${hash(JSON.stringify(assets)).slice(0, 20)}`;
-// Fail rather than overwrite a legacy path, even on an unexpected baseline.
-assert(
-  !(await files(`${root}/site`)).some((path) =>
-    path.startsWith(`${assetDirectory}/`),
-  ),
-  "Release asset directory already exists in the baseline",
+// Script-only releases reuse immutable assets. Check every existing byte and
+// path before reusing a content-addressed directory; never overwrite it.
+const existingAssets = (await files(`${root}/site`)).filter((path) =>
+  path.startsWith(`${assetDirectory}/`),
 );
-for (const { path } of assets) {
+if (existingAssets.length)
+  assert.deepEqual(
+    existingAssets,
+    assets.map(({ path }) => `${assetDirectory}/${path}`).sort(),
+    "Existing release asset inventory differs",
+  );
+for (const { path, sha256 } of assets) {
   const destination = `${root}/site/${assetDirectory}/${path}`;
+  if (existingAssets.length) {
+    assert.equal(
+      hash(await readFile(destination)),
+      sha256,
+      `Existing asset changed: ${path}`,
+    );
+    continue;
+  }
   await mkdir(dirname(destination), { recursive: true });
   await cp(`dist/assets/${path}`, destination);
 }

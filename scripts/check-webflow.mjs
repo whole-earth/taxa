@@ -23,6 +23,140 @@ const browser = await engine.launch(
   engine === chromium ? { channel: "chrome" } : {},
 );
 const results = [];
+
+async function checkMobileFooter(page, viewport) {
+  await page.setViewportSize(viewport);
+  await page.waitForFunction(
+    () =>
+      window.taxaDebug.app.timeline.viewportHeight === innerHeight &&
+      window.taxaDebug.app.scroller.limit ===
+        document.documentElement.scrollHeight - innerHeight,
+  );
+  const inspect = () => {
+    const app = window.taxaDebug.app;
+    const footer = document.querySelector(".taxa-legal-footer");
+    const card = document.querySelector(
+      ".cell-child_right.product-mobile-offset",
+    );
+    return {
+      footer: footer.getBoundingClientRect().toJSON(),
+      legalText: footer.querySelector("a").getBoundingClientRect().toJSON(),
+      opacity: Number(getComputedStyle(footer).opacity),
+      inert: footer.inert,
+      card: card.getBoundingClientRect().toJSON(),
+      offset:
+        parseFloat(card.style.getPropertyValue("--taxa-footer-clearance")) || 0,
+      capY: app.product.applicator.position.y,
+      capRotation: app.product.applicator.rotation.y,
+      sections: app.timeline.bounds,
+    };
+  };
+  const seek = async (tail) => {
+    await page.evaluate((tail) => {
+      const app = window.taxaDebug.app;
+      const { top, height } = app.timeline.bounds[3];
+      const end = top + height - innerHeight;
+      const bottom = document.documentElement.scrollHeight - innerHeight;
+      app.scroller.scrollTo(end + (bottom - end) * tail, { immediate: true });
+      app.invalidate(true);
+    }, tail);
+    await page.waitForFunction(
+      () => window.taxaDebug.app.timeline.lastScrollY === scrollY,
+    );
+    // Allow native scroll events and the fixed-panel style to catch up.
+    await page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
+  };
+  await seek(0);
+  await page.waitForFunction(
+    () =>
+      getComputedStyle(document.querySelector(".main > .product > .child"))
+        .opacity === "1",
+  );
+  const end = await page.evaluate(inspect);
+  assert(
+    end.card.bottom + end.footer.height <= viewport.height + 1,
+    "Card must reserve space for the footer",
+  );
+  assert(
+    end.opacity === 0 && end.inert,
+    "Footer must stay hidden and unfocusable until the cap closes",
+  );
+  const samples = [];
+  for (const tail of [0.5, 1, 0.5, 0]) {
+    await seek(tail);
+    const sample = await page.evaluate(inspect);
+    assert(
+      sample.card.bottom <= sample.footer.top,
+      "Footer overlaps the product card",
+    );
+    assert.equal(sample.capY, end.capY, "Footer scrolling changed cap height");
+    assert.equal(
+      sample.capRotation,
+      end.capRotation,
+      "Footer scrolling changed cap rotation",
+    );
+    assert.deepEqual(
+      sample.sections,
+      end.sections,
+      "Footer scrolling changed story bounds",
+    );
+    assert(
+      Math.abs(end.card.bottom - sample.card.bottom) < 1,
+      "Product card must remain fixed while the footer scrolls",
+    );
+    assert(
+      Math.abs(
+        sample.legalText.top -
+          sample.card.bottom -
+          (viewport.height - sample.legalText.bottom),
+      ) < 1,
+      "Legal text must have balanced space above and below",
+    );
+    assert.equal(
+      sample.footer.top,
+      end.footer.top,
+      "Footer must fade without sliding",
+    );
+    assert(
+      Math.abs(sample.opacity - tail) < 0.03,
+      "Footer opacity must follow forward and reverse scrolling",
+    );
+    if (tail === 1) {
+      assert.equal(sample.inert, false);
+      assert(
+        sample.footer.bottom <= viewport.height + 1,
+        `Footer not fully visible at ${viewport.width}x${viewport.height}: ${JSON.stringify(sample)}`,
+      );
+      assert(
+        await page.locator(".taxa-legal-footer a").evaluateAll((links) =>
+          links.every((link) => {
+            const r = link.getBoundingClientRect();
+            return link.contains(
+              document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2),
+            );
+          }),
+        ),
+        "Footer links must be reachable",
+      );
+      await page.screenshot({
+        path: `${resultsDirectory}/${engine.name()}-footer-${viewport.width}x${viewport.height}.png`,
+      });
+    }
+    samples.push(sample);
+  }
+  assert.equal(
+    samples.at(-1).offset,
+    end.offset,
+    "Reverse scrolling must keep the same card clearance",
+  );
+  return { viewport, samples };
+}
+
 try {
   for (const viewport of [
     { width: 1440, height: 900 },
@@ -244,8 +378,52 @@ try {
         .evaluate((e) => getComputedStyle(e).transform),
       "none",
     );
+    const footerChecks = [];
     if (mobile) {
-      assert.equal(await page.locator(".taxa-legal-footer").isVisible(), false);
+      assert.equal(await page.locator(".taxa-legal-footer").isVisible(), true);
+      await page.waitForFunction(
+        () => !window.taxaDebug.app.podSelector.isAnimating,
+      );
+      await mkdir(resultsDirectory, { recursive: true });
+      for (const size of [
+        { width: 390, height: 844 },
+        { width: 375, height: 500 },
+        { width: 320, height: 568 },
+        { width: 430, height: 932 },
+        { width: 767, height: 600 },
+      ])
+        footerChecks.push(await checkMobileFooter(page, size));
+      // Copy changes must update clearance without a viewport resize.
+      await page.setViewportSize({ width: 320, height: 568 });
+      for (const pod of ["Orange", "Yellow", "Green"]) {
+        await page.locator(`#pod${pod}`).click();
+        await page.waitForFunction(
+          () => !window.taxaDebug.app.podSelector.isAnimating,
+        );
+        footerChecks.push(
+          await checkMobileFooter(page, { width: 320, height: 568 }),
+        );
+      }
+      // Desktop must clear the mobile-only space beneath the card.
+      await page.evaluate(() =>
+        window.scrollTo(0, document.documentElement.scrollHeight),
+      );
+      await page.setViewportSize({ width: 768, height: 900 });
+      await page.waitForFunction(
+        () =>
+          getComputedStyle(
+            document.querySelector(".cell-child_right.product-mobile-offset"),
+          ).translate === "none",
+      );
+      await page.waitForFunction(
+        () =>
+          parseFloat(
+            document
+              .querySelector(".cell-child_right.product-mobile-offset")
+              .style.getPropertyValue("--taxa-footer-clearance"),
+          ) === 0,
+      );
+      await page.setViewportSize(viewport);
       await page.locator(".nav-btn").click();
       await page.waitForFunction(() => window.taxaDebug.app.overlayActive);
       await page.locator(".nav-btn").click();
@@ -256,7 +434,15 @@ try {
     await page.screenshot({
       path: `${resultsDirectory}/${engine.name()}-${mobile ? "mobile" : "desktop"}.png`,
     });
-    results.push({ viewport, sections: before, colors, poses, assets, errors });
+    results.push({
+      viewport,
+      sections: before,
+      colors,
+      poses,
+      footerChecks,
+      assets,
+      errors,
+    });
     await page.close();
   }
   await writeFile(

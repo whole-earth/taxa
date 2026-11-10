@@ -1,24 +1,12 @@
+import { installMobileFooter } from "./mobileFooter.js";
+
 // Page controls stay usable while the 3D assets load, and in the fallback view.
 export class PageUI {
   constructor() {
+    const productDetails = document.querySelector(".product-details");
+    this.footer = installMobileFooter(productDetails);
     this.events = new AbortController();
     const signal = this.events.signal;
-    document.getElementById("motion-toggle").addEventListener(
-      "click",
-      (event) => {
-        if (!this.app) return;
-        this.app.motionPaused = !this.app.motionPaused;
-        event.currentTarget.textContent = this.app.motionPaused
-          ? "Resume motion"
-          : "Pause motion";
-        event.currentTarget.setAttribute(
-          "aria-pressed",
-          String(this.app.motionPaused),
-        );
-        this.app.invalidate(true);
-      },
-      { signal },
-    );
     this.menu = document.getElementById("nav-links");
     this.toggle = document.querySelector(".menu-toggle");
     this.dialog = document.getElementById("contact-dialog");
@@ -132,6 +120,7 @@ export class PageUI {
 
   reveal() {
     document.body.classList.add("scene-ready");
+    this.footer.refresh();
   }
 
   connect(app) {
@@ -156,6 +145,7 @@ export class PageUI {
 
   dispose() {
     this.events.abort();
+    this.footer.dispose();
     this.app = null;
   }
 }

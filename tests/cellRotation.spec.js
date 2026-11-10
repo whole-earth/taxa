@@ -67,14 +67,22 @@ test("scroll jumps are bounded and suspended rotation discards momentum", () => 
 });
 
 for (const mobile of [false, true]) {
-  test(`rotation resumes after paused scrolling and stays off through product closure (${mobile ? "mobile" : "desktop"})`, async ({
+  test(`rotation resumes after programmatically paused scrolling and stays off through product closure (${mobile ? "mobile" : "desktop"})`, async ({
     page,
   }) => {
     if (mobile) await page.setViewportSize({ width: 390, height: 844 });
     await ready(page);
-    await page.locator("#motion-toggle").click();
+    await page.evaluate(() => {
+      const app = window.taxaDebug.app;
+      app.motionPaused = !app.motionPaused;
+      app.invalidate(true);
+    });
     await seek(page, "zoom", 0.2);
-    await page.locator("#motion-toggle").click();
+    await page.evaluate(() => {
+      const app = window.taxaDebug.app;
+      app.motionPaused = !app.motionPaused;
+      app.invalidate(true);
+    });
     await page.waitForFunction(() => {
       const app = window.taxaDebug.app;
       return !app.motionPaused && app.sceneManager.controls.autoRotate;

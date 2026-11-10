@@ -487,17 +487,6 @@ body::-webkit-scrollbar {
   color: #77746e;
   letter-spacing: 0.02em;
 }
-.motion-toggle {
-  position: fixed;
-  bottom: 12px;
-  left: 16px;
-  z-index: 100;
-  font-size: 11px;
-  background: #fffbf4cc;
-  border-radius: 12px;
-  padding: 5px 9px;
-  color: #696b6e;
-}
 .load-progress {
   position: fixed;
   bottom: 18px;
@@ -733,12 +722,15 @@ html.lenis body {
   .ingredient-icon {
     margin-top: 3px;
   }
-  .motion-toggle {
-    font-size: 10px;
-    bottom: 8px;
-  }
   .taxa-legal-footer {
-    display: none;
+    flex-wrap: wrap;
+    gap: 8px 9px;
+    margin-top: 24px;
+    padding: 16px 18px;
+    font-size: 11px;
+  }
+  .taxa-footer-enabled .product-details {
+    translate: 0 calc(-1 * var(--taxa-footer-clearance, 0px));
   }
 }
 /* Keep the complete product card reachable on laptops and landscape phones.
@@ -801,6 +793,12 @@ html.lenis body {
     overscroll-behavior-y: contain;
     scrollbar-width: thin;
     border-radius: 14px;
+  }
+}
+@media (max-width: 767px) and (max-height: 560px) and (orientation: landscape) {
+  .product-details {
+    /* Keep the scrollable card below navigation after reserving the footer. */
+    height: calc(100% - 56px);
   }
 }
 @media (max-width: 479px) {

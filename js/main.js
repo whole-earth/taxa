@@ -22,7 +22,6 @@ try {
   document.body.classList.add("scene-failed");
   document.getElementById("loadProgressCount").textContent =
     "The 3D story could not load. You can still explore the page.";
-  document.getElementById("motion-toggle").hidden = true;
   app?.dispose();
   page.connect(null);
 }

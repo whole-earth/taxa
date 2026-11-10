@@ -1,5 +1,7 @@
-// Only style UI supplied by the animation. Existing Webflow elements retain
-// their production styles, classes and event handlers.
+import { installMobileFooter } from "./mobileFooter.js";
+
+// Adapt the animation to Webflow's existing UI. The mobile-footer exception
+// restores legal links without changing the story's section heights.
 export function installWebflowUI() {
   const style = document.createElement("style");
   style.textContent = `
@@ -11,9 +13,20 @@ export function installWebflowUI() {
     @media(prefers-reduced-motion:reduce) {
       #three > .product-fallback { transition:none; }
     }
+    @media(max-width:767px) {
+      html[data-wf-page="6799d21f9d3e7d527d28c511"].taxa-footer-enabled .taxa-legal-footer {
+        display:flex;
+      }
+      html[data-wf-page="6799d21f9d3e7d527d28c511"].taxa-footer-enabled .main > .product > .child .cell-child_right {
+        translate:0 calc(-1 * var(--taxa-footer-clearance, 0px));
+      }
+    }
   `;
   document.head.append(style);
   let app;
+  const footer = installMobileFooter(
+    document.querySelector(".main > .product > .child .cell-child_right"),
+  );
   const overlays = [
     ...document.querySelectorAll(".contact, .science-password, .nav-body"),
   ];
@@ -46,6 +59,7 @@ export function installWebflowUI() {
     reveal() {
       document.body.classList.add("scene-ready", "completing");
       document.body.classList.remove("loading");
+      footer.refresh();
     },
     connect(value) {
       app = value;
@@ -54,6 +68,7 @@ export function installWebflowUI() {
     dispose() {
       observer.disconnect();
       window.removeEventListener("resize", sync);
+      footer.dispose();
       style.remove();
       app = null;
     },

@@ -202,7 +202,11 @@ test("static product and paused hero stop rendering; scroll invalidates them", a
   page,
 }) => {
   await ready(page);
-  await page.locator("#motion-toggle").click();
+  await page.evaluate(() => {
+    const app = window.taxaDebug.app;
+    app.motionPaused = true;
+    app.invalidate(true);
+  });
   await page.waitForTimeout(2000);
   const before = await page.evaluate(
     () => window.taxaDebug.performanceMonitor.frames,
